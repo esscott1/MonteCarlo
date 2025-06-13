@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Text;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace MonteCarloSimulation1
 {
@@ -7,8 +9,15 @@ namespace MonteCarloSimulation1
 
     public class MonteCarloSimulation
     {
-        private const double Mean = .0807;
-        private const double StandardDeviation = .1915;
+        // last 95 years of S&P
+        //private const string inputs = "based on last 95 years of S&P";
+        //private const double Mean = .0807;
+        //private const double StandardDeviation = .1915;
+
+        // last 30 years of S&P
+        private const string inputs = "based on last 30 years of S&P";
+        private const double Mean = .1007;
+        private const double StandardDeviation = .1688;
         /// <summary>
         /// 10 year bond avg since 1962 5.83% std dev 2.953%:  
         /// </summary>
@@ -22,10 +31,14 @@ namespace MonteCarloSimulation1
             double withdrawl = 120000;
             double mean = Mean;
             double standardDeviation = StandardDeviation;
-            double initialInvestment = 4000000.0;
+            double initialInvestment = 2800000.0;
             Random random = new Random();
             double outOfMoneyCount = 0;
             StringBuilder outOfMoneyMessage = new StringBuilder();
+            double newMoney = 500000;
+            int yearNewMoney = 10;
+            List<double> allRates = new List<double>(); 
+            List<int> yearsOutofMoney = new List<int>();
 
 
             Console.WriteLine("Monte Carlo Simulation Results:");
@@ -35,7 +48,9 @@ namespace MonteCarloSimulation1
             {
                 double currentInvestment = initialInvestment; // Start with the initial investment
                 double iwithdrawl = withdrawl;
+                double periodwithdrawl = 0;
                 List<double> rates = new List<double>();
+                List<double> withdrawals = new List<double>();  
                 List<double> bal = new List<double>();
                 Random eRand = new Random();
                 double inflation = 0.025;
@@ -52,21 +67,27 @@ namespace MonteCarloSimulation1
                     // Generate a random number with a normal distribution using the Box-Muller transform
                     double interestRate = GetRateBoxMullerTransform(mean, standardDeviation, random);
                    // double interestRate = CalculateInverseCDF(eRand.NextDouble());
-                    rates.Add(interestRate);
+                    rates.Add(interestRate);  //for displaying rates
+                    allRates.Add(interestRate); // for displaying all rates
+
                     iwithdrawl = iwithdrawl * (1 + inflation);
-                    iwithdrawl = iwithdrawl;
+                    periodwithdrawl = iwithdrawl - ss;
+                    withdrawals.Add(periodwithdrawl); // for displaying withdrawals
                     // Calculate the ending balance
 
-                    double endingBalance = currentInvestment * (1 + interestRate) - iwithdrawl;
+                    double endingBalance = currentInvestment * (1 + interestRate) - periodwithdrawl;
+                    if(run == yearNewMoney)
+                        endingBalance = endingBalance + newMoney; // Add new money at the end of yearNewMoney
                     bal.Add(endingBalance);
                    // Console.WriteLine($"  Year {run + 1}: Begin Bal = {currentInvestment:C0} Interest Rate = {interestRate:P2}, Withdrawl = {iwithdrawl:C0} End Bal = {endingBalance:C0}");
                     if (endingBalance < 0)
                     {
+                        yearsOutofMoney.Add(run);
                         outOfMoneyCount++;
                         outOfMoneyMessage.Append($"\nIteration {i + 1}: in Year {run}:  Average rate of return {rates.Average():P2}");
                         for (int c = 0; c < rates.Count; c++)
                         {
-                            outOfMoneyMessage.Append($"\nYear {c} rate: {rates[c]:P2} with bal: {bal[c]:C0}");
+                            outOfMoneyMessage.Append($"\nYear {c} rate: {rates[c]:P2} with draw: {withdrawals[c]:C0} with bal: {bal[c]:C0}");
                         }
                         outOfMoneyMessage.Append('\n');
                         break;
@@ -78,8 +99,15 @@ namespace MonteCarloSimulation1
             if (outOfMoneyCount > 0)
             {
                 Console.WriteLine();
-                Console.WriteLine(outOfMoneyMessage.ToString()); double survial = outOfMoneyCount / iterations;
-                Console.WriteLine($"\n{outOfMoneyCount} portfolios did not survive out of {iterations} survival rate: {1-survial:P4}");
+                Console.WriteLine(outOfMoneyMessage.ToString()); 
+                double survial = outOfMoneyCount / iterations;
+                double totalAvgRates = allRates.Average();
+                double variance = allRates.Average(n => Math.Pow(n - totalAvgRates, 2));
+                double stdDev = Math.Sqrt(variance);
+                Console.WriteLine($"\ntotal avg return {totalAvgRates:P4} with std dev {stdDev} based on {inputs}");
+                Console.WriteLine($"\nInheritance of  {newMoney:C0} in  {DateTime.Now.Year + yearNewMoney}");
+                Console.WriteLine($"\n{outOfMoneyCount} portfolios did not survive {years} years given {iterations} iterations. survival rate: {1-survial:P4}");
+                Console.WriteLine($"\n average year failures ran out of money {yearsOutofMoney.Average():F0}");
                 Console.WriteLine($"/n{outOfMoneyMessage.Length}");
 
             }
