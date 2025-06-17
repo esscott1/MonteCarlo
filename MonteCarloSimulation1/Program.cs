@@ -9,24 +9,34 @@ namespace MonteCarloSimulation1
 
     public class MonteCarloSimulation
     {
+        // last 54 years of 10 year bonds
+        //private const string inputs = "based on last 30 years of S&P";
+        //private const double Mean = .0583;
+        //private const double StandardDeviation = .0295;
+
+        // current 10 year
+        private const string inputs = "based on last 30 years of S&P";
+        private const double Mean = .0443;
+        private const double StandardDeviation = .001;
+
         // last 95 years of S&P
         //private const string inputs = "based on last 95 years of S&P";
         //private const double Mean = .0807;
         //private const double StandardDeviation = .1915;
 
         // last 30 years of S&P
-        private const string inputs = "based on last 30 years of S&P";
-        private const double Mean = .1007;
-        private const double StandardDeviation = .1688;
+        //private const string inputs = "based on last 30 years of S&P";
+        //private const double Mean = .1007;
+        //private const double StandardDeviation = .1688;
         /// <summary>
         /// 10 year bond avg since 1962 5.83% std dev 2.953%:  
         /// </summary>
         /// <param name="args"></param>
         public static void Main(string[] args)
         {
-            int years = 50;
+            int years = 40;
             int months = 360;
-            int iterations = 10000;
+            int iterations = 1000;
             
             double withdrawl = 120000;
             double mean = Mean;
@@ -35,10 +45,15 @@ namespace MonteCarloSimulation1
             Random random = new Random();
             double outOfMoneyCount = 0;
             StringBuilder outOfMoneyMessage = new StringBuilder();
-            double newMoney = 500000;
+            double newMoney = 0;
             int yearNewMoney = 10;
             List<double> allRates = new List<double>(); 
             List<int> yearsOutofMoney = new List<int>();
+            List<double> successmoneyremaining = new List<double>();
+            List<double> ebal = new List<double>();
+            List<double> annualmoneymade = new List<double>();
+            List<double> annualwithdrawals = new List<double>();    
+
 
 
             Console.WriteLine("Monte Carlo Simulation Results:");
@@ -52,6 +67,8 @@ namespace MonteCarloSimulation1
                 List<double> rates = new List<double>();
                 List<double> withdrawals = new List<double>();  
                 List<double> bal = new List<double>();
+                List<double> moneymade = new List<double>();
+
                 Random eRand = new Random();
                 double inflation = 0.025;
                 double ss = 0;
@@ -75,11 +92,12 @@ namespace MonteCarloSimulation1
                     withdrawals.Add(periodwithdrawl); // for displaying withdrawals
                     // Calculate the ending balance
 
+                    moneymade.Add(currentInvestment * interestRate); // for displaying annual return 
                     double endingBalance = currentInvestment * (1 + interestRate) - periodwithdrawl;
                     if(run == yearNewMoney)
                         endingBalance = endingBalance + newMoney; // Add new money at the end of yearNewMoney
                     bal.Add(endingBalance);
-                   // Console.WriteLine($"  Year {run + 1}: Begin Bal = {currentInvestment:C0} Interest Rate = {interestRate:P2}, Withdrawl = {iwithdrawl:C0} End Bal = {endingBalance:C0}");
+                    // Console.WriteLine($"  Year {run + 1}: Begin Bal = {currentInvestment:C0} Interest Rate = {interestRate:P2}, Withdrawl = {iwithdrawl:C0} End Bal = {endingBalance:C0}");
                     if (endingBalance < 0)
                     {
                         yearsOutofMoney.Add(run);
@@ -92,7 +110,14 @@ namespace MonteCarloSimulation1
                         outOfMoneyMessage.Append('\n');
                         break;
                     }
-                    currentInvestment = endingBalance; // Use ending balance as initial for next run
+                    else { 
+                        successmoneyremaining.Add(endingBalance); // for displaying success money remaining
+                        ebal = bal;
+                        annualmoneymade = moneymade;
+                        annualwithdrawals = withdrawals;
+
+                    }
+                        currentInvestment = endingBalance; // Use ending balance as initial for next run
                 }
                 // initialInvestment = currentInvestment;
             }
@@ -111,7 +136,20 @@ namespace MonteCarloSimulation1
                 Console.WriteLine($"/n{outOfMoneyMessage.Length}");
 
             }
-            Console.WriteLine("\nSimulation complete.");
+            else
+            {
+                Console.WriteLine();
+                Console.WriteLine("all scenarios succeeded");
+                Console.WriteLine($"Average balance remaining: {successmoneyremaining.Average():C0}");
+                Console.WriteLine();
+                Console.WriteLine($"\nlast run balances: ");
+                for(int i=1;  i<ebal.Count;  i++)
+                {
+                    Console.WriteLine($"Year {i} withdrawls: {annualwithdrawals[i]:C0}, investment return: {annualmoneymade[i]:C0}, balance: {ebal[i]:C0}");
+                }
+            }
+                Console.WriteLine("\nSimulation complete.");
+               
         }
 
         private static double GetRateBoxMullerTransform(double mean, double standardDeviation, Random random)
