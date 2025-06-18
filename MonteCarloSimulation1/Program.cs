@@ -280,7 +280,7 @@ namespace MonteCarloSimulation1
             Console.WriteLine("1. 10 year gov bonds - 5.8% return w/std. 2.95%");
             Console.WriteLine("2. Last 95 years of S&P - 8.07% return w/ std. 19.15%");
             Console.WriteLine("3. Last 30 years of S&P - 10.07% return w/ std 16.8%");
-            Console.WriteLine("4. Current 10 year bond yield - .4.43% return w/ std 0.1%");
+            Console.WriteLine("4. Current 10 year bond yield - 4.43% return w/ std 0.1%");
             Console.Write("Enter the number of your choice (1-4): ");
 
             while (true)
