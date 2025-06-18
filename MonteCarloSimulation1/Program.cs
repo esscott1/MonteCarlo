@@ -29,55 +29,20 @@ namespace MonteCarloSimulation1
                     break;
                 }
 
-                int option = PromptInvestmentOption();
-                double mean, standardDeviation;
-                string inputs;
+                var parameters = SimulationParameters.PromptUser();
 
-                switch (option)
+                // Prepare result object
+                var result = new SimulationResult
                 {
-                    case 1:
-                        inputs = "Use the last 54 years of 10 year govt bonds";
-                        mean = 0.0583;
-                        standardDeviation = 0.0295;
-                        break;
-                    case 2:
-                        inputs = "Use the last 95 years of S&P returns";
-                        mean = 0.0807;
-                        standardDeviation = 0.1915;
-                        break;
-                    case 3:
-                        inputs = "Use the last 30 years of S&P returns";
-                        mean = 0.1007;
-                        standardDeviation = 0.1688;
-                        break;
-                    case 4:
-                        inputs = "Use the current 10 year bond yield";
-                        mean = 0.0443;
-                        standardDeviation = 0.001;
-                        break;
-                    default:
-                        inputs = "Use the current 10 year bond yield";
-                        mean = 0.0443;
-                        standardDeviation = 0.001;
-                        break;
-                }
-
-                int years = PromptYears();
-                int iterations = PromptIterations();
-                double withdrawal = DefaultWithdrawal;
-                double initialInvestment = DefaultInitialInvestment;
-
-                // Prompt for newMoney and yearNewMoney
-                double newMoney = PromptNewMoney();
-                int yearNewMoney = PromptYearNewMoney();
+                    OutOfMoneyCount = 0,
+                    YearsOutOfMoney = new List<int>(),
+                    FailedScenarioAverages = new List<double>(),
+                    SuccessMoneyRemaining = new List<double>()
+                };
 
                 var random = new Random();
-                double outOfMoneyCount = 0;
                 var outOfMoneyMessage = new StringBuilder();
-                var allRates = new List<double>(years * iterations);
-                var yearsOutOfMoney = new List<int>();
-                var successMoneyRemaining = new List<double>();
-                var failedScenarioAverages = new List<double>();
+                var allRates = new List<double>(parameters.Years * parameters.Iterations);
 
                 // For reporting the last successful run
                 List<double> lastBalances = null;
@@ -88,43 +53,40 @@ namespace MonteCarloSimulation1
                 List<double> lastTaxableWithdrawals = null;
                 List<double> lastNontaxableWithdrawals = null;
 
-                // Console.WriteLine("Monte Carlo Simulation Results:");
-
-                for (int i = 0; i < iterations; i++)
+                for (int i = 0; i < parameters.Iterations; i++)
                 {
-                    double currentInvestment = initialInvestment;
+                    double currentInvestment = parameters.InitialInvestment;
                     double inflation = 0.025;
                     double ss = 0;
-                    double currentWithdrawal = withdrawal;
+                    double currentWithdrawal = parameters.Withdrawal;
 
                     // Split investment for tracking
                     double taxable = currentInvestment * 0.4;
                     double nontaxable = currentInvestment * 0.6;
 
-                    var rates = new List<double>(years);
-                    var withdrawals = new List<double>(years);
-                    var balances = new List<double>(years);
-                    var annualReturns = new List<double>(years);
-                    var taxableBalances = new List<double>(years);
-                    var nontaxableBalances = new List<double>(years);
-                    var taxableWithdrawals = new List<double>(years);
-                    var nontaxableWithdrawals = new List<double>(years);
+                    var rates = new List<double>(parameters.Years);
+                    var withdrawals = new List<double>(parameters.Years);
+                    var balances = new List<double>(parameters.Years);
+                    var annualReturns = new List<double>(parameters.Years);
+                    var taxableBalances = new List<double>(parameters.Years);
+                    var nontaxableBalances = new List<double>(parameters.Years);
+                    var taxableWithdrawals = new List<double>(parameters.Years);
+                    var nontaxableWithdrawals = new List<double>(parameters.Years);
 
                     bool outOfMoney = false;
 
-                    for (int run = 0; run < years; run++)
+                    for (int run = 0; run < parameters.Years; run++)
                     {
                         if (run > 9) ss = 50000;
                         if (run > 19) inflation = 0.01;
 
-                        double interestRate = GetRateBoxMullerTransform(mean, standardDeviation, random);
+                        double interestRate = GetRateBoxMullerTransform(parameters.Mean, parameters.StdDev, random);
                         rates.Add(interestRate);
                         allRates.Add(interestRate);
 
                         currentWithdrawal *= (1 + inflation);
                         double periodWithdrawal = currentWithdrawal - (ss * .8);
                         withdrawals.Add(periodWithdrawal);
-
 
                         // Apply returns
                         taxable *= (1 + interestRate);
@@ -157,22 +119,20 @@ namespace MonteCarloSimulation1
 
                         // Recombine for balance and next year
                         double endingBalance = taxable + nontaxable;
-                        if (run == yearNewMoney)
-                            endingBalance += newMoney;
+                        if (run == parameters.YearNewMoney)
+                            endingBalance += parameters.NewMoney;
                         balances.Add(endingBalance);
 
                         if (endingBalance < 0 || taxable < 0 || nontaxable < 0)
                         {
-                            yearsOutOfMoney.Add(run);
-                            outOfMoneyCount++;
-                            //outOfMoneyMessage.Append($"\nIteration {i + 1}: in Year {run}:  Average rate of return {rates.Average():P2}");
+                            result.YearsOutOfMoney.Add(run);
+                            result.OutOfMoneyCount++;
                             for (int c = 0; c < rates.Count; c++)
                             {
-                                outOfMoneyMessage.Append($"\nYear {c}\nRate of return: {rates[c]:P2} \nwithdrawl: {withdrawals[c]:C0}(taxable {taxableWithdrawals[c]:C0}, nontax {nontaxableWithdrawals[c]:C0}) \nbal: {balances[c]:C0} (tax {taxableBalances[c]:C0}, nontax {nontaxableBalances[c]:C0})\n");
+                                outOfMoneyMessage.Append($"\nYear {c}\nRate of return: {rates[c]:P2} \nwithdrawal: {withdrawals[c]:C0}(taxable {taxableWithdrawals[c]:C0}, nontax {nontaxableWithdrawals[c]:C0}) \nbal: {balances[c]:C0} (tax {taxableBalances[c]:C0}, nontax {nontaxableBalances[c]:C0})\n");
                             }
-                            //outOfMoneyMessage.Append($"\nIteration {i + 1}: in Year {run}:  Average rate of return {rates.Average():P2}");
                             outOfMoneyMessage.Append('\n');
-                            failedScenarioAverages.Add(rates.Average());
+                            result.FailedScenarioAverages.Add(rates.Average());
                             outOfMoney = true;
                             break;
                         }
@@ -182,7 +142,7 @@ namespace MonteCarloSimulation1
                         if (!outOfMoney)
                         {
                             // Only store the last successful run for reporting
-                            successMoneyRemaining.Add(balances[^1]);
+                            result.SuccessMoneyRemaining.Add(balances[^1]);
                             lastBalances = balances;
                             lastAnnualReturns = annualReturns;
                             lastAnnualWithdrawals = withdrawals;
@@ -191,122 +151,25 @@ namespace MonteCarloSimulation1
                             lastTaxableWithdrawals = taxableWithdrawals;
                             lastNontaxableWithdrawals = nontaxableWithdrawals;
                         }
-
                     }
                 }
 
-                // ---- OUTPUT SECTION: Print after all iterations ----
-
-                if (outOfMoneyCount > 0)
-                {
-                    Console.WriteLine(outOfMoneyMessage.ToString());
-                    Console.WriteLine("----------------------------------------------------");
-                    double survival = 1 - (outOfMoneyCount / iterations);
-                    if (survival > 0.8)
-                        Smile();
-                    else
-                        Frown();
-                    Console.WriteLine($"\n{outOfMoneyCount} portfolios did not survive {years} years given {iterations} iterations. survival rate: {survival:P4}");
-                    Console.WriteLine($"\nThe Scenario: {inputs} with Initial mean: {mean:P4}  Initial standard deviation: {standardDeviation:P4}");
-
-                    double totalAvgRates = allRates.Average();
-                    double variance = allRates.Average(n => Math.Pow(n - totalAvgRates, 2));
-                    double stdDev = Math.Sqrt(variance);
-                    Console.WriteLine($"\nActual total avg return {totalAvgRates:P4} with std dev {stdDev} based on {inputs} into Randomization");
-                    Console.WriteLine($"\nInheritance of  {newMoney:C0} in  {DateTime.Now.Year + yearNewMoney} was considered");
-
-                    Console.WriteLine($"\nAverage year of failures ran out of money in year {yearsOutOfMoney.Average():F0} with an Avg return of {failedScenarioAverages.Average():P4}");
-                    //if (failedScenarioAverages.Count > 0)
-                    //{
-                    //    Console.WriteLine($"\nAverage return for failed scenarios: {failedScenarioAverages.Average():P4}");
-                    //}
-                    Console.WriteLine($"\nSee Above for failed scenarios and their rates of return, withdrawals, and balances.\n");
-                }
-                else //all scenarios succeeded
-                {
-                    Console.WriteLine();
-                    Console.WriteLine($"\nlast run balances: ");
-                    if (lastBalances != null && lastAnnualReturns != null && lastAnnualWithdrawals != null)
-                    {
-                        for (int ji = 1; ji < lastBalances.Count; ji++)
-                        {
-                            Console.WriteLine(
-                                $"Year {ji}\n withdrawls: {lastAnnualWithdrawals[ji]:C0}, (" +
-                                $"taxable: {lastTaxableWithdrawals[ji]:C0}, " +
-                                $"nontaxable: {lastNontaxableWithdrawals[ji]:C0})\n " +
-                                $"years return ($): {lastAnnualReturns[ji]:C0}\n " +
-                                $"total balance: {lastBalances[ji]:C0} (" +
-                                $"taxable balance: {lastTaxableBalances[ji]:C0}, " +
-                                $"nontaxable balance: {lastNontaxableBalances[ji]:C0}), ");
-                        }
-                    }
-                    Smile();
-                    Console.WriteLine($"***  All scenarios survived! ***");
-                    Console.WriteLine($"\nScenario: {inputs} with Initial mean: {mean:P4}  Initial standard deviation: {standardDeviation:P4}");
-                    Console.WriteLine($"\nInitial mean: {mean:P4}  Initial standard deviation: {standardDeviation:P4}");
-                    Console.WriteLine($"\nAverage balance remaining: {successMoneyRemaining.Average():C0}");
-                    Console.WriteLine();
-                }
-                Console.WriteLine("\nSimulation complete.");
-            }
-            
-        }
-        static void Smile()
-        {
-            Console.WriteLine("\nMonte Carlo Simulation Results:");
-            Console.WriteLine("  _____  ");
-            Console.WriteLine(" /     \\ ");
-            Console.WriteLine("|  o o  |");
-            Console.WriteLine("|   ^   |");
-            Console.WriteLine("|  '-'  |");
-            Console.WriteLine(" \\_____/ \n");
-            
-        }
-        static void Frown()
-        {
-            Console.WriteLine("\nMonte Carlo Simulation Results:");
-            Console.WriteLine("  _____  ");
-            Console.WriteLine(" /     \\ ");
-            Console.WriteLine("|  o o  |");
-            Console.WriteLine("|   ^   |");
-            Console.WriteLine("|   _   |");
-            Console.WriteLine("|  ' '  |");
-            Console.WriteLine(" \\_____/ \n");
-            
-        }
-        private static int PromptInvestmentOption()
-        {
-            Console.WriteLine("Select an investment scenario:");
-            Console.WriteLine("1. 10 year gov bonds - 5.8% return w/std. 2.95%");
-            Console.WriteLine("2. Last 95 years of S&P - 8.07% return w/ std. 19.15%");
-            Console.WriteLine("3. Last 30 years of S&P - 10.07% return w/ std 16.8%");
-            Console.WriteLine("4. Current 10 year bond yield - 4.43% return w/ std 0.1%");
-            Console.Write("Enter the number of your choice (1-4): ");
-
-            while (true)
-            {
-                string input = Console.ReadLine();
-                if (int.TryParse(input, out int choice) && choice >= 1 && choice <= 4)
-                {
-                    return choice;
-                }
-                Console.Write("Invalid input. Please enter a number between 1 and 4: ");
+                SimulationReporter.PrintResults(parameters.ScenarioDescription,
+                                result,
+                                parameters,
+                                allRates,
+                                outOfMoneyMessage,
+                                lastBalances,
+                                lastAnnualReturns,
+                                lastAnnualWithdrawals,
+                                lastTaxableBalances,
+                                lastNontaxableBalances,
+                                lastTaxableWithdrawals,
+                                lastNontaxableWithdrawals
+                            );
             }
         }
 
-        private static int PromptYears()
-        {
-            Console.Write("How long do you want your money to last (years)? ");
-            while (true)
-            {
-                string input = Console.ReadLine();
-                if (int.TryParse(input, out int years) && years > 0)
-                {
-                    return years;
-                }
-                Console.Write("Invalid input. Please enter a positive integer for years: ");
-            }
-        }
 
         private static double GetRateBoxMullerTransform(double mean, double standardDeviation, Random random)
         {
@@ -370,7 +233,252 @@ namespace MonteCarloSimulation1
 
             return mean + standardDeviation * x;
         }
-        private static double PromptNewMoney()
+  
+    }
+    public class SimulationParameters
+    {
+        public int Years { get; set; }
+        public int Iterations { get; set; }
+        public double Withdrawal { get; set; }
+        public double InitialInvestment { get; set; }
+        public double Mean { get; set; }
+        public double StdDev { get; set; }
+        public double NewMoney { get; set; }
+        public int YearNewMoney { get; set; }
+        public required string ScenarioDescription { get; set; }
+
+
+
+        // Factory method to prompt user for all parameters
+        public static SimulationParameters PromptUser()
+        {
+            int option = SimulationPrompt.PromptInvestmentOption();
+            string scenarioDescription;
+            double mean, standardDeviation;
+
+            switch (option)
+            {
+                case 1:
+                    scenarioDescription = "Use the last 54 years of 10 year govt bonds";
+                    mean = 0.0583;
+                    standardDeviation = 0.0295;
+                    break;
+                case 2:
+                    scenarioDescription = "Use the last 95 years of S&P returns";
+                    mean = 0.0807;
+                    standardDeviation = 0.1915;
+                    break;
+                case 3:
+                    scenarioDescription = "Use the last 30 years of S&P returns";
+                    mean = 0.1007;
+                    standardDeviation = 0.1688;
+                    break;
+                case 4:
+                    scenarioDescription = "Use the current 10 year bond yield";
+                    mean = 0.0443;
+                    standardDeviation = 0.001;
+                    break;
+                default:
+                    scenarioDescription = "Use the current 10 year bond yield";
+                    mean = 0.0443;
+                    standardDeviation = 0.001;
+                    break;
+            }
+
+            return new SimulationParameters
+            {
+                Years = SimulationPrompt.PromptYears(),
+                Iterations = SimulationPrompt.PromptIterations(),
+                Withdrawal = SimulationPrompt.PromptWithdrawal(),
+                InitialInvestment = SimulationPrompt.PromptInitialInvestment(), 
+                Mean = mean,
+                StdDev = standardDeviation,
+                NewMoney = SimulationPrompt.PromptNewMoney(),
+                YearNewMoney = SimulationPrompt.PromptYearNewMoney(),
+                ScenarioDescription = scenarioDescription
+            };
+        }
+    }
+
+    public class SimulationResult
+    {
+        public double OutOfMoneyCount { get; set; }
+        public List<int> YearsOutOfMoney { get; set; }
+        public List<double> FailedScenarioAverages { get; set; }
+        public List<double> SuccessMoneyRemaining { get; set; }
+        // Add other result fields as needed
+    }
+    public static class SimulationReporter
+    {
+        public static void PrintResults(
+            String scenarioDescription,
+            SimulationResult result,
+            SimulationParameters parameters,
+            List<double> allRates,
+            StringBuilder outOfMoneyMessage,
+            List<double> lastBalances,
+            List<double> lastAnnualReturns,
+            List<double> lastAnnualWithdrawals,
+            List<double> lastTaxableBalances,
+            List<double> lastNontaxableBalances,
+            List<double> lastTaxableWithdrawals,
+            List<double> lastNontaxableWithdrawals)
+
+        // ---- OUTPUT SECTION: Print after all iterations ----
+        { 
+            if (result.OutOfMoneyCount > 0)
+            {
+                Console.WriteLine(outOfMoneyMessage.ToString());
+                Console.WriteLine("----------------------------------------------------");
+                double survival = 1 - (result.OutOfMoneyCount / parameters.Iterations);
+                if (survival > 0.8)
+                    Smile();
+                else
+                    Frown();
+                Console.WriteLine($"\n{result.OutOfMoneyCount} portfolios did not survive {parameters.Years} years given {parameters.Iterations} iterations. survival rate: {survival:P4}");
+                Console.WriteLine($"\nThe Scenario: {scenarioDescription} with Initial mean: {parameters.Mean:P4}  Initial standard deviation: {parameters.StdDev:P4}");
+
+                double totalAvgRates = allRates.Average();
+                double variance = allRates.Average(n => Math.Pow(n - totalAvgRates, 2));
+                double stdDev = Math.Sqrt(variance);
+                Console.WriteLine($"\nActual total avg return {totalAvgRates:P4} with std dev {stdDev} based on {scenarioDescription} into Randomization");
+                Console.WriteLine($"\nInheritance of  {parameters.NewMoney:C0} in  {DateTime.Now.Year + parameters.YearNewMoney} was considered");
+
+                Console.WriteLine($"\nAverage year of failures ran out of money in year {result.YearsOutOfMoney.Average():F0} with an Avg return of {result.FailedScenarioAverages.Average():P4}");
+                Console.WriteLine($"\nSee Above for failed scenarios and their rates of return, withdrawals, and balances.\n");
+            }
+            else //all scenarios succeeded
+            {
+                Console.WriteLine();
+                Console.WriteLine($"\nlast run balances: ");
+                if (lastBalances != null && lastAnnualReturns != null && lastAnnualWithdrawals != null)
+                {
+                    for (int ji = 1; ji < lastBalances.Count; ji++)
+                    {
+                        Console.WriteLine(
+                            $"Year {ji}\n withdrawals: {lastAnnualWithdrawals[ji]:C0}, (" +
+                            $"taxable: {lastTaxableWithdrawals[ji]:C0}, " +
+                            $"nontaxable: {lastNontaxableWithdrawals[ji]:C0})\n " +
+                            $"years return ($): {lastAnnualReturns[ji]:C0}\n " +
+                            $"total balance: {lastBalances[ji]:C0} (" +
+                            $"taxable balance: {lastTaxableBalances[ji]:C0}, " +
+                            $"nontaxable balance: {lastNontaxableBalances[ji]:C0}), ");
+                    }
+                }
+                Smile();
+                Console.WriteLine($"***  All scenarios survived! ***");
+                Console.WriteLine($"\nScenario: {scenarioDescription} with Initial mean: {parameters.Mean:P4}  Initial standard deviation: {parameters.StdDev:P4}");
+                Console.WriteLine($"\nInitial mean: {parameters.Mean:P4}  Initial standard deviation: {parameters.StdDev:P4}");
+                Console.WriteLine($"\nAverage balance remaining: {result.SuccessMoneyRemaining.Average():C0}");
+                Console.WriteLine();
+            }
+            Console.WriteLine("\nSimulation complete.");
+        }
+        static void Smile()
+        {
+            Console.WriteLine("\nMonte Carlo Simulation Results:");
+            Console.WriteLine("  _____  ");
+            Console.WriteLine(" /     \\ ");
+            Console.WriteLine("|  o o  |");
+            Console.WriteLine("|   ^   |");
+            Console.WriteLine("|  '-'  |");
+            Console.WriteLine(" \\_____/ \n");
+
+        }
+        static void Frown()
+        {
+            Console.WriteLine("\nMonte Carlo Simulation Results:");
+            Console.WriteLine("  _____  ");
+            Console.WriteLine(" /     \\ ");
+            Console.WriteLine("|  o o  |");
+            Console.WriteLine("|   ^   |");
+            Console.WriteLine("|   _   |");
+            Console.WriteLine("|  ' '  |");
+            Console.WriteLine(" \\_____/ \n");
+
+        }
+
+    }
+
+    public static class SimulationPrompt
+    {
+        public static int PromptInvestmentOption()
+        {
+            Console.WriteLine("Select an investment scenario:");
+            Console.WriteLine("1. 10 year gov bonds - 5.8% return w/std. 2.95%");
+            Console.WriteLine("2. Last 95 years of S&P - 8.07% return w/ std. 19.15%");
+            Console.WriteLine("3. Last 30 years of S&P - 10.07% return w/ std 16.8%");
+            Console.WriteLine("4. Current 10 year bond yield - 4.43% return w/ std 0.1%");
+            Console.Write("Enter the number of your choice (1-4): ");
+
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (int.TryParse(input, out int choice) && choice >= 1 && choice <= 4)
+                {
+                    return choice;
+                }
+                Console.Write("Invalid input. Please enter a number between 1 and 4: ");
+            }
+        }
+
+        public static int PromptYears()
+        {
+            Console.Write("How long do you want your money to last (years)? ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (int.TryParse(input, out int years) && years > 0)
+                {
+                    return years;
+                }
+                Console.Write("Invalid input. Please enter a positive integer for years: ");
+            }
+        }
+
+        public static int PromptIterations()
+        {
+            Console.Write("Enter the number of simulation iterations (e.g., 10): ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (int.TryParse(input, out int value) && value > 0)
+                {
+                    return value;
+                }
+                Console.Write("Invalid input. Please enter a positive integer: ");
+            }
+        }
+
+        public static double PromptWithdrawal()
+        {
+            Console.Write("Enter the annual withdrawal amount (e.g., 120000): ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (double.TryParse(input, out double value) && value >= 0)
+                {
+                    return value;
+                }
+                Console.Write("Invalid input. Please enter a non-negative number: ");
+            }
+        }
+
+        public static double PromptInitialInvestment()
+        {
+            Console.Write("Enter the initial investment amount (e.g., 2800000): ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (double.TryParse(input, out double value) && value >= 0)
+                {
+                    return value;
+                }
+                Console.Write("Invalid input. Please enter a non-negative number: ");
+            }
+        }
+
+        public static double PromptNewMoney()
         {
             Console.Write("Enter the amount of new money to be added (e.g., inheritance) [0 for none]: ");
             while (true)
@@ -384,7 +492,7 @@ namespace MonteCarloSimulation1
             }
         }
 
-        private static int PromptYearNewMoney()
+        public static int PromptYearNewMoney()
         {
             Console.Write("Enter the year (0-based) when the new money should be added: ");
             while (true)
@@ -397,18 +505,7 @@ namespace MonteCarloSimulation1
                 Console.Write("Invalid input. Please enter a non-negative integer: ");
             }
         }
-        private static int PromptIterations()
-        {
-            Console.Write("Enter the number of simulation iterations (e.g., 10): ");
-            while (true)
-            {
-                string input = Console.ReadLine();
-                if (int.TryParse(input, out int value) && value > 0)
-                {
-                    return value;
-                }
-                Console.Write("Invalid input. Please enter a positive integer: ");
-            }
-        }
     }
+
+
 }
