@@ -1,21 +1,9 @@
-﻿using System;
-using System.Text;
-using System.Linq;
-using System.Collections.Generic;
-using System.Net.NetworkInformation;
-using System.Runtime.CompilerServices;
+﻿using System.Text;
 
 namespace MonteCarloSimulation1
 {
     public class MonteCarloSimulation
     {
-        // Simulation configuration
-        private const int DefaultIterations = 10;
-        private const double DefaultWithdrawal = 120000;
-        private const double DefaultInitialInvestment = 2800000.0;
-        private const int DefaultMonths = 360;
-        private const double DefaultNewMoney = 0;
-        private const int DefaultYearNewMoney = 10;
 
         public static void Main(string[] args)
         {
@@ -55,14 +43,13 @@ namespace MonteCarloSimulation1
 
                 for (int i = 0; i < parameters.Iterations; i++)
                 {
-                    double currentInvestment = parameters.InitialInvestment;
                     double inflation = 0.025;
                     double ss = 0;
                     double currentWithdrawal = parameters.Withdrawal;
 
                     // Split investment for tracking
-                    double taxable = currentInvestment * 0.4;
-                    double nontaxable = currentInvestment * 0.6;
+                    double taxable = parameters.InitialInvestment * 0.4;
+                    double nontaxable = parameters.InitialInvestment * 0.6;
 
                     var rates = new List<double>(parameters.Years);
                     var withdrawals = new List<double>(parameters.Years);
@@ -72,8 +59,6 @@ namespace MonteCarloSimulation1
                     var nontaxableBalances = new List<double>(parameters.Years);
                     var taxableWithdrawals = new List<double>(parameters.Years);
                     var nontaxableWithdrawals = new List<double>(parameters.Years);
-
-                    bool outOfMoney = false;
 
                     for (int run = 0; run < parameters.Years; run++)
                     {
@@ -133,24 +118,18 @@ namespace MonteCarloSimulation1
                             }
                             outOfMoneyMessage.Append('\n');
                             result.FailedScenarioAverages.Add(rates.Average());
-                            outOfMoney = true;
                             break;
                         }
 
-                        currentInvestment = endingBalance;
-
-                        if (!outOfMoney)
-                        {
-                            // Only store the last successful run for reporting
-                            result.SuccessMoneyRemaining.Add(balances[^1]);
-                            lastBalances = balances;
-                            lastAnnualReturns = annualReturns;
-                            lastAnnualWithdrawals = withdrawals;
-                            lastTaxableBalances = taxableBalances;
-                            lastNontaxableBalances = nontaxableBalances;
-                            lastTaxableWithdrawals = taxableWithdrawals;
-                            lastNontaxableWithdrawals = nontaxableWithdrawals;
-                        }
+                        // Only store the last successful run for reporting
+                        result.SuccessMoneyRemaining.Add(balances[^1]);
+                        lastBalances = balances;
+                        lastAnnualReturns = annualReturns;
+                        lastAnnualWithdrawals = withdrawals;
+                        lastTaxableBalances = taxableBalances;
+                        lastNontaxableBalances = nontaxableBalances;
+                        lastTaxableWithdrawals = taxableWithdrawals;
+                        lastNontaxableWithdrawals = nontaxableWithdrawals;
                     }
                 }
 
@@ -179,61 +158,6 @@ namespace MonteCarloSimulation1
             return mean + standardDeviation * randStdNormal;
         }
 
-        // Function to calculate the inverse CDF of the normal distribution.
-        // This is an approximation, as there is no closed-form solution.
-        private static double CalculateInverseCDF(double p, double mean, double standardDeviation)
-        {
-            double a1 = -39.69683028665376;
-            double a2 = 220.9460984245205;
-            double a3 = -2759.979103979004;
-            double a4 = 13835.77518672690;
-            double a5 = -30664.14590005163;
-            double a6 = 25066.32774311881;
-
-            double b1 = -54.47609879822406;
-            double b2 = 161.5858368580461;
-            double b3 = -1556.989794985913;
-            double b4 = 1221.238011352355;
-            double b5 = -288.8167363461239;
-
-            double c1 = -0.3239984597581123;
-            double c2 = -0.02100035308924411;
-            double c3 = 0.003438151596945617;
-            double c4 = -0.0002043224016355399;
-
-            double d1 = -0.9621174000094653;
-            double d2 = 0.4374664141464968;
-            double d3 = -0.2916749416344412;
-            double d4 = 0.04278945251007351;
-
-            double x;
-
-            if (p <= 0.02275)
-            {
-                x = Math.Sqrt(-2.0 * Math.Log(p));
-                x = a1 + x * (a2 + x * (a3 + x * (a4 + x * (a5 + x * a6))));
-                x = x / (1.0 + x * (b1 + x * (b2 + x * (b3 + x * (b4 + x * b5)))));
-            }
-            else if (p >= 0.97725)
-            {
-                x = Math.Sqrt(-2.0 * Math.Log(1.0 - p));
-                x = c1 + x * (c2 + x * (c3 + x * c4));
-                x = x / (1.0 + x * (d1 + x * (d2 + x * (d3 + x * d4))));
-            }
-            else
-            {
-                x = p - 0.5;
-                x = x * x * x;
-                x = c1 + x * (c2 + x * (c3 + x * c4));
-                x = p - 0.5;
-                x = x * x * x;
-                x = x / (1.0 + x * (d1 + x * (d2 + x * (d3 + x * d4))));
-                x = x / (1.0 + x * (d1 + x * (d2 + x * (d3 + x * d4))));
-            }
-
-            return mean + standardDeviation * x;
-        }
-  
     }
     public class SimulationParameters
     {
