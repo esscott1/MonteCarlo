@@ -104,6 +104,10 @@ namespace MonteCarloSimulation1
                         taxable -= grossTaxableWithdrawal;
                         nontaxable -= desiredNontaxableWithdrawal;
 
+                        // Add new money (e.g., inheritance) as after-tax cash in the year it arrives
+                        if (run == parameters.YearNewMoney)
+                            nontaxable += parameters.NewMoney;
+
                         // Track balances
                         taxableBalances.Add(taxable);
                         nontaxableBalances.Add(nontaxable);
@@ -117,8 +121,6 @@ namespace MonteCarloSimulation1
 
                         // Recombine for balance and next year
                         double endingBalance = taxable + nontaxable;
-                        if (run == parameters.YearNewMoney)
-                            endingBalance += parameters.NewMoney;
                         balances.Add(endingBalance);
 
                         if (endingBalance < 0 || taxable < 0 || nontaxable < 0)
