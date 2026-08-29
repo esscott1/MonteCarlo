@@ -105,6 +105,27 @@ function renderErrors(errors) {
     results.innerHTML = `<div class="error-box"><p>Please fix the following:</p><ul>${list}</ul></div>`;
 }
 
+function renderRunDetailTable(yearDetails) {
+    const rows = yearDetails.map((yd) => `
+        <tr>
+            <td>${yd.year}</td>
+            <td>${formatCurrency(yd.withdrawal)} (taxable ${formatCurrency(yd.taxableWithdrawal)}, nontaxable ${formatCurrency(yd.nontaxableWithdrawal)})</td>
+            <td>${formatPercent(yd.taxRate)}</td>
+            <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
+            <td>${formatCurrency(yd.balance)} (taxable ${formatCurrency(yd.taxableBalance)}, nontaxable ${formatCurrency(yd.nontaxableBalance)})</td>
+        </tr>
+    `).join('');
+
+    return `
+        <table class="run-table">
+            <thead>
+                <tr><th>Year</th><th>Withdrawal</th><th>Tax Rate</th><th>Return</th><th>Total Balance</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
 function renderPerRunTable(result) {
     const rows = result.endingBalances.map((balance, i) => {
         const failureYear = result.failureYears[i];
@@ -113,7 +134,7 @@ function renderPerRunTable(result) {
             : '<span class="success">&mdash;</span>';
         return `
             <tr>
-                <td>${i + 1}</td>
+                <td><button type="button" class="run-toggle" aria-expanded="false">${i + 1} <span class="run-toggle-icon">&#9656;</span></button></td>
                 <td>${formatCurrency(balance)}</td>
                 <td>${formatCurrency(result.lowestBalanceValues[i])} in year ${result.lowestBalanceYears[i]}</td>
                 <td>${formatPercent(result.averageAnnualReturns[i])}</td>
@@ -121,6 +142,9 @@ function renderPerRunTable(result) {
                 <td>Year ${result.highestReturnYears[i]} (${formatPercent(result.highestReturnValues[i])})</td>
                 <td>Year ${result.lowestReturnYears[i]} (${formatPercent(result.lowestReturnValues[i])})</td>
                 <td>${failureNote}</td>
+            </tr>
+            <tr class="run-detail-row" hidden>
+                <td colspan="8">${renderRunDetailTable(result.runDetails[i])}</td>
             </tr>
         `;
     }).join('');
@@ -220,6 +244,20 @@ function renderResults(parameters, output) {
         renderDetail(output);
 }
 
+function initRunToggles() {
+    results.addEventListener('click', (e) => {
+        const button = e.target.closest('.run-toggle');
+        if (!button) return;
+
+        const detailRow = button.closest('tr').nextElementSibling;
+        const expanded = button.getAttribute('aria-expanded') === 'true';
+
+        detailRow.hidden = expanded;
+        button.setAttribute('aria-expanded', String(!expanded));
+        button.querySelector('.run-toggle-icon').innerHTML = expanded ? '&#9656;' : '&#9662;';
+    });
+}
+
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -262,3 +300,4 @@ form.addEventListener('submit', async (e) => {
 
 loadScenarios();
 initMoneyInputs();
+initRunToggles();
