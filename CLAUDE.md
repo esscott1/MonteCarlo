@@ -20,9 +20,12 @@ dotnet run --project MonteCarloSimulation1
 
 # Run the web app, then open http://localhost:5091
 dotnet run --project MonteCarloSimulation.Web
+
+# Run the automated tests
+dotnet test MonteCarlo.sln
 ```
 
-There is no test project and no automated test suite — verification has been manual: smoke-running the console app with piped stdin input, and exercising the web app live in a browser.
+`MonteCarloSimulation.Core.Tests` covers `MonteCarloEngine`'s run-outcome behavior (all-succeed, all-fail, and two statistically-approximate pass-rate scenarios) — it deliberately does not assert on exact dollar values, since `Random` is unseeded (see "Non-determinism" below). Beyond that, verification has been manual: smoke-running the console app with piped stdin input, and exercising the web app live in a browser.
 
 **Windows gotcha:** if a previous `dotnet run` of `MonteCarloSimulation1` or `MonteCarloSimulation.Web` wasn't cleanly exited, its `.exe` stays locked and the next `dotnet build`/`dotnet run` fails with `MSB3021`/`MSB3027`. Kill the stray process (`Get-Process MonteCarloSimulation1,MonteCarloSimulation.Web -ErrorAction SilentlyContinue | Stop-Process -Force`) before rebuilding.
 
