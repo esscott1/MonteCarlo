@@ -28,6 +28,7 @@ app.MapPost("/api/run", (RunRequest request) =>
         YearNewMoney = request.YearNewMoney,
         SocialSecurityYearsUntilStart = request.SocialSecurityYearsUntilStart,
         SocialSecurityAnnualAmount = request.SocialSecurityAnnualAmount,
+        AnnualStandardDeduction = request.AnnualStandardDeduction,
         ScenarioDescription = scenario.Description
     };
 

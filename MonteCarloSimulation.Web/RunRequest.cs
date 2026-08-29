@@ -13,6 +13,7 @@ namespace MonteCarloSimulation.Web
         public int YearNewMoney { get; set; }
         public int SocialSecurityYearsUntilStart { get; set; }
         public double SocialSecurityAnnualAmount { get; set; }
+        public double AnnualStandardDeduction { get; set; }
 
         public Dictionary<string, string> Validate()
         {
@@ -26,6 +27,7 @@ namespace MonteCarloSimulation.Web
             if (YearNewMoney < 0) errors["yearNewMoney"] = "Year of new money must be non-negative.";
             if (SocialSecurityYearsUntilStart < 0) errors["socialSecurityYearsUntilStart"] = "Must be non-negative.";
             if (SocialSecurityAnnualAmount < 0) errors["socialSecurityAnnualAmount"] = "Must be non-negative.";
+            if (AnnualStandardDeduction < 0) errors["annualStandardDeduction"] = "Must be non-negative.";
             return errors;
         }
     }

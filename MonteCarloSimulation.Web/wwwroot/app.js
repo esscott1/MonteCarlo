@@ -230,7 +230,8 @@ form.addEventListener('submit', async (e) => {
         newMoney: parseNumber(formData.get('newMoney')),
         yearNewMoney: Number(formData.get('yearNewMoney')),
         socialSecurityYearsUntilStart: Number(formData.get('socialSecurityYearsUntilStart')),
-        socialSecurityAnnualAmount: parseNumber(formData.get('socialSecurityAnnualAmount'))
+        socialSecurityAnnualAmount: parseNumber(formData.get('socialSecurityAnnualAmount')),
+        annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction'))
     };
 
     results.innerHTML = '<p class="loading">Running simulation&hellip;</p>';

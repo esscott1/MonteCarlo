@@ -38,7 +38,7 @@ Three projects in `MonteCarlo.sln`:
 
 ### The simulation model (`MonteCarloEngine.Run`)
 
-Each run splits the initial investment 40% `taxable` / 60% `nontaxable`. Every simulated year, both buckets grow by the same randomly-drawn rate (Box-Muller transform over the scenario's mean/stddev), then a withdrawal is taken pro-rata from both. A flat 20% tax is modeled only on the taxable side: withdrawing from `taxable` divides the desired amount by `0.8` (grossing it up); withdrawing from `nontaxable` is not grossed up.
+Each run splits the initial investment 40% `taxable` / 60% `nontaxable`. Every simulated year, both buckets grow by the same randomly-drawn rate (Box-Muller transform over the scenario's mean/stddev), then a withdrawal is taken pro-rata from both. A flat 20% tax (`MonteCarloEngine.Run`'s local `taxRate` constant) is modeled only on the taxable side: the first `AnnualStandardDeduction` dollars of that year's taxable-side withdrawal are exempt from the tax, and only the amount above that is grossed up (divided by `1 - taxRate`); withdrawing from `nontaxable` is never grossed up regardless of the deduction. `AnnualStandardDeduction` itself compounds by the same inflation rate as the withdrawal, starting from year 0 (no deferred start, unlike Social Security).
 
 Two cash-flow features layer on top of that:
 - **NewMoney** (a one-time inheritance) is credited directly into `nontaxable` in its arrival year — tax-free on arrival, and since `nontaxable` withdrawals are never grossed up, it stays tax-free on every withdrawal after that too.

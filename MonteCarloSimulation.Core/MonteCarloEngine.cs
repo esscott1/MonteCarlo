@@ -6,6 +6,8 @@ namespace MonteCarloSimulation.Core
     {
         public static SimulationRunOutput Run(SimulationParameters parameters)
         {
+            const double taxRate = 0.20;
+
             var result = new SimulationResult
             {
                 OutOfMoneyCount = 0,
@@ -41,6 +43,7 @@ namespace MonteCarloSimulation.Core
                 double inflation = 0.025;
                 double ss = 0;
                 double currentWithdrawal = parameters.Withdrawal;
+                double standardDeduction = parameters.AnnualStandardDeduction;
 
                 // Split investment for tracking
                 double taxable = parameters.InitialInvestment * 0.4;
@@ -71,6 +74,7 @@ namespace MonteCarloSimulation.Core
                     allRates.Add(interestRate);
 
                     currentWithdrawal *= (1 + inflation);
+                    standardDeduction *= (1 + inflation);
                     double periodWithdrawal = currentWithdrawal;
                     withdrawals.Add(periodWithdrawal);
 
@@ -83,9 +87,12 @@ namespace MonteCarloSimulation.Core
                     double taxableProportion = totalBalance > 0 ? taxable / totalBalance : 0;
                     double nontaxableProportion = totalBalance > 0 ? nontaxable / totalBalance : 0;
 
-                    // Calculate grossed-up withdrawal from taxable (to net the correct after-tax amount)
+                    // Calculate grossed-up withdrawal from taxable (to net the correct after-tax amount),
+                    // exempting the first `standardDeduction` dollars of this withdrawal from tax
                     double desiredTaxableWithdrawal = periodWithdrawal * taxableProportion;
-                    double grossTaxableWithdrawal = desiredTaxableWithdrawal / 0.8; // gross up for 20% tax
+                    double grossTaxableWithdrawal = desiredTaxableWithdrawal <= standardDeduction
+                        ? desiredTaxableWithdrawal
+                        : (desiredTaxableWithdrawal - taxRate * standardDeduction) / (1 - taxRate);
                     double desiredNontaxableWithdrawal = periodWithdrawal * nontaxableProportion;
 
                     // Withdraw from each account
