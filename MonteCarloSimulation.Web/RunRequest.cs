@@ -8,7 +8,8 @@ namespace MonteCarloSimulation.Web
         public int Years { get; set; }
         public int Iterations { get; set; }
         public double Withdrawal { get; set; }
-        public double InitialInvestment { get; set; }
+        public double InitialTaxableBalance { get; set; }
+        public double InitialNontaxableBalance { get; set; }
         public double NewMoney { get; set; }
         public int YearNewMoney { get; set; }
         public int SocialSecurityYearsUntilStart { get; set; }
@@ -22,7 +23,8 @@ namespace MonteCarloSimulation.Web
             if (Years <= 0) errors["years"] = "Years must be a positive integer.";
             if (Iterations <= 0) errors["iterations"] = "Iterations must be a positive integer.";
             if (Withdrawal < 0) errors["withdrawal"] = "Withdrawal must be non-negative.";
-            if (InitialInvestment < 0) errors["initialInvestment"] = "Initial investment must be non-negative.";
+            if (InitialTaxableBalance < 0) errors["initialTaxableBalance"] = "Initial taxable balance must be non-negative.";
+            if (InitialNontaxableBalance < 0) errors["initialNontaxableBalance"] = "Initial nontaxable balance must be non-negative.";
             if (NewMoney < 0) errors["newMoney"] = "New money must be non-negative.";
             if (YearNewMoney < 0) errors["yearNewMoney"] = "Year of new money must be non-negative.";
             if (SocialSecurityYearsUntilStart < 0) errors["socialSecurityYearsUntilStart"] = "Must be non-negative.";

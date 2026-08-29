@@ -45,9 +45,8 @@ namespace MonteCarloSimulation.Core
                 double currentWithdrawal = parameters.Withdrawal;
                 double standardDeduction = parameters.AnnualStandardDeduction;
 
-                // Split investment for tracking
-                double taxable = parameters.InitialInvestment * 0.4;
-                double nontaxable = parameters.InitialInvestment * 0.6;
+                double taxable = parameters.InitialTaxableBalance;
+                double nontaxable = parameters.InitialNontaxableBalance;
 
                 var rates = new List<double>(parameters.Years);
                 var withdrawals = new List<double>(parameters.Years);

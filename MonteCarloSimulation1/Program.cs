@@ -136,7 +136,8 @@ namespace MonteCarloSimulation1
                 Years = PromptYears(),
                 Iterations = PromptIterations(),
                 Withdrawal = PromptWithdrawal(),
-                InitialInvestment = PromptInitialInvestment(),
+                InitialTaxableBalance = PromptInitialTaxableBalance(),
+                InitialNontaxableBalance = PromptInitialNontaxableBalance(),
                 Mean = scenario.Mean,
                 StdDev = scenario.StdDev,
                 NewMoney = PromptNewMoney(),
@@ -210,9 +211,23 @@ namespace MonteCarloSimulation1
             }
         }
 
-        public static double PromptInitialInvestment()
+        public static double PromptInitialTaxableBalance()
         {
-            Console.Write("Enter the initial investment amount (e.g., 2800000): ");
+            Console.Write("Enter the initial taxable balance (e.g., 1120000): ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (double.TryParse(input, out double value) && value >= 0)
+                {
+                    return value;
+                }
+                Console.Write("Invalid input. Please enter a non-negative number: ");
+            }
+        }
+
+        public static double PromptInitialNontaxableBalance()
+        {
+            Console.Write("Enter the initial nontaxable balance (e.g., 1680000): ");
             while (true)
             {
                 string input = Console.ReadLine();
