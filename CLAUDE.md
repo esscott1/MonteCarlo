@@ -1,0 +1,62 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+A Monte Carlo retirement-portfolio simulator: given an investment scenario, a starting balance, and an annual withdrawal, it runs many randomized simulations of portfolio performance over a number of years and reports survival rate and balance outcomes. Available as both a console app and a web GUI, both built on .NET 9 and sharing one simulation engine.
+
+## Commands
+
+```bash
+# Build everything
+dotnet build MonteCarlo.sln
+
+# Build a single project
+dotnet build MonteCarloSimulation.Core/MonteCarloSimulation.Core.csproj
+
+# Run the console app (interactive prompts)
+dotnet run --project MonteCarloSimulation1
+
+# Run the web app, then open http://localhost:5091
+dotnet run --project MonteCarloSimulation.Web
+```
+
+There is no test project and no automated test suite — verification has been manual: smoke-running the console app with piped stdin input, and exercising the web app live in a browser.
+
+**Windows gotcha:** if a previous `dotnet run` of `MonteCarloSimulation1` or `MonteCarloSimulation.Web` wasn't cleanly exited, its `.exe` stays locked and the next `dotnet build`/`dotnet run` fails with `MSB3021`/`MSB3027`. Kill the stray process (`Get-Process MonteCarloSimulation1,MonteCarloSimulation.Web -ErrorAction SilentlyContinue | Stop-Process -Force`) before rebuilding.
+
+Source files are UTF-8 with BOM and CRLF line endings — preserve this when editing. `git add` will warn `LF will be replaced by CRLF`; that's expected and harmless.
+
+## Architecture
+
+Three projects in `MonteCarlo.sln`:
+
+- **`MonteCarloSimulation.Core`** — the entire simulation engine, with zero I/O. `MonteCarloEngine.Run(SimulationParameters)` is the single source of truth for all financial math; both front ends call it and only format its output differently. Never duplicate simulation logic into either front end — if a calculation needs to change, it changes here once. Also holds `SimulationParameters`/`SimulationResult`/`SimulationRunOutput` (plain data) and `InvestmentScenarios` (the 4 built-in scenario presets, shared so neither front end re-hardcodes the same numbers).
+- **`MonteCarloSimulation1`** — the console app. A thin I/O loop: prompt for input (`SimulationPrompt`), call `MonteCarloEngine.Run`, print results (`SimulationReporter`).
+- **`MonteCarloSimulation.Web`** — an ASP.NET Core minimal API (`GET /api/scenarios`, `POST /api/run`) serving a static `wwwroot/` page (plain HTML + vanilla JS, no framework, no build step). The frontend never touches the input form when rendering results — results and inputs are separate DOM subtrees, which is what keeps inputs visible after a run.
+
+### The simulation model (`MonteCarloEngine.Run`)
+
+Each run splits the initial investment 40% `taxable` / 60% `nontaxable`. Every simulated year, both buckets grow by the same randomly-drawn rate (Box-Muller transform over the scenario's mean/stddev), then a withdrawal is taken pro-rata from both. A flat 20% tax is modeled only on the taxable side: withdrawing from `taxable` divides the desired amount by `0.8` (grossing it up); withdrawing from `nontaxable` is not grossed up.
+
+Two cash-flow features layer on top of that:
+- **NewMoney** (a one-time inheritance) is credited directly into `nontaxable` in its arrival year — tax-free on arrival, and since `nontaxable` withdrawals are never grossed up, it stays tax-free on every withdrawal after that too.
+- **Social Security** is *not* deposited into either bucket. It's netted against the withdrawal target directly (`periodWithdrawal = currentWithdrawal - ss * 0.8`), taxed at the same 20% rate but as the inverse operation (netting income down instead of grossing a withdrawal up). It starts at `SocialSecurityYearsUntilStart` and compounds by the same inflation rate as the withdrawal thereafter. Because it's an off-books adjustment, it never appears in the taxable/nontaxable withdrawal breakdowns used for reporting.
+
+A run "fails" the instant `taxable`, `nontaxable`, or their combined total goes negative — a sub-account can trigger failure even while the combined balance is still positive.
+
+### `SimulationResult`'s per-run lists are index-aligned
+
+`SimulationResult` holds several `List<T>` fields (`EndingBalances`, `AverageAnnualReturns`, `FailureYears`, `HighestReturnYears`/`Values`, `LowestReturnYears`/`Values`, `LowestBalanceYears`/`Values`) that all get exactly one entry appended per iteration, in the same order — `EndingBalances[i]` and `FailureYears[i]` describe the same run. When adding a new per-run stat, append to it at the same point in `MonteCarloEngine.Run` (right after the year loop, alongside the existing appends) so it stays aligned; don't index it differently from the others. `YearsOutOfMoney` and `FailedScenarioAverages` are the exception — they only have entries for *failed* runs, in occurrence order, not aligned to run index.
+
+### Intentional quirks — not bugs
+
+- `SuccessMoneyRemaining` accumulates one entry *per year* of every successful run, not one ending balance per run.
+- The console's detailed "last run balances" report and the web's last-successful-run detail table only populate when **zero** iterations failed (`OutOfMoneyCount == 0`) — otherwise only the failure trace and per-run summary print.
+
+These were flagged during development and deliberately kept as-is; don't "fix" them without being asked.
+
+### Non-determinism
+
+`Random` is unseeded (`new Random()`), so runs aren't reproducible and there's no golden-value test to write. The verification approach used throughout this repo's history is structural/cross-referential instead: e.g., confirming a run's reported highest/lowest return year matches the max/min line in that same run's own printed trace, or confirming a value that should compound (like NewMoney) actually persists into the following year rather than reverting.
