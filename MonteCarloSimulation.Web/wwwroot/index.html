@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monte Carlo Retirement Simulator</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <h1>Monte Carlo Retirement Simulator</h1>
+
+    <form id="run-form">
+        <fieldset>
+            <legend>Investment Scenario</legend>
+            <div id="scenario-options">Loading scenarios&hellip;</div>
+        </fieldset>
+
+        <div class="field-grid">
+            <label>Years
+                <input type="number" name="years" min="1" step="1" value="30" required>
+            </label>
+            <label>Iterations
+                <input type="number" name="iterations" min="1" step="1" value="10" required>
+            </label>
+            <label>Annual Withdrawal
+                <input type="text" inputmode="decimal" class="money-input" name="withdrawal" pattern="[0-9,]*\.?[0-9]*" value="96,000" required>
+            </label>
+            <label>Initial Investment
+                <input type="text" inputmode="decimal" class="money-input" name="initialInvestment" pattern="[0-9,]*\.?[0-9]*" value="1,400,000" required>
+            </label>
+            <label>New Money (inheritance)
+                <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" required>
+            </label>
+            <label>Year New Money Arrives
+                <input type="number" name="yearNewMoney" min="0" step="1" value="10" required>
+            </label>
+            <label>Years Until Social Security
+                <input type="number" name="socialSecurityYearsUntilStart" min="0" step="1" value="5" required>
+            </label>
+            <label>Initial Annual Social Security
+                <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAnnualAmount" pattern="[0-9,]*\.?[0-9]*" value="34,000" required>
+            </label>
+        </div>
+
+        <button type="submit">Run</button>
+    </form>
+
+    <section id="results" aria-live="polite"></section>
+
+    <script src="app.js"></script>
+</body>
+</html>
