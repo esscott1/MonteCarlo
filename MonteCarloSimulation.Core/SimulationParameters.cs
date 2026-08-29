@@ -12,6 +12,7 @@ namespace MonteCarloSimulation.Core
         public int YearNewMoney { get; set; }
         public int SocialSecurityYearsUntilStart { get; set; }
         public double SocialSecurityAnnualAmount { get; set; }
+        public double AnnualStandardDeduction { get; set; }
         public required string ScenarioDescription { get; set; }
     }
 }

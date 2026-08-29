@@ -143,6 +143,7 @@ namespace MonteCarloSimulation1
                 YearNewMoney = PromptYearNewMoney(),
                 SocialSecurityYearsUntilStart = PromptSocialSecurityYearsUntilStart(),
                 SocialSecurityAnnualAmount = PromptSocialSecurityAnnualAmount(),
+                AnnualStandardDeduction = PromptAnnualStandardDeduction(),
                 ScenarioDescription = scenario.Description
             };
         }
@@ -268,6 +269,20 @@ namespace MonteCarloSimulation1
         public static double PromptSocialSecurityAnnualAmount()
         {
             Console.Write("Enter the initial annual Social Security amount (e.g., 50000) [0 for none]: ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (double.TryParse(input, out double value) && value >= 0)
+                {
+                    return value;
+                }
+                Console.Write("Invalid input. Please enter a non-negative number: ");
+            }
+        }
+
+        public static double PromptAnnualStandardDeduction()
+        {
+            Console.Write("Enter the annual standard deduction (e.g., 14600) [0 for none]: ");
             while (true)
             {
                 string input = Console.ReadLine();
