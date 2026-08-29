@@ -12,5 +12,6 @@ namespace MonteCarloSimulation.Core
         public List<double>? LastNontaxableBalances { get; init; }
         public List<double>? LastTaxableWithdrawals { get; init; }
         public List<double>? LastNontaxableWithdrawals { get; init; }
+        public List<double>? LastTaxRates { get; init; }
     }
 }

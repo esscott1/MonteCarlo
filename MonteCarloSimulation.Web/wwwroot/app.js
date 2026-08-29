@@ -117,6 +117,7 @@ function renderPerRunTable(result) {
                 <td>${formatCurrency(balance)}</td>
                 <td>${formatCurrency(result.lowestBalanceValues[i])} in year ${result.lowestBalanceYears[i]}</td>
                 <td>${formatPercent(result.averageAnnualReturns[i])}</td>
+                <td>${formatPercent(result.averageTaxRates[i])}</td>
                 <td>Year ${result.highestReturnYears[i]} (${formatPercent(result.highestReturnValues[i])})</td>
                 <td>Year ${result.lowestReturnYears[i]} (${formatPercent(result.lowestReturnValues[i])})</td>
                 <td>${failureNote}</td>
@@ -132,6 +133,7 @@ function renderPerRunTable(result) {
                     <th>Ending Balance</th>
                     <th>Lowest Balance</th>
                     <th>Avg Annual Return</th>
+                    <th>Avg Tax Rate</th>
                     <th>Highest Return</th>
                     <th>Lowest Return</th>
                     <th>Failure Year</th>
@@ -191,6 +193,7 @@ function renderDetail(output) {
             <tr>
                 <td>${ji}</td>
                 <td>${formatCurrency(output.lastAnnualWithdrawals[ji])} (taxable ${formatCurrency(output.lastTaxableWithdrawals[ji])}, nontaxable ${formatCurrency(output.lastNontaxableWithdrawals[ji])})</td>
+                <td>${formatPercent(output.lastTaxRates[ji])}</td>
                 <td>${formatCurrency(output.lastAnnualReturns[ji])}</td>
                 <td>${formatCurrency(balance)} (taxable ${formatCurrency(output.lastTaxableBalances[ji])}, nontaxable ${formatCurrency(output.lastNontaxableBalances[ji])})</td>
             </tr>
@@ -202,7 +205,7 @@ function renderDetail(output) {
             <summary>Show year-by-year detail for the last successful run</summary>
             <table class="run-table">
                 <thead>
-                    <tr><th>Year</th><th>Withdrawal</th><th>Year's Return ($)</th><th>Total Balance</th></tr>
+                    <tr><th>Year</th><th>Withdrawal</th><th>Tax Rate</th><th>Year's Return ($)</th><th>Total Balance</th></tr>
                 </thead>
                 <tbody>${rows}</tbody>
             </table>

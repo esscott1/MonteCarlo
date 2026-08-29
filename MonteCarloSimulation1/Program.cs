@@ -60,7 +60,8 @@ namespace MonteCarloSimulation1
                 Console.WriteLine($"\nlast run balances: ");
                 if (output.LastBalances != null && output.LastAnnualReturns != null && output.LastAnnualWithdrawals != null
                     && output.LastTaxableBalances != null && output.LastNontaxableBalances != null
-                    && output.LastTaxableWithdrawals != null && output.LastNontaxableWithdrawals != null)
+                    && output.LastTaxableWithdrawals != null && output.LastNontaxableWithdrawals != null
+                    && output.LastTaxRates != null)
                 {
                     for (int ji = 1; ji < output.LastBalances.Count; ji++)
                     {
@@ -68,6 +69,7 @@ namespace MonteCarloSimulation1
                             $"Year {ji}\n withdrawals: {output.LastAnnualWithdrawals[ji]:C0}, (" +
                             $"taxable: {output.LastTaxableWithdrawals[ji]:C0}, " +
                             $"nontaxable: {output.LastNontaxableWithdrawals[ji]:C0})\n " +
+                            $"tax rate: {output.LastTaxRates[ji]:P2}\n " +
                             $"years return ($): {output.LastAnnualReturns[ji]:C0}\n " +
                             $"total balance: {output.LastBalances[ji]:C0} (" +
                             $"taxable balance: {output.LastTaxableBalances[ji]:C0}, " +
@@ -91,6 +93,7 @@ namespace MonteCarloSimulation1
                 Console.WriteLine(
                     $"Run {r + 1}: Ending balance: {result.EndingBalances[r]:C0}, " +
                     $"Average annual return: {result.AverageAnnualReturns[r]:P2}, " +
+                    $"Average tax rate: {result.AverageTaxRates[r]:P2}, " +
                     $"Highest return: year {result.HighestReturnYears[r]} ({result.HighestReturnValues[r]:P2}), " +
                     $"Lowest return: year {result.LowestReturnYears[r]} ({result.LowestReturnValues[r]:P2}), " +
                     $"Lowest balance: {result.LowestBalanceValues[r]:C0} in year {result.LowestBalanceYears[r]}{failureNote}");
