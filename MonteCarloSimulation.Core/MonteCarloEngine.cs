@@ -6,8 +6,6 @@ namespace MonteCarloSimulation.Core
     {
         public static SimulationRunOutput Run(SimulationParameters parameters)
         {
-            const double taxRate = 0.20;
-
             var result = new SimulationResult
             {
                 OutOfMoneyCount = 0,
@@ -16,6 +14,7 @@ namespace MonteCarloSimulation.Core
                 SuccessMoneyRemaining = new List<double>(),
                 EndingBalances = new List<double>(),
                 AverageAnnualReturns = new List<double>(),
+                AverageTaxRates = new List<double>(),
                 FailureYears = new List<int?>(),
                 HighestReturnYears = new List<int>(),
                 HighestReturnValues = new List<double>(),
@@ -37,6 +36,7 @@ namespace MonteCarloSimulation.Core
             List<double> lastNontaxableBalances = null;
             List<double> lastTaxableWithdrawals = null;
             List<double> lastNontaxableWithdrawals = null;
+            List<double> lastTaxRates = null;
 
             for (int i = 0; i < parameters.Iterations; i++)
             {
@@ -44,6 +44,7 @@ namespace MonteCarloSimulation.Core
                 double ss = 0;
                 double currentWithdrawal = parameters.Withdrawal;
                 double standardDeduction = parameters.AnnualStandardDeduction;
+                double bracketInflationFactor = 1.0;
 
                 double taxable = parameters.InitialTaxableBalance;
                 double nontaxable = parameters.InitialNontaxableBalance;
@@ -56,6 +57,7 @@ namespace MonteCarloSimulation.Core
                 var nontaxableBalances = new List<double>(parameters.Years);
                 var taxableWithdrawals = new List<double>(parameters.Years);
                 var nontaxableWithdrawals = new List<double>(parameters.Years);
+                var taxRates = new List<double>(parameters.Years);
 
                 int? failureYear = null;
 
@@ -74,6 +76,7 @@ namespace MonteCarloSimulation.Core
 
                     currentWithdrawal *= (1 + inflation);
                     standardDeduction *= (1 + inflation);
+                    bracketInflationFactor *= (1 + inflation);
                     double periodWithdrawal = currentWithdrawal;
                     withdrawals.Add(periodWithdrawal);
 
@@ -87,12 +90,16 @@ namespace MonteCarloSimulation.Core
                     double nontaxableProportion = totalBalance > 0 ? nontaxable / totalBalance : 0;
 
                     // Calculate grossed-up withdrawal from taxable (to net the correct after-tax amount),
-                    // exempting the first `standardDeduction` dollars of this withdrawal from tax
+                    // exempting the first `standardDeduction` dollars of this withdrawal from tax,
+                    // then taxing the remainder marginally through the inflation-scaled bracket table
                     double desiredTaxableWithdrawal = periodWithdrawal * taxableProportion;
-                    double grossTaxableWithdrawal = desiredTaxableWithdrawal <= standardDeduction
-                        ? desiredTaxableWithdrawal
-                        : (desiredTaxableWithdrawal - taxRate * standardDeduction) / (1 - taxRate);
+                    double grossTaxableWithdrawal = GrossUpTaxableWithdrawal(
+                        desiredTaxableWithdrawal, standardDeduction, bracketInflationFactor, FederalTaxBrackets.Single2026);
                     double desiredNontaxableWithdrawal = periodWithdrawal * nontaxableProportion;
+                    double yearTaxRate = grossTaxableWithdrawal > 0
+                        ? (grossTaxableWithdrawal - desiredTaxableWithdrawal) / grossTaxableWithdrawal
+                        : 0;
+                    taxRates.Add(yearTaxRate);
 
                     // Withdraw from each account
                     taxable -= grossTaxableWithdrawal;
@@ -127,7 +134,7 @@ namespace MonteCarloSimulation.Core
                         failureYear = run;
                         for (int c = 0; c < rates.Count; c++)
                         {
-                            outOfMoneyMessage.Append($"\nYear {c}\nRate of return: {rates[c]:P2} \nwithdrawal: {withdrawals[c]:C0}(taxable {taxableWithdrawals[c]:C0}, nontax {nontaxableWithdrawals[c]:C0}) \nbal: {balances[c]:C0} (tax {taxableBalances[c]:C0}, nontax {nontaxableBalances[c]:C0})\n");
+                            outOfMoneyMessage.Append($"\nYear {c}\nRate of return: {rates[c]:P2} \nwithdrawal: {withdrawals[c]:C0}(taxable {taxableWithdrawals[c]:C0}, nontax {nontaxableWithdrawals[c]:C0}) \ntax rate: {taxRates[c]:P2} \nbal: {balances[c]:C0} (tax {taxableBalances[c]:C0}, nontax {nontaxableBalances[c]:C0})\n");
                         }
                         outOfMoneyMessage.Append('\n');
                         result.FailedScenarioAverages.Add(rates.Average());
@@ -143,10 +150,12 @@ namespace MonteCarloSimulation.Core
                     lastNontaxableBalances = nontaxableBalances;
                     lastTaxableWithdrawals = taxableWithdrawals;
                     lastNontaxableWithdrawals = nontaxableWithdrawals;
+                    lastTaxRates = taxRates;
                 }
 
                 result.EndingBalances.Add(balances[^1]);
                 result.AverageAnnualReturns.Add(rates.Average());
+                result.AverageTaxRates.Add(taxRates.Average());
                 result.FailureYears.Add(failureYear);
 
                 double highestReturn = rates.Max();
@@ -172,8 +181,42 @@ namespace MonteCarloSimulation.Core
                 LastTaxableBalances = lastTaxableBalances,
                 LastNontaxableBalances = lastNontaxableBalances,
                 LastTaxableWithdrawals = lastTaxableWithdrawals,
-                LastNontaxableWithdrawals = lastNontaxableWithdrawals
+                LastNontaxableWithdrawals = lastNontaxableWithdrawals,
+                LastTaxRates = lastTaxRates
             };
+        }
+
+        // Computes the pre-tax ("gross") taxable-side withdrawal that nets `desiredNet` dollars after tax,
+        // exempting the first `standardDeduction` dollars from tax and taxing the remainder marginally
+        // through `brackets` (thresholds scaled by `inflationFactor` to match the already-inflated deduction).
+        // Each bracket is linear, so this is an exact analytic inversion — no iteration required.
+        private static double GrossUpTaxableWithdrawal(
+            double desiredNet, double standardDeduction, double inflationFactor, IReadOnlyList<TaxBracket> brackets)
+        {
+            if (desiredNet <= standardDeduction) return desiredNet;
+
+            double remainingNet = desiredNet - standardDeduction;
+            double grossAboveDeduction = 0;
+
+            foreach (var bracket in brackets)
+            {
+                double lower = bracket.LowerBound * inflationFactor;
+                double upper = bracket.UpperBound * inflationFactor;
+                double bracketWidth = upper - lower;
+                double bracketNetCapacity = bracketWidth * (1 - bracket.Rate);
+
+                if (remainingNet <= bracketNetCapacity || double.IsPositiveInfinity(upper))
+                {
+                    grossAboveDeduction += remainingNet / (1 - bracket.Rate);
+                    remainingNet = 0;
+                    break;
+                }
+
+                grossAboveDeduction += bracketWidth;
+                remainingNet -= bracketNetCapacity;
+            }
+
+            return standardDeduction + grossAboveDeduction;
         }
 
         private static double GetRateBoxMullerTransform(double mean, double standardDeviation, Random random)
