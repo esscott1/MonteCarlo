@@ -109,6 +109,29 @@ button[type="submit"]:hover {
     background: rgba(0, 0, 0, 0.05);
 }
 
+.run-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: #1a73e8;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.run-toggle:hover {
+    color: #1558b0;
+}
+
+.run-detail-row td {
+    padding: 0.75rem;
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.run-detail-row .run-table {
+    margin-bottom: 0;
+}
+
 .failure {
     color: var(--warn-border);
 }

@@ -21,7 +21,8 @@ namespace MonteCarloSimulation.Core
                 LowestReturnYears = new List<int>(),
                 LowestReturnValues = new List<double>(),
                 LowestBalanceYears = new List<int>(),
-                LowestBalanceValues = new List<double>()
+                LowestBalanceValues = new List<double>(),
+                RunDetails = new List<List<RunYearDetail>>()
             };
 
             var random = new Random();
@@ -168,6 +169,15 @@ namespace MonteCarloSimulation.Core
                 double lowestBalance = balances.Min();
                 result.LowestBalanceYears.Add(balances.IndexOf(lowestBalance));
                 result.LowestBalanceValues.Add(lowestBalance);
+
+                var runDetails = new List<RunYearDetail>(rates.Count);
+                for (int c = 0; c < rates.Count; c++)
+                {
+                    runDetails.Add(new RunYearDetail(
+                        c, rates[c], withdrawals[c], taxableWithdrawals[c], nontaxableWithdrawals[c],
+                        taxRates[c], balances[c], taxableBalances[c], nontaxableBalances[c]));
+                }
+                result.RunDetails.Add(runDetails);
             }
 
             return new SimulationRunOutput
