@@ -92,7 +92,8 @@ namespace MonteCarloSimulation1
                     $"Run {r + 1}: Ending balance: {result.EndingBalances[r]:C0}, " +
                     $"Average annual return: {result.AverageAnnualReturns[r]:P2}, " +
                     $"Highest return: year {result.HighestReturnYears[r]} ({result.HighestReturnValues[r]:P2}), " +
-                    $"Lowest return: year {result.LowestReturnYears[r]} ({result.LowestReturnValues[r]:P2}){failureNote}");
+                    $"Lowest return: year {result.LowestReturnYears[r]} ({result.LowestReturnValues[r]:P2}), " +
+                    $"Lowest balance: {result.LowestBalanceValues[r]:C0} in year {result.LowestBalanceYears[r]}{failureNote}");
             }
 
             Console.WriteLine("\nSimulation complete.");

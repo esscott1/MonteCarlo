@@ -13,6 +13,8 @@ namespace MonteCarloSimulation.Core
         public List<double> HighestReturnValues { get; set; }
         public List<int> LowestReturnYears { get; set; }
         public List<double> LowestReturnValues { get; set; }
+        public List<int> LowestBalanceYears { get; set; }
+        public List<double> LowestBalanceValues { get; set; }
         // Add other result fields as needed
     }
 }

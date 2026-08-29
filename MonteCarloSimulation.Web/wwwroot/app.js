@@ -25,6 +25,79 @@ function formatPercent(value) {
     return (Number(value) * 100).toFixed(2) + '%';
 }
 
+function parseNumber(value) {
+    const stripped = String(value).replace(/,/g, '');
+    return stripped === '' ? NaN : Number(stripped);
+}
+
+function formatWithCommas(value) {
+    const num = parseNumber(value);
+    return Number.isNaN(num) ? String(value) : num.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function countDigits(str) {
+    return (str.match(/[0-9]/g) || []).length;
+}
+
+// Reformats a money input with thousands separators as the user types, keeping
+// the cursor sitting after the same digit it followed before reformatting.
+// Tracks which side of the decimal point the cursor is on, since a plain
+// digit-count-before-cursor can't tell "just before the dot" apart from
+// "just after it" and would otherwise misplace the next typed character.
+function formatMoneyInputLive(input) {
+    const value = input.value;
+    const cursorPos = input.selectionStart ?? value.length;
+
+    const dotIndexOriginal = value.indexOf('.');
+    const cursorInDecimal = dotIndexOriginal !== -1 && cursorPos > dotIndexOriginal;
+    const digitsBeforeCursor = cursorInDecimal
+        ? countDigits(value.slice(dotIndexOriginal + 1, cursorPos))
+        : countDigits(value.slice(0, cursorPos));
+
+    let raw = value.replace(/[^0-9.]/g, '');
+    const firstDot = raw.indexOf('.');
+    if (firstDot !== -1) {
+        raw = raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, '');
+    }
+
+    const hasDot = raw.includes('.');
+    const [intPart, decPart] = raw.split('.');
+    const formattedInt = intPart ? Number(intPart).toLocaleString('en-US') : '';
+    const formatted = hasDot ? `${formattedInt}.${decPart ?? ''}` : formattedInt;
+
+    input.value = formatted;
+
+    let newPos;
+    if (cursorInDecimal) {
+        const dotIndexFormatted = formatted.indexOf('.');
+        newPos = dotIndexFormatted + 1 + digitsBeforeCursor;
+    } else {
+        let seen = 0;
+        newPos = formatted.length;
+        for (let i = 0; i < formatted.length; i++) {
+            if (formatted[i] === '.') break;
+            if (/[0-9]/.test(formatted[i])) {
+                seen++;
+                if (seen === digitsBeforeCursor) {
+                    newPos = i + 1;
+                    break;
+                }
+            }
+        }
+        if (digitsBeforeCursor === 0) newPos = 0;
+    }
+    input.setSelectionRange(newPos, newPos);
+}
+
+function initMoneyInputs() {
+    document.querySelectorAll('.money-input').forEach((input) => {
+        input.addEventListener('keyup', () => formatMoneyInputLive(input));
+        input.addEventListener('blur', () => {
+            input.value = formatWithCommas(input.value);
+        });
+    });
+}
+
 function renderErrors(errors) {
     const list = Object.entries(errors)
         .map(([field, messages]) => `<li><strong>${field}:</strong> ${messages.join(' ')}</li>`)
@@ -42,6 +115,7 @@ function renderPerRunTable(result) {
             <tr>
                 <td>${i + 1}</td>
                 <td>${formatCurrency(balance)}</td>
+                <td>${formatCurrency(result.lowestBalanceValues[i])} in year ${result.lowestBalanceYears[i]}</td>
                 <td>${formatPercent(result.averageAnnualReturns[i])}</td>
                 <td>Year ${result.highestReturnYears[i]} (${formatPercent(result.highestReturnValues[i])})</td>
                 <td>Year ${result.lowestReturnYears[i]} (${formatPercent(result.lowestReturnValues[i])})</td>
@@ -56,6 +130,7 @@ function renderPerRunTable(result) {
                 <tr>
                     <th>Run</th>
                     <th>Ending Balance</th>
+                    <th>Lowest Balance</th>
                     <th>Avg Annual Return</th>
                     <th>Highest Return</th>
                     <th>Lowest Return</th>
@@ -150,12 +225,12 @@ form.addEventListener('submit', async (e) => {
         scenarioId: Number(formData.get('scenarioId')),
         years: Number(formData.get('years')),
         iterations: Number(formData.get('iterations')),
-        withdrawal: Number(formData.get('withdrawal')),
-        initialInvestment: Number(formData.get('initialInvestment')),
-        newMoney: Number(formData.get('newMoney')),
+        withdrawal: parseNumber(formData.get('withdrawal')),
+        initialInvestment: parseNumber(formData.get('initialInvestment')),
+        newMoney: parseNumber(formData.get('newMoney')),
         yearNewMoney: Number(formData.get('yearNewMoney')),
         socialSecurityYearsUntilStart: Number(formData.get('socialSecurityYearsUntilStart')),
-        socialSecurityAnnualAmount: Number(formData.get('socialSecurityAnnualAmount'))
+        socialSecurityAnnualAmount: parseNumber(formData.get('socialSecurityAnnualAmount'))
     };
 
     results.innerHTML = '<p class="loading">Running simulation&hellip;</p>';
@@ -181,3 +256,4 @@ form.addEventListener('submit', async (e) => {
 });
 
 loadScenarios();
+initMoneyInputs();

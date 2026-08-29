@@ -20,25 +20,25 @@
                 <input type="number" name="years" min="1" step="1" value="30" required>
             </label>
             <label>Iterations
-                <input type="number" name="iterations" min="1" step="1" value="100" required>
+                <input type="number" name="iterations" min="1" step="1" value="10" required>
             </label>
             <label>Annual Withdrawal
-                <input type="number" name="withdrawal" min="0" step="any" value="120000" required>
+                <input type="text" inputmode="decimal" class="money-input" name="withdrawal" pattern="[0-9,]*\.?[0-9]*" value="96,000" required>
             </label>
             <label>Initial Investment
-                <input type="number" name="initialInvestment" min="0" step="any" value="2800000" required>
+                <input type="text" inputmode="decimal" class="money-input" name="initialInvestment" pattern="[0-9,]*\.?[0-9]*" value="1,400,000" required>
             </label>
             <label>New Money (inheritance)
-                <input type="number" name="newMoney" min="0" step="any" value="0" required>
+                <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" required>
             </label>
             <label>Year New Money Arrives
-                <input type="number" name="yearNewMoney" min="0" step="1" value="0" required>
+                <input type="number" name="yearNewMoney" min="0" step="1" value="10" required>
             </label>
             <label>Years Until Social Security
-                <input type="number" name="socialSecurityYearsUntilStart" min="0" step="1" value="10" required>
+                <input type="number" name="socialSecurityYearsUntilStart" min="0" step="1" value="5" required>
             </label>
             <label>Initial Annual Social Security
-                <input type="number" name="socialSecurityAnnualAmount" min="0" step="any" value="0" required>
+                <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAnnualAmount" pattern="[0-9,]*\.?[0-9]*" value="34,000" required>
             </label>
         </div>
 

@@ -18,7 +18,9 @@ namespace MonteCarloSimulation.Core
                 HighestReturnYears = new List<int>(),
                 HighestReturnValues = new List<double>(),
                 LowestReturnYears = new List<int>(),
-                LowestReturnValues = new List<double>()
+                LowestReturnValues = new List<double>(),
+                LowestBalanceYears = new List<int>(),
+                LowestBalanceValues = new List<double>()
             };
 
             var random = new Random();
@@ -144,6 +146,10 @@ namespace MonteCarloSimulation.Core
                 result.HighestReturnValues.Add(highestReturn);
                 result.LowestReturnYears.Add(rates.IndexOf(lowestReturn));
                 result.LowestReturnValues.Add(lowestReturn);
+
+                double lowestBalance = balances.Min();
+                result.LowestBalanceYears.Add(balances.IndexOf(lowestBalance));
+                result.LowestBalanceValues.Add(lowestBalance);
             }
 
             return new SimulationRunOutput

@@ -75,15 +75,15 @@ button[type="submit"]:hover {
     border-radius: 6px;
     padding: 1rem;
     margin-bottom: 1rem;
+    background: #1f2937;
+    color: #f3f4f6;
 }
 
 .summary-box.ok {
-    background: var(--ok-bg);
     border-left-color: var(--ok-border);
 }
 
 .summary-box.warn {
-    background: var(--warn-bg);
     border-left-color: var(--warn-border);
 }
 
