@@ -71,7 +71,7 @@ namespace MonteCarloSimulation.Core
                     allRates.Add(interestRate);
 
                     currentWithdrawal *= (1 + inflation);
-                    double periodWithdrawal = currentWithdrawal - (ss * .8);
+                    double periodWithdrawal = currentWithdrawal;
                     withdrawals.Add(periodWithdrawal);
 
                     // Apply returns
@@ -95,6 +95,9 @@ namespace MonteCarloSimulation.Core
                     // Add new money (e.g., inheritance) as after-tax cash in the year it arrives
                     if (run == parameters.YearNewMoney)
                         nontaxable += parameters.NewMoney;
+
+                    // Add Social Security as taxable income in the years it's received
+                    taxable += ss;
 
                     // Track balances
                     taxableBalances.Add(taxable);
