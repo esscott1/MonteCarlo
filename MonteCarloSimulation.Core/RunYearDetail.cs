@@ -3,6 +3,7 @@ namespace MonteCarloSimulation.Core
     public record RunYearDetail(
         int Year,
         double RateOfReturn,
+        double ReturnAmount,
         double Withdrawal,
         double TaxableWithdrawal,
         double NontaxableWithdrawal,

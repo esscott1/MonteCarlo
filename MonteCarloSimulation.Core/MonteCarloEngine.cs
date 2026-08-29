@@ -174,7 +174,7 @@ namespace MonteCarloSimulation.Core
                 for (int c = 0; c < rates.Count; c++)
                 {
                     runDetails.Add(new RunYearDetail(
-                        c, rates[c], withdrawals[c], taxableWithdrawals[c], nontaxableWithdrawals[c],
+                        c, rates[c], annualReturns[c], withdrawals[c], taxableWithdrawals[c], nontaxableWithdrawals[c],
                         taxRates[c], balances[c], taxableBalances[c], nontaxableBalances[c]));
                 }
                 result.RunDetails.Add(runDetails);

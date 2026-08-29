@@ -111,7 +111,7 @@ function renderRunDetailTable(yearDetails) {
             <td>${yd.year}</td>
             <td>${formatCurrency(yd.withdrawal)} (taxable ${formatCurrency(yd.taxableWithdrawal)}, nontaxable ${formatCurrency(yd.nontaxableWithdrawal)})</td>
             <td>${formatPercent(yd.taxRate)}</td>
-            <td>${formatPercent(yd.rateOfReturn)}</td>
+            <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
             <td>${formatCurrency(yd.balance)} (taxable ${formatCurrency(yd.taxableBalance)}, nontaxable ${formatCurrency(yd.nontaxableBalance)})</td>
         </tr>
     `).join('');
