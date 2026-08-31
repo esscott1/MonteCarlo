@@ -34,17 +34,20 @@ jobs:
       - name: Run Claude Code Agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: claude-sonnet-5
         run: |
-          claude -p "You are an autonomous coding agent. Implement the following feature request for the codebase. 
+          claude -p --model "$CLAUDE_MODEL" "You are an autonomous coding agent. Implement the following feature request for the codebase.
           Jira Issue: ${{ github.event.client_payload.issue_key }}
           Summary: ${{ github.event.client_payload.summary }}
           Description: ${{ github.event.client_payload.description }}
-          
+
           Instructions:
           1. Analyze the codebase and make the necessary code changes.
           2. Ensure the code compiles.
           3. Stage your changes.
-          4. Commit the changes using the exact message format: '${{ github.event.client_payload.issue_key }} Implement ${{ github.event.client_payload.summary }}'"
+          4. Commit the changes using the exact message format: '${{ github.event.client_payload.issue_key }} Implement ${{ github.event.client_payload.summary }}
+
+          Model: $CLAUDE_MODEL'"
 
       - name: Push Branch and Create PR
         env:
