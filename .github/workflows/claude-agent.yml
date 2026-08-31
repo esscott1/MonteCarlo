@@ -36,7 +36,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CLAUDE_MODEL: claude-sonnet-5
         run: |
-          claude -p --model "$CLAUDE_MODEL" --permission-mode acceptEdits --allowed-tools "Bash(git *) Bash(gh *) Bash(dotnet *) Edit Write" "You are an autonomous coding agent. Implement the following feature request for the codebase.
+          claude -p --model "$CLAUDE_MODEL" --permission-mode acceptEdits --allowed-tools "Bash(git *) Bash(gh *) Bash(dotnet *) Edit Write" -- "You are an autonomous coding agent. Implement the following feature request for the codebase.
           Jira Issue: ${{ github.event.client_payload.issue_key }}
           Summary: ${{ github.event.client_payload.summary }}
           Description: ${{ github.event.client_payload.description }}
