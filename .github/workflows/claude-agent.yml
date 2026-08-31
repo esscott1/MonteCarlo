@@ -1,0 +1,63 @@
+name: Autonomous Claude Agent
+on:
+  repository_dispatch:
+    types: [run_claude_agent]
+
+jobs:
+  implement_feature:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create Feature Branch
+        run: |
+          BRANCH_NAME="feature/${{ github.event.client_payload.issue_key }}-auto-implementation"
+          git checkout -b $BRANCH_NAME
+
+      - name: Run Claude Code Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude -p "You are an autonomous coding agent. Implement the following feature request for the codebase. 
+          Jira Issue: ${{ github.event.client_payload.issue_key }}
+          Summary: ${{ github.event.client_payload.summary }}
+          Description: ${{ github.event.client_payload.description }}
+          
+          Instructions:
+          1. Analyze the codebase and make the necessary code changes.
+          2. Ensure the code compiles.
+          3. Stage your changes.
+          4. Commit the changes using the exact message format: '${{ github.event.client_payload.issue_key }} Implement ${{ github.event.client_payload.summary }}'"
+
+      - name: Push Branch and Create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH_NAME="feature/${{ github.event.client_payload.issue_key }}-auto-implementation"
+          git push -u origin $BRANCH_NAME
+          
+          gh pr create \
+            --title "${{ github.event.client_payload.issue_key }} ${{ github.event.client_payload.summary }}" \
+            --body "Automated implementation by Claude Code for Jira issue ${{ github.event.client_payload.issue_key }}. 
+            
+            Original description:
+            ${{ github.event.client_payload.description }}" \
+            --base master \
+            --head $BRANCH_NAME
