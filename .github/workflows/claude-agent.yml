@@ -29,6 +29,7 @@ jobs:
       - name: Create Feature Branch
         run: |
           BRANCH_NAME="feature/${{ github.event.client_payload.issue_key }}-agent-$(date +'%Y%m%d-%H%M')"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> "$GITHUB_ENV"
           git checkout -b $BRANCH_NAME
 
       - name: Run Claude Code Agent
@@ -53,7 +54,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH_NAME="feature/${{ github.event.client_payload.issue_key }}-agent-$(date +'%Y%m%d-%H%M')"
           git push -u origin $BRANCH_NAME
           
           gh pr create \
