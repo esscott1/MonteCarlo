@@ -1,4 +1,4 @@
-:root {
+﻿:root {
     color-scheme: light dark;
     --border: #ccc;
     --ok-bg: #e6f4ea;
@@ -239,6 +239,9 @@ details pre {
 .error-box {
     border: 1px solid var(--warn-border);
     background: var(--warn-bg);
+    /* Explicit text colour: the background is light in both themes, so inheriting
+       the page colour leaves this unreadable under a dark colour-scheme. */
+    color: #7f1d1d;
     border-radius: 6px;
     padding: 1rem;
 }
@@ -246,4 +249,36 @@ details pre {
 .loading {
     font-style: italic;
     color: #888;
+}
+
+.flyout {
+    max-width: 420px;
+}
+
+#edit-result:not(:empty) {
+    margin-top: 0.25rem;
+}
+
+#edit-result .summary-box {
+    margin-bottom: 0.5rem;
+}
+
+.agent-trace {
+    margin-top: 0;
+    font-size: 0.85rem;
+}
+
+.agent-trace summary {
+    cursor: pointer;
+    color: #1a73e8;
+}
+
+.agent-trace p {
+    margin: 0.4rem 0;
+    overflow-wrap: anywhere;
+}
+
+.agent-note {
+    color: #888;
+    font-style: italic;
 }
