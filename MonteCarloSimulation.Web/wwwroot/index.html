@@ -7,7 +7,29 @@
     <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <h1>Monte Carlo Retirement Calculator</h1>
+    <div class="page-header">
+        <h1>Monte Carlo Retirement Calculator</h1>
+        <button type="button" id="edit-toggle" class="icon-button" aria-label="Change request" aria-haspopup="dialog" aria-expanded="false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+        </button>
+
+        <form id="edit-flyout" class="flyout" role="dialog" aria-labelledby="edit-flyout-title" hidden>
+            <h2 id="edit-flyout-title" class="flyout-title">Change Request</h2>
+            <label>Summary
+                <input type="text" name="summary" placeholder="Change the H1 and Title">
+            </label>
+            <label>Description
+                <textarea name="description" rows="4" placeholder="change the H1 and Title to read &quot;My Retirement Calculator.&quot;"></textarea>
+            </label>
+            <div class="flyout-actions">
+                <button type="button" id="edit-cancel">Cancel</button>
+                <button type="submit">Submit</button>
+            </div>
+        </form>
+    </div>
 
     <form id="run-form">
         <fieldset>

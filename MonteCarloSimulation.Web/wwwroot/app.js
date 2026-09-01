@@ -258,6 +258,48 @@ function initRunToggles() {
     });
 }
 
+function initEditFlyout() {
+    const toggle = document.getElementById('edit-toggle');
+    const flyout = document.getElementById('edit-flyout');
+    const cancel = document.getElementById('edit-cancel');
+    const header = toggle.closest('.page-header');
+
+    function openFlyout() {
+        flyout.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+        flyout.querySelector('input, textarea').focus();
+    }
+
+    function closeFlyout() {
+        flyout.hidden = true;
+        toggle.setAttribute('aria-expanded', 'false');
+        flyout.reset();
+        toggle.focus();
+    }
+
+    toggle.addEventListener('click', () => {
+        if (flyout.hidden) openFlyout(); else closeFlyout();
+    });
+
+    cancel.addEventListener('click', closeFlyout);
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !flyout.hidden) closeFlyout();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (flyout.hidden) return;
+        if (!header.contains(e.target)) closeFlyout();
+    });
+
+    // Submitting only closes the flyout for now — this is where the request
+    // that turns these fields into a change proposal will be wired up later.
+    flyout.addEventListener('submit', (e) => {
+        e.preventDefault();
+        closeFlyout();
+    });
+}
+
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -301,3 +343,4 @@ form.addEventListener('submit', async (e) => {
 loadScenarios();
 initMoneyInputs();
 initRunToggles();
+initEditFlyout();
