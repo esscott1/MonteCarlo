@@ -282,3 +282,27 @@ details pre {
     color: #888;
     font-style: italic;
 }
+
+.flyout-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.flyout-close {
+    background: none;
+    border: none;
+    padding: 0 0.25rem;
+    font-size: 1.4rem;
+    line-height: 1;
+    color: inherit;
+    opacity: 0.6;
+    cursor: pointer;
+}
+
+.flyout-close:hover,
+.flyout-close:focus-visible {
+    opacity: 1;
+    color: #1a73e8;
+}

@@ -17,7 +17,10 @@
         </button>
 
         <form id="edit-flyout" class="flyout" role="dialog" aria-labelledby="edit-flyout-title" hidden>
-            <h2 id="edit-flyout-title" class="flyout-title">Change Request</h2>
+            <div class="flyout-header">
+                <h2 id="edit-flyout-title" class="flyout-title">Ask AI for Change.</h2>
+                <button type="button" id="edit-close" class="flyout-close" aria-label="Close">&times;</button>
+            </div>
             <label>Summary
                 <input type="text" name="summary" placeholder="Change the H1 and Title">
             </label>

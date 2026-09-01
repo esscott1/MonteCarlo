@@ -271,6 +271,29 @@ function initEditFlyout() {
     const header = toggle.closest('.page-header');
     const editResult = document.getElementById('edit-result');
     const submitButton = flyout.querySelector('button[type="submit"]');
+    const closeButton = document.getElementById('edit-close');
+
+    const AUTO_CLOSE_MS = 5000;
+    let autoCloseTimer = null;
+
+    function cancelAutoClose() {
+        if (autoCloseTimer === null) return;
+        clearTimeout(autoCloseTimer);
+        autoCloseTimer = null;
+    }
+
+    // Restarted from scratch on each call, so any interaction inside the flyout
+    // gives the reader another full 5 seconds.
+    function startAutoClose() {
+        cancelAutoClose();
+        autoCloseTimer = setTimeout(closeFlyout, AUTO_CLOSE_MS);
+    }
+
+    // Only extends a countdown that is already running - it never starts one, so
+    // interacting with the form before submitting can't arm the timer.
+    function noteActivity() {
+        if (autoCloseTimer !== null) startAutoClose();
+    }
 
     function openFlyout() {
         flyout.hidden = false;
@@ -279,6 +302,7 @@ function initEditFlyout() {
     }
 
     function closeFlyout() {
+        cancelAutoClose();
         flyout.hidden = true;
         toggle.setAttribute('aria-expanded', 'false');
         flyout.reset();
@@ -291,6 +315,12 @@ function initEditFlyout() {
     });
 
     cancel.addEventListener('click', closeFlyout);
+    closeButton.addEventListener('click', closeFlyout);
+
+    // Fires after the button handlers above, so a click that closed the flyout
+    // finds the timer already cancelled and doesn't resurrect it.
+    flyout.addEventListener('click', noteActivity);
+    flyout.addEventListener('keydown', noteActivity);
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !flyout.hidden) closeFlyout();
@@ -318,6 +348,13 @@ function initEditFlyout() {
                 <p class="agent-note">${verdict}</p>
             </details>
         `;
+
+        // The <details> toggle event doesn't bubble, so it needs its own listener
+        // rather than relying on the delegated handlers above.
+        const trace = editResult.querySelector('.agent-trace');
+        if (trace) trace.addEventListener('toggle', noteActivity);
+
+        startAutoClose();
     }
 
     flyout.addEventListener('submit', async (e) => {
