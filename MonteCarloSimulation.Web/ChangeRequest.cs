@@ -6,7 +6,7 @@ namespace MonteCarloSimulation.Web
     public class ChangeRequest
     {
         public const int MaxSummaryLength = 200;
-        public const int MaxDescriptionLength = 2000;
+        public const int MaxDescriptionLength = 35;
 
         public string Summary { get; set; } = "";
         public string Description { get; set; } = "";
