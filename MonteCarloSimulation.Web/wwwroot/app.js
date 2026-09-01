@@ -1,4 +1,4 @@
-const form = document.getElementById('run-form');
+﻿const form = document.getElementById('run-form');
 const scenarioOptions = document.getElementById('scenario-options');
 const results = document.getElementById('results');
 
@@ -96,6 +96,12 @@ function initMoneyInputs() {
             input.value = formatWithCommas(input.value);
         });
     });
+}
+
+// User-supplied text is echoed back into the change-request result panel, so it has to be
+// escaped rather than interpolated raw.
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function renderErrors(errors) {
@@ -263,6 +269,8 @@ function initEditFlyout() {
     const flyout = document.getElementById('edit-flyout');
     const cancel = document.getElementById('edit-cancel');
     const header = toggle.closest('.page-header');
+    const editResult = document.getElementById('edit-result');
+    const submitButton = flyout.querySelector('button[type="submit"]');
 
     function openFlyout() {
         flyout.hidden = false;
@@ -274,6 +282,7 @@ function initEditFlyout() {
         flyout.hidden = true;
         toggle.setAttribute('aria-expanded', 'false');
         flyout.reset();
+        editResult.innerHTML = '';
         toggle.focus();
     }
 
@@ -292,11 +301,70 @@ function initEditFlyout() {
         if (!header.contains(e.target)) closeFlyout();
     });
 
-    // Submitting only closes the flyout for now — this is where the request
-    // that turns these fields into a change proposal will be wired up later.
-    flyout.addEventListener('submit', (e) => {
+    function renderAgentResult(data) {
+        const verdict = data.serverCorrected
+            ? "Server verification rebuilt the fields — the agent's draft did not match the required format exactly."
+            : "Server verification passed — the agent's draft matched the required format exactly.";
+
+        editResult.innerHTML = `
+            <div class="summary-box ok">
+                <p>Created <a href="${escapeHtml(data.issueUrl)}" target="_blank" rel="noopener">${escapeHtml(data.issueKey)}</a> in Jira, still in To Do.</p>
+            </div>
+            <details class="agent-trace">
+                <summary>What the agent did</summary>
+                <p>The agent was forced to call one tool, <code>create_jira_story</code>, with these arguments:</p>
+                <p><strong>summary:</strong> ${escapeHtml(data.summary)}</p>
+                <p><strong>description:</strong> ${escapeHtml(data.description)}</p>
+                <p class="agent-note">${verdict}</p>
+            </details>
+        `;
+    }
+
+    flyout.addEventListener('submit', async (e) => {
         e.preventDefault();
-        closeFlyout();
+
+        const payload = {
+            summary: flyout.elements.summary.value,
+            description: flyout.elements.description.value,
+            passphrase: flyout.elements.passphrase.value
+        };
+
+        submitButton.disabled = true;
+        editResult.innerHTML = '<p class="loading">Asking the agent to create the story&hellip;</p>';
+
+        try {
+            const response = await fetch('/api/change-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            // The rate limiter rejects before the endpoint runs, so there's no JSON body to read.
+            if (response.status === 429) {
+                editResult.innerHTML = '<div class="error-box"><p>Too many change requests from this address. Try again later.</p></div>';
+                return;
+            }
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                if (data.errors) {
+                    const list = Object.entries(data.errors)
+                        .map(([field, messages]) => `<li><strong>${escapeHtml(field)}:</strong> ${escapeHtml(messages.join(' '))}</li>`)
+                        .join('');
+                    editResult.innerHTML = `<div class="error-box"><p>Please fix the following:</p><ul>${list}</ul></div>`;
+                } else {
+                    editResult.innerHTML = `<div class="error-box"><p>${escapeHtml(data.message || 'The request failed.')}</p></div>`;
+                }
+                return;
+            }
+
+            renderAgentResult(data);
+        } catch (err) {
+            editResult.innerHTML = `<div class="error-box"><p>Request failed: ${escapeHtml(err.message)}</p></div>`;
+        } finally {
+            submitButton.disabled = false;
+        }
     });
 }
 
