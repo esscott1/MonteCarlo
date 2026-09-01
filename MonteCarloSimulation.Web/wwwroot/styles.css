@@ -19,6 +19,89 @@ h1 {
     font-size: 1.5rem;
 }
 
+.page-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+    margin: 2rem 0 1rem;
+}
+
+.page-header h1 {
+    margin: 0;
+}
+
+.icon-button {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    line-height: 0;
+    color: inherit;
+    cursor: pointer;
+}
+
+.icon-button:hover,
+.icon-button:focus-visible {
+    color: #1a73e8;
+}
+
+.flyout {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 10;
+    min-width: 320px;
+    max-width: 100%;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.flyout:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.flyout-title {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.flyout label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.9rem;
+    gap: 0.25rem;
+}
+
+.flyout input[type="text"],
+.flyout textarea {
+    padding: 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font: inherit;
+}
+
+.flyout-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+#edit-cancel {
+    padding: 0.6rem 1.5rem;
+    font-size: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+}
+
 fieldset {
     border: 1px solid var(--border);
     border-radius: 6px;
