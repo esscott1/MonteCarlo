@@ -22,7 +22,7 @@ namespace MonteCarloSimulation.Web
         public const string DescriptionPrefix = "update the H1 and Title for the web page to ";
 
         private const string ToolName = "create_jira_story";
-        private const string ModelId = "claude-opus-5";
+        private const string ModelId = "claude-haiku-4-5-20251001";
 
         private const string SystemPrompt = """
             You compose a Jira story from a change request submitted by a visitor to a public web page.
