@@ -1,5 +1,7 @@
 # Monte Carlo Retirement Simulator
 
+## Primary Purpose
+
 This application is, at its core, a retirement-readiness calculator that lets people explore their own path to financial freedom by simulating how a portfolio might hold up against years of withdrawals.
 
 ## Secondary purpose: illustrating Claude AI and CI/CD concepts
