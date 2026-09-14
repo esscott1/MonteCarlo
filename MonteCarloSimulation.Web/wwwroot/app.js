@@ -98,6 +98,37 @@ function initMoneyInputs() {
     });
 }
 
+// Reads a fetch() response body as Server-Sent Events and yields each event's `data:` payload,
+// parsed as JSON. Used instead of EventSource because EventSource can't send a POST body.
+async function* readSse(response) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let separator;
+        while ((separator = buffer.indexOf('\n\n')) !== -1) {
+            const rawEvent = buffer.slice(0, separator);
+            buffer = buffer.slice(separator + 2);
+
+            const dataLines = rawEvent.split('\n')
+                .filter((line) => line.startsWith('data:'))
+                .map((line) => line.slice(5).trim());
+            if (dataLines.length === 0) continue;
+
+            try {
+                yield JSON.parse(dataLines.join('\n'));
+            } catch {
+                // Ignore a malformed chunk rather than breaking the whole stream.
+            }
+        }
+    }
+}
+
 // User-supplied text is echoed back into the change-request result panel, so it has to be
 // escaped rather than interpolated raw.
 function escapeHtml(value) {
@@ -270,16 +301,51 @@ function initEditFlyout() {
     const cancel = document.getElementById('edit-cancel');
     const header = toggle.closest('.page-header');
     const editResult = document.getElementById('edit-result');
+    const editStatus = document.getElementById('edit-status');
+    const editStatusText = document.getElementById('edit-status-text');
     const submitButton = flyout.querySelector('button[type="submit"]');
     const closeButton = document.getElementById('edit-close');
 
+    const STAGE_MESSAGES = {
+        validating: 'Validating Passphrase and AI Key',
+        'calling-ai': 'Asking Claude to make a Jira Ticket',
+        'creating-ticket': 'Jira is creating the ticket now, stand by'
+    };
+
+    function showStatus(text) {
+        editStatusText.textContent = text;
+        editStatus.hidden = false;
+    }
+
+    function hideStatus() {
+        editStatus.hidden = true;
+        editStatusText.textContent = '';
+    }
+
     const AUTO_CLOSE_MS = 5000;
     let autoCloseTimer = null;
+    let countdownInterval = null;
+    let closesAt = null;
+
+    // Computed from the real clock (rather than decremented) so it stays truthful
+    // to autoCloseTimer even if this tick is a little late.
+    function updateCountdownText() {
+        const notice = document.getElementById('auto-close-notice');
+        if (!notice || closesAt === null) return;
+        const secondsLeft = Math.max(0, Math.ceil((closesAt - Date.now()) / 1000));
+        notice.textContent = `This window will automatically close in ${secondsLeft} second${secondsLeft === 1 ? '' : 's'}.`;
+    }
 
     function cancelAutoClose() {
-        if (autoCloseTimer === null) return;
-        clearTimeout(autoCloseTimer);
-        autoCloseTimer = null;
+        if (autoCloseTimer !== null) {
+            clearTimeout(autoCloseTimer);
+            autoCloseTimer = null;
+        }
+        if (countdownInterval !== null) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+        }
+        closesAt = null;
     }
 
     // Restarted from scratch on each call, so any interaction inside the flyout
@@ -287,6 +353,9 @@ function initEditFlyout() {
     function startAutoClose() {
         cancelAutoClose();
         autoCloseTimer = setTimeout(closeFlyout, AUTO_CLOSE_MS);
+        closesAt = Date.now() + AUTO_CLOSE_MS;
+        updateCountdownText();
+        countdownInterval = setInterval(updateCountdownText, 250);
     }
 
     // Only extends a countdown that is already running - it never starts one, so
@@ -307,6 +376,7 @@ function initEditFlyout() {
         toggle.setAttribute('aria-expanded', 'false');
         flyout.reset();
         editResult.innerHTML = '';
+        hideStatus();
         toggle.focus();
     }
 
@@ -339,6 +409,7 @@ function initEditFlyout() {
         editResult.innerHTML = `
             <div class="summary-box ok">
                 <p>Created <a href="${escapeHtml(data.issueUrl)}" target="_blank" rel="noopener">${escapeHtml(data.issueKey)}</a> in Jira, still in To Do.</p>
+                <p id="auto-close-notice" class="loading"></p>
             </div>
             <details class="agent-trace">
                 <summary>What the agent did</summary>
@@ -367,7 +438,8 @@ function initEditFlyout() {
         };
 
         submitButton.disabled = true;
-        editResult.innerHTML = '<p class="loading">Asking the agent to create the story&hellip;</p>';
+        editResult.innerHTML = '';
+        hideStatus();
 
         try {
             const response = await fetch('/api/change-request', {
@@ -376,15 +448,16 @@ function initEditFlyout() {
                 body: JSON.stringify(payload)
             });
 
-            // The rate limiter rejects before the endpoint runs, so there's no JSON body to read.
+            // The rate limiter rejects before the endpoint runs, so there's no event stream to read.
             if (response.status === 429) {
                 editResult.innerHTML = '<div class="error-box"><p>Too many change requests from this address. Try again later.</p></div>';
                 return;
             }
 
-            const data = await response.json().catch(() => ({}));
-
+            // A non-OK response here means the request was rejected before streaming started
+            // (shape validation) - anything after that point is reported in-band as an "error" stage.
             if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
                 if (data.errors) {
                     const list = Object.entries(data.errors)
                         .map(([field, messages]) => `<li><strong>${escapeHtml(field)}:</strong> ${escapeHtml(messages.join(' '))}</li>`)
@@ -396,8 +469,27 @@ function initEditFlyout() {
                 return;
             }
 
-            renderAgentResult(data);
+            let settled = false;
+            for await (const event of readSse(response)) {
+                if (event.stage in STAGE_MESSAGES) {
+                    showStatus(STAGE_MESSAGES[event.stage]);
+                } else if (event.stage === 'done') {
+                    hideStatus();
+                    renderAgentResult(event.result);
+                    settled = true;
+                } else if (event.stage === 'error') {
+                    hideStatus();
+                    editResult.innerHTML = `<div class="error-box"><p>${escapeHtml(event.message || 'The request failed.')}</p></div>`;
+                    settled = true;
+                }
+            }
+
+            if (!settled) {
+                hideStatus();
+                editResult.innerHTML = '<div class="error-box"><p>The connection ended before the request finished. Please try again.</p></div>';
+            }
         } catch (err) {
+            hideStatus();
             editResult.innerHTML = `<div class="error-box"><p>Request failed: ${escapeHtml(err.message)}</p></div>`;
         } finally {
             submitButton.disabled = false;

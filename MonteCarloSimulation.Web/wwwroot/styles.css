@@ -251,6 +251,12 @@ details pre {
     color: #888;
 }
 
+.status-line {
+    font-style: italic;
+    color: #888;
+    margin-top: 0.25rem;
+}
+
 .flyout {
     max-width: 420px;
 }
