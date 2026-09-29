@@ -149,14 +149,18 @@ function yearWithAge(year, ageInYear) {
     return `${year} (${Math.floor(ageInYear + 0.005)}yrs)`;
 }
 
-function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance) {
+function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax) {
     const taxablePct = taxablePercentOfBalance === undefined ? '' : ` (${formatPercent(taxablePercentOfBalance)} of balance)`;
-    return bulletList([
+    const items = [
         `Total: ${formatCurrency(total)}`,
         `Taxable: ${formatCurrency(taxableAmt)}${taxablePct}`,
         `Brokerage: ${formatCurrency(brokerageAmt)}`,
         `Roth: ${formatCurrency(rothAmt)}`,
-    ]);
+    ];
+    if (socialSecurity > 0) {
+        items.push(`Social Security: ${formatCurrency(socialSecurity)} (${formatCurrency(socialSecurityTax)} tax)`);
+    }
+    return bulletList(items);
 }
 
 function taxesBreakdown(ordinaryTaxAmount, capitalGainsTaxAmount, ordinaryBracketRate, amountUntilNextBracket, nextBracketRate, rothConversionAmount, rothConversionTax) {
@@ -178,7 +182,7 @@ function renderRunDetailTable(yearDetails) {
         return `
         <tr>
             <td>${yearWithAge(yd.year, yd.ageInYear)}</td>
-            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance)}</td>
+            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax)}</td>
             <td>${taxesBreakdown(yd.ordinaryTaxAmount, yd.capitalGainsTaxAmount, yd.ordinaryBracketRate, yd.amountUntilNextBracket, yd.nextBracketRate, yd.rothConversionAmount, yd.rothConversionTax)}</td>
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
             <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>
@@ -243,6 +247,8 @@ function renderSummary(parameters, output) {
     const totalAvgRate = output.allRates.reduce((a, b) => a + b, 0) / output.allRates.length;
     const variance = output.allRates.reduce((a, b) => a + Math.pow(b - totalAvgRate, 2), 0) / output.allRates.length;
     const stdDev = Math.sqrt(variance);
+    const avgLifetimeTax = result.lifetimeTaxesPaid.reduce((a, b) => a + b, 0) / result.lifetimeTaxesPaid.length;
+    const lifetimeTaxLine = `<p>Average lifetime tax paid: ${formatCurrency(avgLifetimeTax)} per run (ordinary + capital gains, incl. Roth conversions${result.outOfMoneyCount > 0 ? ', through the year a run ran out' : ''})</p>`;
 
     if (result.outOfMoneyCount > 0) {
         const survival = 1 - (result.outOfMoneyCount / parameters.iterations);
@@ -255,6 +261,7 @@ function renderSummary(parameters, output) {
                 <p>Actual realized average return: ${formatPercent(totalAvgRate)} with std dev ${stdDev.toFixed(4)}</p>
                 <p>Inheritance of ${formatCurrency(parameters.newMoney)} in year ${parameters.yearNewMoney} was considered</p>
                 <p>Average year of failure: ${avgFailureYear.toFixed(0)}, with an average return of ${formatPercent(avgFailureReturn)}</p>
+                ${lifetimeTaxLine}
             </div>
         `;
     }
@@ -265,6 +272,7 @@ function renderSummary(parameters, output) {
             <p><strong>🙂 All scenarios survived!</strong></p>
             <p>Scenario: ${parameters.scenarioDescription} &mdash; Initial mean: ${formatPercent(parameters.mean)}, Initial std dev: ${formatPercent(parameters.stdDev)}</p>
             <p>Average balance remaining: ${formatCurrency(avgBalance)}</p>
+            ${lifetimeTaxLine}
         </div>
     `;
 }
@@ -286,7 +294,7 @@ function renderDetail(output) {
         return `
             <tr>
                 <td>${yearWithAge(ji, output.lastAgesInYear[ji])}</td>
-                <td>${moneyBreakdown(output.lastAnnualWithdrawals[ji], output.lastTaxableWithdrawals[ji], output.lastBrokerageWithdrawals[ji], output.lastRothWithdrawals[ji], output.lastTaxableWithdrawalPercents[ji])}</td>
+                <td>${moneyBreakdown(output.lastAnnualWithdrawals[ji], output.lastTaxableWithdrawals[ji], output.lastBrokerageWithdrawals[ji], output.lastRothWithdrawals[ji], output.lastTaxableWithdrawalPercents[ji], output.lastSocialSecurityIncomes[ji], output.lastSocialSecurityTaxes[ji])}</td>
                 <td>${taxesBreakdown(output.lastOrdinaryTaxAmounts[ji], output.lastCapitalGainsTaxAmounts[ji], output.lastOrdinaryBracketRates[ji], output.lastAmountsUntilNextBracket[ji], output.lastNextBracketRates[ji], output.lastRothConversionAmounts[ji], output.lastRothConversionTaxes[ji])}</td>
                 <td>${formatCurrency(output.lastAnnualReturns[ji])}</td>
                 <td>${moneyBreakdown(balance, output.lastTaxableBalances[ji], output.lastBrokerageBalances[ji], output.lastRothBalances[ji])}</td>
@@ -615,7 +623,8 @@ form.addEventListener('submit', async (e) => {
         socialSecurityYearsUntilStart: Number(formData.get('socialSecurityYearsUntilStart')),
         socialSecurityAnnualAmount: parseNumber(formData.get('socialSecurityAnnualAmount')),
         annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction')),
-        enableRothConversions: form.elements['enableRothConversions'].checked
+        enableRothConversions: form.elements['enableRothConversions'].checked,
+        withdrawalStrategy: formData.get('withdrawalStrategy')
     };
 
     results.innerHTML = '<p class="loading">Running simulation&hellip;</p>';

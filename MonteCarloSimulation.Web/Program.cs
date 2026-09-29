@@ -1,8 +1,13 @@
-﻿using System.Threading.RateLimiting;
+﻿using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using MonteCarloSimulation.Core;
 using MonteCarloSimulation.Web;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Enums (e.g. WithdrawalStrategy) travel as readable names like "TaxOptimized" rather than ordinals.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.AddHttpClient<JiraClient>();
 builder.Services.AddSingleton<ChangeRequestAgent>();
@@ -54,6 +59,7 @@ app.MapPost("/api/run", (RunRequest request) =>
         SocialSecurityAnnualAmount = request.SocialSecurityAnnualAmount,
         AnnualStandardDeduction = request.AnnualStandardDeduction,
         EnableRothConversions = request.EnableRothConversions,
+        WithdrawalStrategy = request.WithdrawalStrategy,
         ScenarioDescription = scenario.Description
     };
 

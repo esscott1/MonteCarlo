@@ -72,6 +72,7 @@ namespace MonteCarloSimulation1
                             $"roth: {output.LastRothWithdrawals[ji]:C0})\n " +
                             $"tax rate: {output.LastTaxRates[ji]:P2}\n " +
                             $"roth conversion: {output.LastRothConversionAmounts?[ji] ?? 0:C0} (tax {output.LastRothConversionTaxes?[ji] ?? 0:C0})\n " +
+                            $"social security: {output.LastSocialSecurityIncomes?[ji] ?? 0:C0} (tax {output.LastSocialSecurityTaxes?[ji] ?? 0:C0})\n " +
                             $"years return ($): {output.LastAnnualReturns[ji]:C0}\n " +
                             $"total balance: {output.LastBalances[ji]:C0} (" +
                             $"taxable balance: {output.LastTaxableBalances[ji]:C0}, " +
@@ -156,6 +157,7 @@ namespace MonteCarloSimulation1
                 SocialSecurityAnnualAmount = PromptSocialSecurityAnnualAmount(),
                 AnnualStandardDeduction = PromptAnnualStandardDeduction(),
                 EnableRothConversions = PromptEnableRothConversions(),
+                WithdrawalStrategy = PromptWithdrawalStrategy(),
                 ScenarioDescription = scenario.Description
             };
         }
@@ -219,6 +221,18 @@ namespace MonteCarloSimulation1
                     return value;
                 }
                 Console.Write("Invalid input. Please enter a non-negative number: ");
+            }
+        }
+
+        public static WithdrawalStrategy PromptWithdrawalStrategy()
+        {
+            Console.Write("Withdrawal order: 1) Pro-rata  2) Tax-optimized (fill 12% from Tax Deferred, then Brokerage, then Roth): ");
+            while (true)
+            {
+                string input = Console.ReadLine()?.Trim();
+                if (input == "1") return WithdrawalStrategy.ProRata;
+                if (input == "2") return WithdrawalStrategy.TaxOptimized;
+                Console.Write("Invalid input. Please enter 1 or 2: ");
             }
         }
 
@@ -376,7 +390,7 @@ namespace MonteCarloSimulation1
 
         public static double PromptAnnualStandardDeduction()
         {
-            Console.Write("Enter the annual standard deduction (e.g., 14600) [0 for none]: ");
+            Console.Write("Enter the annual standard deduction (e.g., 16000) [0 for none]: ");
             while (true)
             {
                 string input = Console.ReadLine();

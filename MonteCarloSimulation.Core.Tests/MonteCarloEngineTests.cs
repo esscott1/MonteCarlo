@@ -446,5 +446,247 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.True(year0.RothConversionAmount < 50_400 * 1.025);
             Assert.All(output.Result.RunDetails[0], yd => Assert.True(yd.BrokerageBalance >= -0.01));
         }
+
+        // Year 0 (inflation 1.025, no standard deduction): 12% ceiling = 50,400 * 1.025 = 51,660 gross,
+        // which nets 51,660 - (1,271 + 4,674) = 45,715 after ordinary tax.
+        private const double TaxOptCeilingGross = 50_400 * 1.025;
+        private const double TaxOptCeilingNet = 45_715;
+
+        private static SimulationParameters TaxOptimizedParameters(int age, double withdrawal) => new()
+        {
+            Years = 3,
+            Iterations = 1,
+            Withdrawal = withdrawal,
+            Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-age),
+            InitialTaxableBalance = 1_000_000,
+            InitialRothBasis = 100_000,
+            InitialRothUnrealizedGain = 0,
+            InitialBrokerageBasis = 300_000,
+            InitialBrokerageUnrealizedGain = 0,
+            Mean = 0,
+            StdDev = 0,
+            NewMoney = 0,
+            YearNewMoney = 0,
+            SocialSecurityYearsUntilStart = 0,
+            SocialSecurityAnnualAmount = 0,
+            AnnualStandardDeduction = 0,
+            WithdrawalStrategy = WithdrawalStrategy.TaxOptimized,
+            ScenarioDescription = "Tax-optimized withdrawal order"
+        };
+
+        [Fact]
+        public void TaxOptimized_SmallNeed_ComesEntirelyFromTaxDeferred()
+        {
+            var year0 = MonteCarloEngine.Run(TaxOptimizedParameters(age: 70, withdrawal: 20_000)).Result.RunDetails[0][0];
+
+            Assert.True(year0.TaxableWithdrawal > 0);
+            Assert.Equal(0, year0.BrokerageWithdrawal);
+            Assert.Equal(0, year0.RothWithdrawal);
+        }
+
+        [Fact]
+        public void TaxOptimized_LargeNeed_FillsTaxDeferredTo12PercentCeiling_ThenBrokerage()
+        {
+            var year0 = MonteCarloEngine.Run(TaxOptimizedParameters(age: 70, withdrawal: 80_000)).Result.RunDetails[0][0];
+
+            Assert.Equal(TaxOptCeilingGross, year0.TaxableWithdrawal, 3);
+            Assert.Equal(0.12, year0.OrdinaryBracketRate);
+            Assert.Equal(0, year0.AmountUntilNextBracket!.Value, 3);
+            Assert.Equal(80_000 * 1.025 - TaxOptCeilingNet, year0.BrokerageWithdrawal, 3);
+            Assert.Equal(0, year0.RothWithdrawal);
+        }
+
+        [Fact]
+        public void TaxOptimized_AfterBrokerageExhausted_TaxDeferredGoesAbove12Percent_BeforeRoth()
+        {
+            var parameters = TaxOptimizedParameters(age: 70, withdrawal: 80_000);
+            parameters.InitialBrokerageBasis = 10_000;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+
+            Assert.Equal(10_000, year0.BrokerageWithdrawal, 3);
+            Assert.Equal(0, year0.BrokerageBalance, 3);
+            Assert.True(year0.TaxableWithdrawal > TaxOptCeilingGross);
+            Assert.Equal(0.22, year0.OrdinaryBracketRate);
+            Assert.Equal(0, year0.RothWithdrawal);
+        }
+
+        [Fact]
+        public void TaxOptimized_Roth_OnlyAfterTaxDeferredAndBrokerageExhausted()
+        {
+            var parameters = TaxOptimizedParameters(age: 70, withdrawal: 80_000);
+            parameters.InitialTaxableBalance = 30_000;
+            parameters.InitialBrokerageBasis = 10_000;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+
+            Assert.Equal(30_000, year0.TaxableWithdrawal, 3);
+            Assert.Equal(10_000, year0.BrokerageWithdrawal, 3);
+            Assert.True(year0.RothWithdrawal > 0);
+        }
+
+        [Fact]
+        public void TaxOptimized_DoesNotFail_WhileTaxDeferredCanStillCoverSpending()
+        {
+            // Regression: the 12% ceiling used to be a hard cap, so once Brokerage and Roth ran dry the
+            // run failed even with plenty of Tax Deferred money left.
+            var parameters = TaxOptimizedParameters(age: 70, withdrawal: 120_000);
+            parameters.Years = 5;
+            parameters.InitialBrokerageBasis = 0;
+            parameters.InitialRothBasis = 0;
+
+            var output = MonteCarloEngine.Run(parameters);
+
+            Assert.Equal(0, output.Result.OutOfMoneyCount);
+            Assert.All(output.Result.RunDetails[0], yd => Assert.True(yd.TaxableWithdrawal > TaxOptCeilingGross));
+        }
+
+        [Fact]
+        public void TaxOptimized_BeforeAge59AndAHalf_UsesBrokerageBeforeRoth()
+        {
+            var output = MonteCarloEngine.Run(TaxOptimizedParameters(age: 40, withdrawal: 20_000));
+
+            Assert.Equal(0, output.Result.OutOfMoneyCount);
+            Assert.All(output.Result.RunDetails[0], yd => Assert.Equal(0, yd.TaxableWithdrawal));
+            Assert.All(output.Result.RunDetails[0], yd => Assert.True(yd.BrokerageWithdrawal > 0));
+            Assert.All(output.Result.RunDetails[0], yd => Assert.Equal(0, yd.RothWithdrawal));
+        }
+
+        [Fact]
+        public void TaxOptimized_WithConversions_BelowFillYear_FillsExactlyTo22Percent()
+        {
+            var parameters = TaxOptimizedParameters(age: 70, withdrawal: 20_000);
+            parameters.EnableRothConversions = true;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+
+            Assert.True(year0.RothConversionAmount > 0);
+            Assert.Equal(TaxOptCeilingGross, year0.TaxableWithdrawal + year0.RothConversionAmount, 3);
+            Assert.Equal(0.12, year0.OrdinaryBracketRate);
+            Assert.Equal(0, year0.AmountUntilNextBracket!.Value, 3);
+        }
+
+        // Social Security, year 0: benefit $30,000 (not yet inflated), 85% taxable = $25,500; standard
+        // deduction 16,000 * 1.025 = 16,400, so $9,100 is taxed at 10% = $910 and the net benefit is $29,090.
+        private const double SsTaxableYear0 = 25_500;
+        private const double SsTaxYear0 = 910;
+        private const double SsNetYear0 = 29_090;
+        private const double StdDedYear0 = 16_000 * 1.025;
+
+        private static SimulationParameters SocialSecurityParameters(int age, double withdrawal) => new()
+        {
+            Years = 3,
+            Iterations = 1,
+            Withdrawal = withdrawal,
+            Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-age),
+            InitialTaxableBalance = 0,
+            InitialRothBasis = 0,
+            InitialRothUnrealizedGain = 0,
+            InitialBrokerageBasis = 0,
+            InitialBrokerageUnrealizedGain = 0,
+            Mean = 0,
+            StdDev = 0,
+            NewMoney = 0,
+            YearNewMoney = 0,
+            SocialSecurityYearsUntilStart = 0,
+            SocialSecurityAnnualAmount = 30_000,
+            AnnualStandardDeduction = 16_000,
+            WithdrawalStrategy = WithdrawalStrategy.TaxOptimized,
+            ScenarioDescription = "Social Security as income"
+        };
+
+        [Fact]
+        public void SocialSecurity_TaxedAt85Percent_AndNetReducesPortfolioNeed()
+        {
+            var parameters = SocialSecurityParameters(age: 70, withdrawal: 50_000);
+            parameters.InitialBrokerageBasis = 500_000; // all basis, so the Brokerage draw is untaxed and gross == net
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+
+            Assert.Equal(30_000, year0.SocialSecurityIncome);
+            Assert.Equal(SsTaxYear0, year0.SocialSecurityTax, 6);
+            Assert.Equal(50_000 * 1.025 - SsNetYear0, year0.BrokerageWithdrawal, 6);
+        }
+
+        [Fact]
+        public void SocialSecurity_StacksFirst_TaxDeferredTaxedAboveIt()
+        {
+            var parameters = SocialSecurityParameters(age: 70, withdrawal: 50_000);
+            parameters.InitialTaxableBalance = 1_000_000;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+
+            // Need 22,160 net. SS already sits $9,100 into the 10% bracket (top 12,710), leaving 3,610 gross
+            // (3,249 net) at 10%; the other 18,911 net is at 12% -> 21,489.77 gross. Total gross 25,099.77.
+            double expectedGross = 3_610 + 18_911 / 0.88;
+            Assert.Equal(expectedGross, year0.TaxableWithdrawal, 4);
+            // Ordinary tax on all income: 1,271 (10% bracket) + 21,489.77 * 12%.
+            Assert.Equal(1_271 + (18_911 / 0.88) * 0.12, year0.OrdinaryTaxAmount, 4);
+            Assert.Equal(0.12, year0.OrdinaryBracketRate);
+        }
+
+        [Fact]
+        public void SocialSecurity_ShrinksTaxOptimized12PercentFill()
+        {
+            var parameters = SocialSecurityParameters(age: 70, withdrawal: 150_000);
+            parameters.InitialTaxableBalance = 1_000_000;
+            parameters.InitialBrokerageBasis = 500_000;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+
+            Assert.Equal(StdDedYear0 + TaxOptCeilingGross - SsTaxableYear0, year0.TaxableWithdrawal, 3);
+            Assert.Equal(0.12, year0.OrdinaryBracketRate);
+            Assert.Equal(0, year0.AmountUntilNextBracket!.Value, 3);
+        }
+
+        [Fact]
+        public void SocialSecurity_ShrinksRothConversionRoom()
+        {
+            var parameters = SocialSecurityParameters(age: 40, withdrawal: 50_000);
+            parameters.InitialTaxableBalance = 500_000;
+            parameters.InitialBrokerageBasis = 500_000;
+            parameters.EnableRothConversions = true;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+
+            Assert.Equal(0, year0.TaxableWithdrawal);
+            Assert.Equal(StdDedYear0 + TaxOptCeilingGross - SsTaxableYear0, year0.RothConversionAmount, 3);
+        }
+
+        [Fact]
+        public void SocialSecurity_SurplusDepositedToBrokerage()
+        {
+            var parameters = SocialSecurityParameters(age: 70, withdrawal: 10_000);
+            parameters.InitialBrokerageBasis = 100_000;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+
+            Assert.Equal(0, year0.BrokerageWithdrawal);
+            Assert.Equal(100_000 + (SsNetYear0 - 10_000 * 1.025), year0.BrokerageBalance, 6);
+        }
+
+        [Fact]
+        public void SocialSecurity_NoLongerDepositedIntoTaxDeferred()
+        {
+            var parameters = SocialSecurityParameters(age: 40, withdrawal: 50_000);
+            parameters.InitialTaxableBalance = 500_000;
+            parameters.InitialBrokerageBasis = 500_000;
+
+            var output = MonteCarloEngine.Run(parameters);
+
+            Assert.All(output.Result.RunDetails[0], yd => Assert.Equal(500_000, yd.TaxableBalance, 6));
+        }
+
+        [Fact]
+        public void TaxOptimized_Shortfall_Fails_WhenEligibleBucketsCannotCoverNeed()
+        {
+            var parameters = TaxOptimizedParameters(age: 40, withdrawal: 60_000);
+            parameters.InitialBrokerageBasis = 5_000;
+            parameters.InitialRothBasis = 5_000;
+
+            var output = MonteCarloEngine.Run(parameters);
+
+            Assert.True(output.Result.OutOfMoneyCount > 0);
+        }
     }
 }
