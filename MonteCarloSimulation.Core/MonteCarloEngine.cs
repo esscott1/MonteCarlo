@@ -48,12 +48,13 @@ namespace MonteCarloSimulation.Core
                     standardDeduction *= (1 + inflation);
                     bracketInflationFactor *= (1 + inflation);
                     double periodWithdrawal = currentWithdrawal;
+                    var taxYear = new TaxYear(standardDeduction, bracketInflationFactor, FederalTaxBrackets.Single2026);
 
                     // Social Security is income in the year received: 85% of it is ordinary income stacked
                     // first in the brackets (so everything else - Tax Deferred draws, conversions - stacks on
                     // top of it), and its after-tax amount reduces what the portfolio must supply this year.
-                    double ssTaxable = SsTaxableFraction * ss;
-                    double ssTax = ComputeOrdinaryTax(ssTaxable, standardDeduction, bracketInflationFactor, FederalTaxBrackets.Single2026);
+                    double ssTaxable = TaxAssumptions.SsTaxableFraction * ss;
+                    double ssTax = taxYear.OrdinaryTax(ssTaxable);
                     double ssNet = ss - ssTax;
                     double need = Math.Max(0, periodWithdrawal - ssNet);
                     double ssSurplus = Math.Max(0, ssNet - periodWithdrawal);
@@ -93,30 +94,27 @@ namespace MonteCarloSimulation.Core
                         // can net after tax, so no bucket goes negative; anything still unmet is a shortfall.
                         double remaining = need;
 
-                        double ceilingGross = standardDeduction + Bracket22Floor * bracketInflationFactor;
-                        double maxTaxableGross = Math.Min(Math.Max(0, ceilingGross - ssTaxable), Math.Max(0, eligibleTaxable));
-                        double maxTaxableNet = maxTaxableGross - IncrementalOrdinaryTax(ssTaxable, maxTaxableGross, standardDeduction, bracketInflationFactor);
+                        double maxTaxableGross = Math.Min(Math.Max(0, taxYear.Bracket22CeilingGross - ssTaxable), Math.Max(0, eligibleTaxable));
+                        double maxTaxableNet = maxTaxableGross - taxYear.IncrementalOrdinaryTax(ssTaxable, maxTaxableGross);
                         desiredTaxableWithdrawal = Math.Min(remaining, maxTaxableNet);
                         // Clamp: re-grossing a net derived from the full cap can overshoot it by float rounding,
                         // which would leave the bucket at -1e-10 and falsely trip the negative-balance failure.
-                        grossTaxableWithdrawal = Math.Min(maxTaxableGross, GrossUpTaxableWithdrawal(
-                            desiredTaxableWithdrawal, ssTaxable, standardDeduction, bracketInflationFactor, FederalTaxBrackets.Single2026));
+                        grossTaxableWithdrawal = Math.Min(maxTaxableGross, taxYear.GrossUpOrdinary(desiredTaxableWithdrawal, ssTaxable));
                         remaining -= desiredTaxableWithdrawal;
 
-                        double brokerageNetCapacity = Math.Max(0, brokerage) * (1 - gainFraction * LtcgRate);
+                        double brokerageNetCapacity = TaxAssumptions.BrokerageNetCapacity(brokerage, gainFraction);
                         desiredBrokerageWithdrawal = Math.Min(remaining, brokerageNetCapacity);
-                        grossBrokerageWithdrawal = Math.Min(Math.Max(0, brokerage), GrossUpLtcgWithdrawal(desiredBrokerageWithdrawal, gainFraction, LtcgRate));
+                        grossBrokerageWithdrawal = Math.Min(Math.Max(0, brokerage), TaxAssumptions.GrossUpLtcg(desiredBrokerageWithdrawal, gainFraction));
                         remaining -= desiredBrokerageWithdrawal;
 
                         if (remaining > 0 && eligibleTaxable > 0)
                         {
                             double fullTaxableGross = eligibleTaxable;
-                            double fullTaxableNet = fullTaxableGross - IncrementalOrdinaryTax(ssTaxable, fullTaxableGross, standardDeduction, bracketInflationFactor);
+                            double fullTaxableNet = fullTaxableGross - taxYear.IncrementalOrdinaryTax(ssTaxable, fullTaxableGross);
                             double totalTaxableNet = Math.Min(desiredTaxableWithdrawal + remaining, fullTaxableNet);
                             remaining -= totalTaxableNet - desiredTaxableWithdrawal;
                             desiredTaxableWithdrawal = totalTaxableNet;
-                            grossTaxableWithdrawal = Math.Min(fullTaxableGross, GrossUpTaxableWithdrawal(
-                                desiredTaxableWithdrawal, ssTaxable, standardDeduction, bracketInflationFactor, FederalTaxBrackets.Single2026));
+                            grossTaxableWithdrawal = Math.Min(fullTaxableGross, taxYear.GrossUpOrdinary(desiredTaxableWithdrawal, ssTaxable));
                         }
 
                         desiredRothWithdrawal = Math.Min(remaining, Math.Max(0, eligibleRoth));
@@ -141,11 +139,10 @@ namespace MonteCarloSimulation.Core
                         // Calculate grossed-up withdrawal from taxable (to net the correct after-tax amount),
                         // stacked on top of the taxable share of Social Security in the inflation-scaled brackets
                         desiredTaxableWithdrawal = baseWithdrawal * taxableProportion;
-                        grossTaxableWithdrawal = GrossUpTaxableWithdrawal(
-                            desiredTaxableWithdrawal, ssTaxable, standardDeduction, bracketInflationFactor, FederalTaxBrackets.Single2026);
+                        grossTaxableWithdrawal = taxYear.GrossUpOrdinary(desiredTaxableWithdrawal, ssTaxable);
 
                         desiredBrokerageWithdrawal = baseWithdrawal * brokerageProportion;
-                        grossBrokerageWithdrawal = GrossUpLtcgWithdrawal(desiredBrokerageWithdrawal, gainFraction, LtcgRate);
+                        grossBrokerageWithdrawal = TaxAssumptions.GrossUpLtcg(desiredBrokerageWithdrawal, gainFraction);
 
                         desiredRothWithdrawal = baseWithdrawal * rothProportion;
                     }
@@ -169,22 +166,21 @@ namespace MonteCarloSimulation.Core
                     double rothConversionTax = 0;
                     if (parameters.EnableRothConversions)
                     {
-                        double ceilingGross = standardDeduction + Bracket22Floor * bracketInflationFactor;
                         double ordinaryIncomeSoFar = ssTaxable + grossTaxableWithdrawal;
-                        rothConversion = Math.Min(Math.Max(0, ceilingGross - ordinaryIncomeSoFar), Math.Max(0, taxable));
-                        rothConversionTax = IncrementalOrdinaryTax(ordinaryIncomeSoFar, rothConversion, standardDeduction, bracketInflationFactor);
+                        rothConversion = Math.Min(Math.Max(0, taxYear.Bracket22CeilingGross - ordinaryIncomeSoFar), Math.Max(0, taxable));
+                        rothConversionTax = taxYear.IncrementalOrdinaryTax(ordinaryIncomeSoFar, rothConversion);
 
                         double conversionGainFraction = brokerage > 0 ? Math.Clamp((brokerage - brokerageBasis) / brokerage, 0.0, 1.0) : 0;
-                        double maxTaxPayable = Math.Max(0, brokerage) * (1 - conversionGainFraction * LtcgRate);
+                        double maxTaxPayable = TaxAssumptions.BrokerageNetCapacity(brokerage, conversionGainFraction);
                         if (rothConversionTax > maxTaxPayable)
                         {
                             // Tax on extra income is convex with f(0)=0, so f(k*x) <= k*f(x): scaling the
                             // conversion by k guarantees the resulting tax fits within maxTaxPayable.
                             rothConversion *= maxTaxPayable / rothConversionTax;
-                            rothConversionTax = IncrementalOrdinaryTax(ordinaryIncomeSoFar, rothConversion, standardDeduction, bracketInflationFactor);
+                            rothConversionTax = taxYear.IncrementalOrdinaryTax(ordinaryIncomeSoFar, rothConversion);
                         }
 
-                        double taxSale = GrossUpLtcgWithdrawal(rothConversionTax, conversionGainFraction, LtcgRate);
+                        double taxSale = TaxAssumptions.GrossUpLtcg(rothConversionTax, conversionGainFraction);
                         double brokerageBeforeTaxSale = brokerage;
                         brokerage -= taxSale;
                         brokerageBasis *= brokerageBeforeTaxSale > 0 ? brokerage / brokerageBeforeTaxSale : 0;
@@ -203,8 +199,8 @@ namespace MonteCarloSimulation.Core
                     double totalTax = ordinaryTaxAmount + capitalGainsTaxAmount;
                     double yearTaxRate = totalGrossWithdrawal > 0 ? totalTax / totalGrossWithdrawal : 0;
 
-                    var (currentBracketRate, amountUntilNextBracket, nextBracketRate) = GetOrdinaryBracketRoom(
-                        ssTaxable + grossTaxableWithdrawal + rothConversion, standardDeduction, bracketInflationFactor, FederalTaxBrackets.Single2026);
+                    var (currentBracketRate, amountUntilNextBracket, nextBracketRate) = taxYear.BracketRoom(
+                        ssTaxable + grossTaxableWithdrawal + rothConversion);
 
                     // Add new money (e.g., inheritance) as after-tax cash in the year it arrives -
                     // it's a cash contribution, not a gain, so it increases both balance and basis
@@ -275,121 +271,6 @@ namespace MonteCarloSimulation.Core
                 OutOfMoneyMessage = outOfMoneyMessage.ToString(),
                 LastSuccessfulRun = runs.LastOrDefault(r => !r.Failed)?.Years
             };
-        }
-
-        private const double LtcgRate = 0.20;
-
-        // Lower bound (un-inflated, above the standard deduction) of the first bracket at 22% or higher -
-        // the ceiling Roth conversions fill up to.
-        private static readonly double Bracket22Floor =
-            FederalTaxBrackets.Single2026.First(b => b.Rate >= 0.22).LowerBound;
-
-        // Taxable share of Social Security - a conservative simplification of the IRS provisional-income
-        // formula (which taxes 0%, 50% or up to 85% depending on other income).
-        private const double SsTaxableFraction = 0.85;
-
-        // Ordinary tax owed on `extraIncome` stacked on top of `baseGrossIncome` already counted this year.
-        private static double IncrementalOrdinaryTax(double baseGrossIncome, double extraIncome, double standardDeduction, double inflationFactor)
-        {
-            if (extraIncome <= 0) return 0;
-            return ComputeOrdinaryTax(baseGrossIncome + extraIncome, standardDeduction, inflationFactor, FederalTaxBrackets.Single2026)
-                - ComputeOrdinaryTax(baseGrossIncome, standardDeduction, inflationFactor, FederalTaxBrackets.Single2026);
-        }
-
-        // Forward tax calculation (the inverse of GrossUpTaxableWithdrawal): ordinary tax owed on
-        // `grossIncome` after exempting `standardDeduction`, marginally through the inflation-scaled brackets.
-        private static double ComputeOrdinaryTax(double grossIncome, double standardDeduction, double inflationFactor, IReadOnlyList<TaxBracket> brackets)
-        {
-            double taxableIncome = Math.Max(0, grossIncome - standardDeduction);
-            double tax = 0;
-
-            foreach (var bracket in brackets)
-            {
-                double lower = bracket.LowerBound * inflationFactor;
-                double upper = bracket.UpperBound * inflationFactor;
-                if (taxableIncome <= lower) break;
-                tax += (Math.Min(taxableIncome, upper) - lower) * bracket.Rate;
-            }
-
-            return tax;
-        }
-
-        // Computes the pre-tax ("gross") Brokerage withdrawal that nets `desiredNet` dollars after tax,
-        // taxing only the `gainFraction` portion of each withdrawn dollar at a flat `ltcgRate` - the
-        // remaining (basis) portion is a tax-free return of principal. Unlike the taxable-bucket
-        // gross-up, this is flat-rate: no brackets, no standard-deduction exemption.
-        private static double GrossUpLtcgWithdrawal(double desiredNet, double gainFraction, double ltcgRate)
-        {
-            if (desiredNet <= 0) return 0;
-            double taxableFraction = Math.Clamp(gainFraction, 0.0, 1.0) * ltcgRate;
-            return desiredNet / (1 - taxableFraction);
-        }
-
-        // Computes the pre-tax ("gross") taxable-side withdrawal that nets `desiredNet` dollars after tax,
-        // stacked on top of `baseIncome` ordinary income already counted this year (the taxable share of
-        // Social Security). Whatever standard deduction the base didn't use is tax-free; the rest is taxed
-        // marginally from where the base left off in the inflation-scaled brackets. Each bracket is linear,
-        // so this is an exact analytic inversion — no iteration required. baseIncome = 0 is the plain case.
-        private static double GrossUpTaxableWithdrawal(
-            double desiredNet, double baseIncome, double standardDeduction, double inflationFactor, IReadOnlyList<TaxBracket> brackets)
-        {
-            double deductionRoom = Math.Max(0, standardDeduction - baseIncome);
-            if (desiredNet <= deductionRoom) return desiredNet;
-
-            double remainingNet = desiredNet - deductionRoom;
-            double position = Math.Max(0, baseIncome - standardDeduction);
-            double grossAboveDeduction = 0;
-
-            foreach (var bracket in brackets)
-            {
-                double lower = bracket.LowerBound * inflationFactor;
-                double upper = bracket.UpperBound * inflationFactor;
-                if (position >= upper) continue;
-
-                double bracketWidth = upper - Math.Max(lower, position);
-                double bracketNetCapacity = bracketWidth * (1 - bracket.Rate);
-
-                if (remainingNet <= bracketNetCapacity || double.IsPositiveInfinity(upper))
-                {
-                    grossAboveDeduction += remainingNet / (1 - bracket.Rate);
-                    remainingNet = 0;
-                    break;
-                }
-
-                grossAboveDeduction += bracketWidth;
-                remainingNet -= bracketNetCapacity;
-            }
-
-            return deductionRoom + grossAboveDeduction;
-        }
-
-        // Finds the marginal ordinary-income bracket the current gross taxable withdrawal falls into,
-        // and how many more gross withdrawal dollars could be taken before crossing into the next bracket
-        // up. Mirrors GrossUpTaxableWithdrawal's accounting: the amount above the standard deduction maps
-        // 1:1 onto the (inflation-scaled) bracket thresholds, so no re-inversion is needed here.
-        // AmountUntilNextBracket/NextBracketRate are null once already in the top bracket, since there's
-        // no next bracket to reach; CurrentBracketRate is always set (0 if the withdrawal never exceeds
-        // the standard deduction, matching the first bracket's floor).
-        private static (double CurrentBracketRate, double? AmountUntilNextBracket, double? NextBracketRate) GetOrdinaryBracketRoom(
-            double grossTaxableWithdrawal, double standardDeduction, double inflationFactor, IReadOnlyList<TaxBracket> brackets)
-        {
-            double grossAboveDeduction = Math.Max(0, grossTaxableWithdrawal - standardDeduction);
-
-            for (int i = 0; i < brackets.Count; i++)
-            {
-                double upper = brackets[i].UpperBound * inflationFactor;
-                if (double.IsPositiveInfinity(upper)) return (brackets[i].Rate, null, null);
-
-                // Income sitting exactly at a threshold (e.g. a conversion that fills to it) belongs to the
-                // lower bracket - no dollar was taxed at the next rate. Tolerance absorbs float rounding.
-                if (grossAboveDeduction <= upper + 1e-6)
-                {
-                    double? nextRate = i + 1 < brackets.Count ? brackets[i + 1].Rate : (double?)null;
-                    return (brackets[i].Rate, Math.Max(0, upper - grossAboveDeduction), nextRate);
-                }
-            }
-
-            return (brackets[^1].Rate, null, null);
         }
 
         private static double GetRateBoxMullerTransform(double mean, double standardDeviation, Random random)
