@@ -15,6 +15,9 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("change-request", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromHours(1) }));
+    options.AddPolicy("observe-access", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromHours(1) }));
 });
 
 var app = builder.Build();
@@ -37,8 +40,12 @@ app.MapPost("/api/run", (RunRequest request) =>
         Years = request.Years,
         Iterations = request.Iterations,
         Withdrawal = request.Withdrawal,
+        Birthdate = request.Birthdate,
         InitialTaxableBalance = request.InitialTaxableBalance,
-        InitialNontaxableBalance = request.InitialNontaxableBalance,
+        InitialRothBasis = request.InitialRothBasis,
+        InitialRothUnrealizedGain = request.InitialRothUnrealizedGain,
+        InitialBrokerageBasis = request.InitialBrokerageBasis,
+        InitialBrokerageUnrealizedGain = request.InitialBrokerageUnrealizedGain,
         Mean = scenario.Mean,
         StdDev = scenario.StdDev,
         NewMoney = request.NewMoney,
@@ -46,6 +53,7 @@ app.MapPost("/api/run", (RunRequest request) =>
         SocialSecurityYearsUntilStart = request.SocialSecurityYearsUntilStart,
         SocialSecurityAnnualAmount = request.SocialSecurityAnnualAmount,
         AnnualStandardDeduction = request.AnnualStandardDeduction,
+        EnableRothConversions = request.EnableRothConversions,
         ScenarioDescription = scenario.Description
     };
 
@@ -102,8 +110,38 @@ app.MapPost("/api/change-request", async (
     }
 }).RequireRateLimiting("change-request");
 
+// Issues a short-lived, stateless signed token gating the Observe dashboard, keyed by the
+// same passphrase already used for change requests - no separate secret to provision.
+app.MapPost("/api/observe-access", (ObserveAccessRequest request, IConfiguration config, ILogger<Program> logger) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Passphrase))
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["passphrase"] = new[] { "Passphrase is required." } });
+
+    var secret = config["ChangeRequest:Passphrase"];
+    if (!ChangeRequest.PassphraseMatches(request.Passphrase, secret))
+    {
+        logger.LogWarning("Observe access rejected: incorrect passphrase.");
+        return Results.Json(new { message = "Incorrect passphrase." }, statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    return Results.Ok(new { token = ObserveAccessToken.Issue(secret!) });
+}).RequireRateLimiting("observe-access");
+
+// Verifies a token issued above. Pure computation from the token + shared secret - no
+// server-side session state - so it works identically no matter which instance handles it.
+app.MapGet("/api/observe-access/verify", (HttpContext ctx, IConfiguration config) =>
+{
+    var token = ctx.Request.Headers["X-Observe-Token"].ToString();
+    var secret = config["ChangeRequest:Passphrase"];
+    return !string.IsNullOrEmpty(secret) && ObserveAccessToken.IsValid(token, secret)
+        ? Results.Ok()
+        : Results.StatusCode(StatusCodes.Status401Unauthorized);
+}).RequireRateLimiting("observe-access");
+
 app.Run();
 
 record RunResponse(SimulationParameters Parameters, SimulationRunOutput Output);
 
 record ChangeRequestResponse(string IssueKey, string IssueUrl, string Summary, string Description, bool ServerCorrected);
+
+record ObserveAccessRequest(string Passphrase);

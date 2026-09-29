@@ -59,8 +59,8 @@ namespace MonteCarloSimulation1
                 Console.WriteLine();
                 Console.WriteLine($"\nlast run balances: ");
                 if (output.LastBalances != null && output.LastAnnualReturns != null && output.LastAnnualWithdrawals != null
-                    && output.LastTaxableBalances != null && output.LastNontaxableBalances != null
-                    && output.LastTaxableWithdrawals != null && output.LastNontaxableWithdrawals != null
+                    && output.LastTaxableBalances != null && output.LastBrokerageBalances != null && output.LastRothBalances != null
+                    && output.LastTaxableWithdrawals != null && output.LastBrokerageWithdrawals != null && output.LastRothWithdrawals != null
                     && output.LastTaxRates != null)
                 {
                     for (int ji = 1; ji < output.LastBalances.Count; ji++)
@@ -68,12 +68,15 @@ namespace MonteCarloSimulation1
                         Console.WriteLine(
                             $"Year {ji}\n withdrawals: {output.LastAnnualWithdrawals[ji]:C0}, (" +
                             $"taxable: {output.LastTaxableWithdrawals[ji]:C0}, " +
-                            $"nontaxable: {output.LastNontaxableWithdrawals[ji]:C0})\n " +
+                            $"brokerage: {output.LastBrokerageWithdrawals[ji]:C0}, " +
+                            $"roth: {output.LastRothWithdrawals[ji]:C0})\n " +
                             $"tax rate: {output.LastTaxRates[ji]:P2}\n " +
+                            $"roth conversion: {output.LastRothConversionAmounts?[ji] ?? 0:C0} (tax {output.LastRothConversionTaxes?[ji] ?? 0:C0})\n " +
                             $"years return ($): {output.LastAnnualReturns[ji]:C0}\n " +
                             $"total balance: {output.LastBalances[ji]:C0} (" +
                             $"taxable balance: {output.LastTaxableBalances[ji]:C0}, " +
-                            $"nontaxable balance: {output.LastNontaxableBalances[ji]:C0}), ");
+                            $"brokerage balance: {output.LastBrokerageBalances[ji]:C0}, " +
+                            $"roth balance: {output.LastRothBalances[ji]:C0}), ");
                     }
                 }
                 Smile();
@@ -139,8 +142,12 @@ namespace MonteCarloSimulation1
                 Years = PromptYears(),
                 Iterations = PromptIterations(),
                 Withdrawal = PromptWithdrawal(),
+                Birthdate = PromptBirthdate(),
                 InitialTaxableBalance = PromptInitialTaxableBalance(),
-                InitialNontaxableBalance = PromptInitialNontaxableBalance(),
+                InitialRothBasis = PromptInitialRothBasis(),
+                InitialRothUnrealizedGain = PromptInitialRothUnrealizedGain(),
+                InitialBrokerageBasis = PromptInitialBrokerageBasis(),
+                InitialBrokerageUnrealizedGain = PromptInitialBrokerageUnrealizedGain(),
                 Mean = scenario.Mean,
                 StdDev = scenario.StdDev,
                 NewMoney = PromptNewMoney(),
@@ -148,6 +155,7 @@ namespace MonteCarloSimulation1
                 SocialSecurityYearsUntilStart = PromptSocialSecurityYearsUntilStart(),
                 SocialSecurityAnnualAmount = PromptSocialSecurityAnnualAmount(),
                 AnnualStandardDeduction = PromptAnnualStandardDeduction(),
+                EnableRothConversions = PromptEnableRothConversions(),
                 ScenarioDescription = scenario.Description
             };
         }
@@ -214,6 +222,32 @@ namespace MonteCarloSimulation1
             }
         }
 
+        public static bool PromptEnableRothConversions()
+        {
+            Console.Write("Use Roth conversions to fill the 10%/12% brackets? (y/n): ");
+            while (true)
+            {
+                string input = Console.ReadLine()?.Trim().ToLowerInvariant();
+                if (input == "y" || input == "yes") return true;
+                if (input == "n" || input == "no") return false;
+                Console.Write("Invalid input. Please enter y or n: ");
+            }
+        }
+
+        public static DateOnly PromptBirthdate()
+        {
+            Console.Write("Enter your birthdate (MM/DD/YYYY): ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (DateOnly.TryParse(input, out DateOnly value) && value <= DateOnly.FromDateTime(DateTime.Today))
+                {
+                    return value;
+                }
+                Console.Write("Invalid input. Please enter a valid past date as MM/DD/YYYY: ");
+            }
+        }
+
         public static double PromptInitialTaxableBalance()
         {
             Console.Write("Enter the initial taxable balance (e.g., 1120000): ");
@@ -228,9 +262,51 @@ namespace MonteCarloSimulation1
             }
         }
 
-        public static double PromptInitialNontaxableBalance()
+        public static double PromptInitialRothBasis()
         {
-            Console.Write("Enter the initial nontaxable balance (e.g., 1680000): ");
+            Console.Write("Enter the initial Roth basis - what you contributed, i.e. cost basis (e.g., 15000): ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (double.TryParse(input, out double value) && value >= 0)
+                {
+                    return value;
+                }
+                Console.Write("Invalid input. Please enter a non-negative number: ");
+            }
+        }
+
+        public static double PromptInitialRothUnrealizedGain()
+        {
+            Console.Write("Enter the initial Roth unrealized gain - current value minus basis (e.g., 5000): ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (double.TryParse(input, out double value) && value >= 0)
+                {
+                    return value;
+                }
+                Console.Write("Invalid input. Please enter a non-negative number: ");
+            }
+        }
+
+        public static double PromptInitialBrokerageBasis()
+        {
+            Console.Write("Enter the initial Brokerage basis - what you paid in, i.e. cost basis (e.g., 500000): ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (double.TryParse(input, out double value) && value >= 0)
+                {
+                    return value;
+                }
+                Console.Write("Invalid input. Please enter a non-negative number: ");
+            }
+        }
+
+        public static double PromptInitialBrokerageUnrealizedGain()
+        {
+            Console.Write("Enter the initial Brokerage unrealized gain - current value minus basis (e.g., 200000): ");
             while (true)
             {
                 string input = Console.ReadLine();

@@ -6,9 +6,21 @@ namespace MonteCarloSimulation.Core
         double ReturnAmount,
         double Withdrawal,
         double TaxableWithdrawal,
-        double NontaxableWithdrawal,
+        double BrokerageWithdrawal,
+        double RothWithdrawal,
         double TaxRate,
         double Balance,
         double TaxableBalance,
-        double NontaxableBalance);
+        double BrokerageBalance,
+        double RothBalance,
+        double OrdinaryTaxAmount,
+        double CapitalGainsTaxAmount,
+        double OrdinaryBracketRate,
+        double? AmountUntilNextBracket,
+        double? NextBracketRate,
+        bool AgeEligible,
+        double RothConversionAmount,
+        double RothConversionTax,
+        double AgeInYear,
+        double TaxableWithdrawalPercentOfBalance);
 }
