@@ -50,19 +50,30 @@ namespace MonteCarloSimulation.Core
             accounts.WithdrawRoth(plan.Roth);
 
             var conversion = parameters.EnableRothConversions
-                ? RothConversion.Apply(accounts, taxYear, ss.Taxable + plan.GrossTaxable)
+                ? RothConversion.Apply(accounts, taxYear, ss.Taxable + plan.GrossTaxable, plan.RealizedGains)
                 : RothConversion.None;
 
-            // The year's reported taxes and Brokerage sales include the conversion and the sale funding its tax
-            double ordinaryTax = plan.TaxableTax + ss.Tax + conversion.Tax;
-            double capitalGainsTax = plan.CapitalGainsTax + conversion.CapitalGainsTax;
+            // The year's taxes come straight from its final income totals - ordinary income (taxable Social
+            // Security, Tax Deferred draws, the conversion) with all realized gains stacked on top - so they
+            // include the conversion and the sale funding its tax.
+            double ordinaryIncome = ss.Taxable + plan.GrossTaxable + conversion.Amount;
+            double realizedGains = plan.RealizedGains + conversion.RealizedGains;
+            double ordinaryTax = taxYear.OrdinaryTax(ordinaryIncome);
+            double capitalGainsTax = taxYear.CapitalGainsTax(ordinaryIncome, realizedGains);
             double brokerageWithdrawal = plan.GrossBrokerage + conversion.TaxSale;
 
             // Blended effective tax rate across all buckets (Roth always contributes 0)
             double totalGross = plan.GrossTaxable + brokerageWithdrawal + plan.Roth + ss.Gross;
             double taxRate = totalGross > 0 ? (ordinaryTax + capitalGainsTax) / totalGross : 0;
 
-            var (bracketRate, amountUntilNextBracket, nextBracketRate) = taxYear.BracketRoom(ss.Taxable + plan.GrossTaxable + conversion.Amount);
+            // Leftover 0% room: realize more gains tax-free by selling and rebuying (a basis step-up, no cash)
+            double harvestedGains = strategy.HarvestsZeroRateGains
+                ? GainHarvest.Apply(accounts, taxYear, ordinaryIncome, realizedGains)
+                : 0;
+
+            var (bracketRate, amountUntilNextBracket, nextBracketRate) = taxYear.BracketRoom(ordinaryIncome);
+            var (gainsBracketRate, amountUntilNextGainsBracket, nextGainsBracketRate) =
+                taxYear.CapitalGainsBracketRoom(ordinaryIncome, realizedGains + harvestedGains);
 
             // New money (e.g. an inheritance) arrives as after-tax cash in its year; so does any Social
             // Security beyond this year's spending
@@ -93,6 +104,10 @@ namespace MonteCarloSimulation.Core
                 OrdinaryBracketRate = bracketRate,
                 AmountUntilNextBracket = amountUntilNextBracket,
                 NextBracketRate = nextBracketRate,
+                CapitalGainsBracketRate = gainsBracketRate,
+                AmountUntilNextCapitalGainsBracket = amountUntilNextGainsBracket,
+                NextCapitalGainsBracketRate = nextGainsBracketRate,
+                HarvestedGains = harvestedGains,
                 AgeEligible = ageEligible,
                 RothConversionAmount = conversion.Amount,
                 RothConversionTax = conversion.Tax,

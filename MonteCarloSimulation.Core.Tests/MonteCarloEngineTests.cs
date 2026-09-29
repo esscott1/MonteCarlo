@@ -150,20 +150,22 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.All(output.Result.Runs.Select(r => r.AverageTaxRate), rate => Assert.InRange(rate, 0.0, 0.01));
         }
 
-        [Fact]
-        public void Run_BrokerageWithdrawal_TaxedNearLtcgRate_WhenMostlyGain()
+        [Theory]
+        [InlineData(20_000, 0.0, 1e-9)]    // all of the gain fits in the 0% band
+        [InlineData(200_000, 0.05, 0.15)]  // the first ~$50k of gain at 0%, the rest at 15%
+        public void Run_AllGainBrokerageWithdrawal_TaxedAtStackedLtcgRates(double withdrawal, double minRate, double maxRate)
         {
             var parameters = new SimulationParameters
             {
                 Years = 10,
                 Iterations = 20,
-                Withdrawal = 20_000,
+                Withdrawal = withdrawal,
                 Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70),
                 InitialTaxableBalance = 0,
                 InitialRothBasis = 0,
                 InitialRothUnrealizedGain = 0,
                 InitialBrokerageBasis = 0,
-                InitialBrokerageUnrealizedGain = 500_000,
+                InitialBrokerageUnrealizedGain = 5_000_000,
                 Mean = 0,
                 StdDev = 0,
                 NewMoney = 0,
@@ -176,7 +178,7 @@ namespace MonteCarloSimulation.Core.Tests
 
             var output = MonteCarloEngine.Run(parameters);
 
-            Assert.All(output.Result.Runs.Select(r => r.AverageTaxRate), rate => Assert.InRange(rate, 0.15, 0.20));
+            Assert.All(output.Result.Runs.Select(r => r.AverageTaxRate), rate => Assert.InRange(rate, minRate, maxRate));
         }
 
         [Fact]
@@ -186,7 +188,7 @@ namespace MonteCarloSimulation.Core.Tests
             {
                 Years = 10,
                 Iterations = 20,
-                Withdrawal = 20_000,
+                Withdrawal = 150_000, // large enough that high-gain sales run past the 0% band
                 Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70),
                 InitialTaxableBalance = 0,
                 InitialRothBasis = 0,
@@ -203,13 +205,14 @@ namespace MonteCarloSimulation.Core.Tests
                 ScenarioDescription = "Basis-vs-gain contrast"
             };
 
-            var highBasisOutput = MonteCarloEngine.Run(BuildParameters(basis: 450_000, gain: 50_000));
-            var highGainOutput = MonteCarloEngine.Run(BuildParameters(basis: 50_000, gain: 450_000));
+            var highBasisOutput = MonteCarloEngine.Run(BuildParameters(basis: 4_500_000, gain: 500_000));
+            var highGainOutput = MonteCarloEngine.Run(BuildParameters(basis: 500_000, gain: 4_500_000));
 
             double highBasisAvgTaxRate = highBasisOutput.Result.Runs.Average(r => r.AverageTaxRate);
             double highGainAvgTaxRate = highGainOutput.Result.Runs.Average(r => r.AverageTaxRate);
 
-            Assert.True(highGainAvgTaxRate - highBasisAvgTaxRate > 0.10);
+            Assert.Equal(0, highBasisAvgTaxRate, 9); // ~$15k of gain a year: all in the 0% band
+            Assert.True(highGainAvgTaxRate > 0.05);
         }
 
         [Fact]
@@ -389,9 +392,12 @@ namespace MonteCarloSimulation.Core.Tests
         };
 
         [Fact]
-        public void Run_RothConversion_FillsTo22PercentBracket_WhenNoOrdinaryIncome()
+        public void Run_RothConversion_FillsTo22PercentBracket_WhenNoOrdinaryIncomeOrGains()
         {
-            var output = MonteCarloEngine.Run(ConversionParameters(enable: true));
+            var parameters = ConversionParameters(enable: true);
+            parameters.InitialBrokerageUnrealizedGain = 0; // all-basis Brokerage: its sales realize no gain
+
+            var output = MonteCarloEngine.Run(parameters);
             var year0 = output.Result.Runs[0].Years[0];
 
             // Tax Deferred is locked (age 40), so all ordinary income comes from the conversion,
@@ -399,10 +405,31 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.Equal(50_400 * 1.025, year0.RothConversionAmount, 3);
             Assert.True(year0.RothConversionTax > 0);
             Assert.Equal(year0.RothConversionTax, year0.OrdinaryTaxAmount, 6);
+            Assert.Equal(0, year0.CapitalGainsTaxAmount, 9);
             Assert.Equal(0.12, year0.OrdinaryBracketRate);
             Assert.Equal(0, year0.AmountUntilNextBracket!.Value, 3);
             Assert.True(year0.RothBalance > 0);
             Assert.Equal(0, output.Result.OutOfMoneyCount);
+        }
+
+        [Fact]
+        public void Run_RothConversion_StopsBeforePushingZeroRateGainsInto15Percent()
+        {
+            // Pro-rata, age 40: the $20,500 spending draw is all Brokerage (gain fraction 0.25), realizing
+            // $5,125 of gain at 0%. The conversion stops where ordinary income plus those gains reaches the
+            // inflated 0% ceiling (49,450 * 1.025), rather than at the 22% line.
+            var output = MonteCarloEngine.Run(ConversionParameters(enable: true));
+            var year0 = output.Result.Runs[0].Years[0];
+            double spendingSale = 20_000 * 1.025;
+
+            Assert.Equal(49_450 * 1.025 - 0.25 * spendingSale, year0.RothConversionAmount, 3);
+            Assert.Equal(year0.RothConversionTax, year0.OrdinaryTaxAmount, 6);
+            // Only the conversion's funding sale lands above the 0% ceiling: its gain (a quarter of the sale)
+            // is taxed at 15%, while the spending sale's gains stay untaxed.
+            double fundingSale = year0.BrokerageWithdrawal - spendingSale;
+            Assert.Equal(0.25 * 0.15 * fundingSale, year0.CapitalGainsTaxAmount, 6);
+            Assert.Equal(0.12, year0.OrdinaryBracketRate);
+            Assert.Equal(0.15, year0.CapitalGainsBracketRate);
         }
 
         [Fact]
@@ -447,10 +474,8 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.All(output.Result.Runs[0].Years, yd => Assert.True(yd.BrokerageBalance >= -0.01));
         }
 
-        // Year 0 (inflation 1.025, no standard deduction): 12% ceiling = 50,400 * 1.025 = 51,660 gross,
-        // which nets 51,660 - (1,271 + 4,674) = 45,715 after ordinary tax.
+        // Year 0 (inflation 1.025, no standard deduction): 12% ceiling = 50,400 * 1.025 = 51,660 gross.
         private const double TaxOptCeilingGross = 50_400 * 1.025;
-        private const double TaxOptCeilingNet = 45_715;
 
         private static SimulationParameters TaxOptimizedParameters(int age, double withdrawal) => new()
         {
@@ -475,25 +500,69 @@ namespace MonteCarloSimulation.Core.Tests
         };
 
         [Fact]
-        public void TaxOptimized_SmallNeed_ComesEntirelyFromTaxDeferred()
+        public void TaxOptimized_SmallNeed_ComesEntirelyFromBrokerage_Untaxed()
         {
+            // Gains first: Brokerage is drawn while its gains fit the 0% band. This Brokerage is all basis, so
+            // the whole need comes from it tax-free and Tax Deferred is untouched.
             var year0 = MonteCarloEngine.Run(TaxOptimizedParameters(age: 70, withdrawal: 20_000)).Result.Runs[0].Years[0];
 
-            Assert.True(year0.TaxableWithdrawal > 0);
-            Assert.Equal(0, year0.BrokerageWithdrawal);
+            Assert.Equal(0, year0.TaxableWithdrawal);
+            Assert.Equal(20_000 * 1.025, year0.BrokerageWithdrawal, 6);
+            Assert.Equal(0, year0.RothWithdrawal);
+            Assert.Equal(0, year0.OrdinaryTaxAmount + year0.CapitalGainsTaxAmount, 9);
+        }
+
+        [Fact]
+        public void TaxOptimized_GainHeavyBrokerage_ZeroRateGainsFirst_ThenBrokerageAt15Percent()
+        {
+            var parameters = TaxOptimizedParameters(age: 70, withdrawal: 80_000);
+            parameters.InitialBrokerageBasis = 0;
+            parameters.InitialBrokerageUnrealizedGain = 300_000;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
+
+            // Step 1 sells $50,686.25 (= 49,450 * 1.025) of all-gain Brokerage at 0%, which leaves no room for
+            // Tax Deferred below the 0% ceiling. The remaining $31,313.75 comes from Brokerage at 15%.
+            double zeroRateSale = 49_450 * 1.025;
+            double fifteenPercentSale = (80_000 * 1.025 - zeroRateSale) / 0.85;
+            Assert.Equal(0, year0.TaxableWithdrawal);
+            Assert.Equal(zeroRateSale + fifteenPercentSale, year0.BrokerageWithdrawal, 4);
+            Assert.Equal(0.15 * fifteenPercentSale, year0.CapitalGainsTaxAmount, 4);
+            Assert.Equal(0, year0.OrdinaryTaxAmount, 9);
+            Assert.Equal(0.15, year0.CapitalGainsBracketRate);
+            Assert.Equal(0.20, year0.NextCapitalGainsBracketRate);
             Assert.Equal(0, year0.RothWithdrawal);
         }
 
         [Fact]
-        public void TaxOptimized_LargeNeed_FillsTaxDeferredTo12PercentCeiling_ThenBrokerage()
+        public void TaxOptimized_HarvestsLeftoverZeroRateRoom()
         {
-            var year0 = MonteCarloEngine.Run(TaxOptimizedParameters(age: 70, withdrawal: 80_000)).Result.Runs[0].Years[0];
+            // Age 45 (Tax Deferred locked), no conversions: a small draw leaves most of the 0% band unused, so
+            // the rest is harvested - stepping up basis without moving cash.
+            var parameters = TaxOptimizedParameters(age: 45, withdrawal: 10_000);
+            parameters.InitialBrokerageBasis = 0;
+            parameters.InitialBrokerageUnrealizedGain = 300_000;
 
-            Assert.Equal(TaxOptCeilingGross, year0.TaxableWithdrawal, 3);
-            Assert.Equal(0.12, year0.OrdinaryBracketRate);
-            Assert.Equal(0, year0.AmountUntilNextBracket!.Value, 3);
-            Assert.Equal(80_000 * 1.025 - TaxOptCeilingNet, year0.BrokerageWithdrawal, 3);
-            Assert.Equal(0, year0.RothWithdrawal);
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
+
+            Assert.Equal(49_450 * 1.025 - 10_000 * 1.025, year0.HarvestedGains, 4);
+            Assert.Equal(0, year0.CapitalGainsTaxAmount, 9);
+            Assert.Equal(0, year0.CapitalGainsBracketRate);
+            Assert.Equal(0, year0.AmountUntilNextCapitalGainsBracket!.Value, 4);
+            Assert.Equal(0.15, year0.NextCapitalGainsBracketRate);
+        }
+
+        [Fact]
+        public void ProRata_DoesNotHarvest()
+        {
+            var parameters = TaxOptimizedParameters(age: 45, withdrawal: 10_000);
+            parameters.InitialBrokerageBasis = 0;
+            parameters.InitialBrokerageUnrealizedGain = 300_000;
+            parameters.WithdrawalStrategy = WithdrawalStrategy.ProRata;
+
+            var output = MonteCarloEngine.Run(parameters);
+
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.Equal(0, yd.HarvestedGains));
         }
 
         [Fact]
@@ -628,15 +697,34 @@ namespace MonteCarloSimulation.Core.Tests
         [Fact]
         public void SocialSecurity_ShrinksTaxOptimized12PercentFill()
         {
-            var parameters = SocialSecurityParameters(age: 70, withdrawal: 150_000);
+            // All-basis Brokerage covers the spending tax-free (realizing no gains) and pays the conversion's tax;
+            // Tax Deferred draws plus the conversion fill to the 22% line, less the taxable SS already there.
+            var parameters = SocialSecurityParameters(age: 70, withdrawal: 50_000);
             parameters.InitialTaxableBalance = 1_000_000;
             parameters.InitialBrokerageBasis = 500_000;
+            parameters.EnableRothConversions = true;
 
             var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
-            Assert.Equal(StdDedYear0 + TaxOptCeilingGross - SsTaxableYear0, year0.TaxableWithdrawal, 3);
+            Assert.Equal(StdDedYear0 + TaxOptCeilingGross - SsTaxableYear0, year0.TaxableWithdrawal + year0.RothConversionAmount, 3);
             Assert.Equal(0.12, year0.OrdinaryBracketRate);
             Assert.Equal(0, year0.AmountUntilNextBracket!.Value, 3);
+        }
+
+        [Fact]
+        public void SocialSecurity_ShrinksZeroRateGainRoom()
+        {
+            // Taxable SS sits in the ordinary stack beneath gains, so the gains taxed at 0% are the 0% ceiling
+            // (deduction + 49,450, inflated) less the taxable SS; the rest of the all-gain sale is taxed at 15%.
+            var parameters = SocialSecurityParameters(age: 70, withdrawal: 150_000);
+            parameters.InitialBrokerageUnrealizedGain = 1_000_000;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
+
+            double zeroRateGains = StdDedYear0 + 49_450 * 1.025 - SsTaxableYear0;
+            Assert.Equal(0, year0.TaxableWithdrawal);
+            Assert.Equal(0.15 * (year0.BrokerageWithdrawal - zeroRateGains), year0.CapitalGainsTaxAmount, 4);
+            Assert.Equal(SsTaxYear0, year0.OrdinaryTaxAmount, 6);
         }
 
         [Fact]

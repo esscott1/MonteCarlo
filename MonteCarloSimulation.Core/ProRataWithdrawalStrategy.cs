@@ -4,6 +4,8 @@ namespace MonteCarloSimulation.Core
     // gate opens this reduces to exactly the unrestricted 3-way split.
     internal sealed class ProRataWithdrawalStrategy : IWithdrawalStrategy
     {
+        public bool HarvestsZeroRateGains => false;
+
         public WithdrawalPlan Plan(in WithdrawalContext c)
         {
             double eligibleTotal = c.EligibleTaxable + c.Brokerage + c.EligibleRoth;
@@ -21,12 +23,13 @@ namespace MonteCarloSimulation.Core
             double netTaxable = baseWithdrawal * taxableProportion;
             double grossTaxable = c.TaxYear.GrossUpOrdinary(netTaxable, c.SsTaxable);
 
+            // The Brokerage share's gains stack on top of all of that ordinary income
             double netBrokerage = baseWithdrawal * brokerageProportion;
-            double grossBrokerage = TaxAssumptions.GrossUpLtcg(netBrokerage, c.GainFraction);
+            double grossBrokerage = c.TaxYear.GrossUpBrokerageSale(netBrokerage, c.GainFraction, c.SsTaxable + grossTaxable, 0);
 
             double roth = baseWithdrawal * rothProportion;
 
-            return new WithdrawalPlan(netTaxable, grossTaxable, netBrokerage, grossBrokerage, roth, isShortfall);
+            return WithdrawalPlan.FromGross(c, grossTaxable, grossBrokerage, roth, isShortfall);
         }
     }
 }

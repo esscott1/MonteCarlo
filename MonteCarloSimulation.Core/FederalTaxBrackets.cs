@@ -15,5 +15,14 @@ namespace MonteCarloSimulation.Core
             new(256225, 640600, 0.35),
             new(640600, double.PositiveInfinity, 0.37)
         };
+
+        // Long-term capital gains, tax year 2026, single filer. Source: IRS Rev. Proc. 2025-32 §3.03.
+        // Bounds are total taxable income: gains stack on top of ordinary taxable income.
+        public static readonly IReadOnlyList<TaxBracket> CapitalGainsSingle2026 = new List<TaxBracket>
+        {
+            new(0, 49450, 0.00),
+            new(49450, 545500, 0.15),
+            new(545500, double.PositiveInfinity, 0.20)
+        };
     }
 }
