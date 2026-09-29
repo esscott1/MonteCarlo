@@ -1,13 +1,12 @@
+// Frozen copy of the pre-refactor engine (master @ fa7101f), used only by EngineEquivalenceTests to prove
+// the refactor changes no simulation result. Deleted once the refactor is complete - do not edit.
 using System.Text;
 
-namespace MonteCarloSimulation.Core
+namespace MonteCarloSimulation.Core.Tests.Legacy
 {
-    public static class MonteCarloEngine
+    public static class LegacyMonteCarloEngine
     {
-        public static SimulationRunOutput Run(SimulationParameters parameters) => Run(parameters, new Random());
-
-        // Seedable entry point, so tests can run the same random sequence through two engines.
-        internal static SimulationRunOutput Run(SimulationParameters parameters, Random random)
+        public static SimulationRunOutput Run(SimulationParameters parameters, Random random)
         {
             var result = new SimulationResult
             {
