@@ -24,5 +24,7 @@ namespace MonteCarloSimulation.Core
         public List<double>? LastRothConversionTaxes { get; init; }
         public List<double>? LastAgesInYear { get; init; }
         public List<double>? LastTaxableWithdrawalPercents { get; init; }
+        public List<double>? LastSocialSecurityIncomes { get; init; }
+        public List<double>? LastSocialSecurityTaxes { get; init; }
     }
 }

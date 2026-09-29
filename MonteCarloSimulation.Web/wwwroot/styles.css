@@ -148,6 +148,13 @@ fieldset {
     gap: 0.4rem;
 }
 
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+}
+
 .subgroup-row {
     grid-column: 1 / -1;
     display: flex;

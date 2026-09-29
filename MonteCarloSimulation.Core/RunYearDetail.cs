@@ -22,5 +22,7 @@ namespace MonteCarloSimulation.Core
         double RothConversionAmount,
         double RothConversionTax,
         double AgeInYear,
-        double TaxableWithdrawalPercentOfBalance);
+        double TaxableWithdrawalPercentOfBalance,
+        double SocialSecurityIncome,
+        double SocialSecurityTax);
 }

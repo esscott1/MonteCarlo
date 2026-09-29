@@ -20,6 +20,7 @@ namespace MonteCarloSimulation.Web
         public double SocialSecurityAnnualAmount { get; set; }
         public double AnnualStandardDeduction { get; set; }
         public bool EnableRothConversions { get; set; }
+        public WithdrawalStrategy WithdrawalStrategy { get; set; }
 
         public Dictionary<string, string> Validate()
         {
@@ -40,6 +41,7 @@ namespace MonteCarloSimulation.Web
             if (SocialSecurityYearsUntilStart < 0) errors["socialSecurityYearsUntilStart"] = "Must be non-negative.";
             if (SocialSecurityAnnualAmount < 0) errors["socialSecurityAnnualAmount"] = "Must be non-negative.";
             if (AnnualStandardDeduction < 0) errors["annualStandardDeduction"] = "Must be non-negative.";
+            if (!Enum.IsDefined(WithdrawalStrategy)) errors["withdrawalStrategy"] = "Select a valid withdrawal order.";
             return errors;
         }
     }

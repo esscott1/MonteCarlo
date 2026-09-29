@@ -9,6 +9,7 @@ namespace MonteCarloSimulation.Core
         public List<double> EndingBalances { get; set; }
         public List<double> AverageAnnualReturns { get; set; }
         public List<double> AverageTaxRates { get; set; }
+        public List<double> LifetimeTaxesPaid { get; set; }
         public List<int?> FailureYears { get; set; }
         public List<int> HighestReturnYears { get; set; }
         public List<double> HighestReturnValues { get; set; }

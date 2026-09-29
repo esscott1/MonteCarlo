@@ -19,6 +19,7 @@ namespace MonteCarloSimulation.Core
         public double SocialSecurityAnnualAmount { get; set; }
         public double AnnualStandardDeduction { get; set; }
         public bool EnableRothConversions { get; set; }
+        public WithdrawalStrategy WithdrawalStrategy { get; set; }
         public required string ScenarioDescription { get; set; }
     }
 }
