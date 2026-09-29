@@ -68,6 +68,11 @@ namespace MonteCarloSimulation1
                             $"brokerage: {y.BrokerageWithdrawal:C0}, " +
                             $"roth: {y.RothWithdrawal:C0})\n " +
                             $"tax rate: {y.TaxRate:P2}\n " +
+                            $"capital gains: {y.CapitalGainsTaxAmount:C0} ({y.CapitalGainsBracketRate:P0} LTCG bracket" +
+                            (y.NextCapitalGainsBracketRate.HasValue
+                                ? $", {y.AmountUntilNextCapitalGainsBracket:C0} until {y.NextCapitalGainsBracketRate:P0})"
+                                : ", top bracket)") +
+                            (y.HarvestedGains > 0 ? $", harvested {y.HarvestedGains:C0} at 0%" : "") + "\n " +
                             $"roth conversion: {y.RothConversionAmount:C0} (tax {y.RothConversionTax:C0})\n " +
                             $"social security: {y.SocialSecurityIncome:C0} (tax {y.SocialSecurityTax:C0})\n " +
                             $"years return ($): {y.ReturnAmount:C0}\n " +
@@ -224,7 +229,7 @@ namespace MonteCarloSimulation1
 
         public static WithdrawalStrategy PromptWithdrawalStrategy()
         {
-            Console.Write("Withdrawal order: 1) Pro-rata  2) Tax-optimized (fill 12% from Tax Deferred, then Brokerage, then Roth): ");
+            Console.Write("Withdrawal order: 1) Pro-rata  2) Tax-optimized (Brokerage gains at 0%, Tax Deferred to 12%, more Brokerage, more Tax Deferred, then Roth): ");
             while (true)
             {
                 string input = Console.ReadLine()?.Trim();

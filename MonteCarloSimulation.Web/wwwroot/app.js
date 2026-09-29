@@ -163,16 +163,30 @@ function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercent
     return bulletList(items);
 }
 
-function taxesBreakdown(ordinaryTaxAmount, capitalGainsTaxAmount, ordinaryBracketRate, amountUntilNextBracket, nextBracketRate, rothConversionAmount, rothConversionTax) {
+function ratePercent(rate) {
+    return `${(rate * 100).toFixed(0)}%`;
+}
+
+function hasNextBracket(nextRate) {
+    return nextRate !== null && nextRate !== undefined;
+}
+
+function taxesBreakdown(yd) {
     const items = [
-        `${formatCurrency(capitalGainsTaxAmount)} cap gains paid`,
-        `${formatCurrency(ordinaryTaxAmount)} ord tax paid (${(ordinaryBracketRate * 100).toFixed(0)}% bracket)`,
+        `${formatCurrency(yd.capitalGainsTaxAmount)} cap gains paid (${ratePercent(yd.capitalGainsBracketRate)} LTCG bracket)`,
+        hasNextBracket(yd.nextCapitalGainsBracketRate)
+            ? `${formatCurrency(yd.amountUntilNextCapitalGainsBracket)} until ${ratePercent(yd.nextCapitalGainsBracketRate)} LTCG bracket`
+            : 'Already in top LTCG bracket',
+        `${formatCurrency(yd.ordinaryTaxAmount)} ord tax paid (${ratePercent(yd.ordinaryBracketRate)} bracket)`,
+        hasNextBracket(yd.nextBracketRate)
+            ? `${formatCurrency(yd.amountUntilNextBracket)} until ${ratePercent(yd.nextBracketRate)} bracket`
+            : 'Already in top ordinary tax bracket',
     ];
-    items.push(nextBracketRate !== null && nextBracketRate !== undefined
-        ? `${formatCurrency(amountUntilNextBracket)} until ${(nextBracketRate * 100).toFixed(0)}% bracket`
-        : 'Already in top ordinary tax bracket');
-    if (rothConversionAmount > 0) {
-        items.push(`${formatCurrency(rothConversionAmount)} converted to Roth (${formatCurrency(rothConversionTax)} tax)`);
+    if (yd.harvestedGains > 0) {
+        items.push(`${formatCurrency(yd.harvestedGains)} gains harvested at 0%`);
+    }
+    if (yd.rothConversionAmount > 0) {
+        items.push(`${formatCurrency(yd.rothConversionAmount)} converted to Roth (${formatCurrency(yd.rothConversionTax)} tax)`);
     }
     return bulletList(items);
 }
@@ -183,7 +197,7 @@ function renderRunDetailTable(yearDetails) {
         <tr>
             <td>${yearWithAge(yd.year, yd.ageInYear)}</td>
             <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax)}</td>
-            <td>${taxesBreakdown(yd.ordinaryTaxAmount, yd.capitalGainsTaxAmount, yd.ordinaryBracketRate, yd.amountUntilNextBracket, yd.nextBracketRate, yd.rothConversionAmount, yd.rothConversionTax)}</td>
+            <td>${taxesBreakdown(yd)}</td>
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
             <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>
         </tr>
