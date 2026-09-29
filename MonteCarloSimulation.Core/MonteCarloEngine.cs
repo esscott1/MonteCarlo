@@ -6,7 +6,7 @@ namespace MonteCarloSimulation.Core
     {
         public static SimulationRunOutput Run(SimulationParameters parameters) => Run(parameters, new Random());
 
-        // Seedable entry point, so tests can run the same random sequence through two engines.
+        // Seedable entry point, so tests can pin the random sequence.
         internal static SimulationRunOutput Run(SimulationParameters parameters, Random random)
         {
             var strategy = WithdrawalStrategies.For(parameters.WithdrawalStrategy);
