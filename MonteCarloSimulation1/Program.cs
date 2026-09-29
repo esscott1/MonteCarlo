@@ -37,7 +37,7 @@ namespace MonteCarloSimulation1
             {
                 Console.WriteLine(output.OutOfMoneyMessage);
                 Console.WriteLine("----------------------------------------------------");
-                double survival = 1 - (result.OutOfMoneyCount / parameters.Iterations);
+                double survival = 1 - (result.OutOfMoneyCount / (double)parameters.Iterations);
                 if (survival > 0.8)
                     Smile();
                 else
@@ -58,26 +58,23 @@ namespace MonteCarloSimulation1
             {
                 Console.WriteLine();
                 Console.WriteLine($"\nlast run balances: ");
-                if (output.LastBalances != null && output.LastAnnualReturns != null && output.LastAnnualWithdrawals != null
-                    && output.LastTaxableBalances != null && output.LastBrokerageBalances != null && output.LastRothBalances != null
-                    && output.LastTaxableWithdrawals != null && output.LastBrokerageWithdrawals != null && output.LastRothWithdrawals != null
-                    && output.LastTaxRates != null)
+                if (output.LastSuccessfulRun != null)
                 {
-                    for (int ji = 1; ji < output.LastBalances.Count; ji++)
+                    foreach (var y in output.LastSuccessfulRun.Skip(1))
                     {
                         Console.WriteLine(
-                            $"Year {ji}\n withdrawals: {output.LastAnnualWithdrawals[ji]:C0}, (" +
-                            $"taxable: {output.LastTaxableWithdrawals[ji]:C0}, " +
-                            $"brokerage: {output.LastBrokerageWithdrawals[ji]:C0}, " +
-                            $"roth: {output.LastRothWithdrawals[ji]:C0})\n " +
-                            $"tax rate: {output.LastTaxRates[ji]:P2}\n " +
-                            $"roth conversion: {output.LastRothConversionAmounts?[ji] ?? 0:C0} (tax {output.LastRothConversionTaxes?[ji] ?? 0:C0})\n " +
-                            $"social security: {output.LastSocialSecurityIncomes?[ji] ?? 0:C0} (tax {output.LastSocialSecurityTaxes?[ji] ?? 0:C0})\n " +
-                            $"years return ($): {output.LastAnnualReturns[ji]:C0}\n " +
-                            $"total balance: {output.LastBalances[ji]:C0} (" +
-                            $"taxable balance: {output.LastTaxableBalances[ji]:C0}, " +
-                            $"brokerage balance: {output.LastBrokerageBalances[ji]:C0}, " +
-                            $"roth balance: {output.LastRothBalances[ji]:C0}), ");
+                            $"Year {y.Year}\n withdrawals: {y.Withdrawal:C0}, (" +
+                            $"taxable: {y.TaxableWithdrawal:C0}, " +
+                            $"brokerage: {y.BrokerageWithdrawal:C0}, " +
+                            $"roth: {y.RothWithdrawal:C0})\n " +
+                            $"tax rate: {y.TaxRate:P2}\n " +
+                            $"roth conversion: {y.RothConversionAmount:C0} (tax {y.RothConversionTax:C0})\n " +
+                            $"social security: {y.SocialSecurityIncome:C0} (tax {y.SocialSecurityTax:C0})\n " +
+                            $"years return ($): {y.ReturnAmount:C0}\n " +
+                            $"total balance: {y.Balance:C0} (" +
+                            $"taxable balance: {y.TaxableBalance:C0}, " +
+                            $"brokerage balance: {y.BrokerageBalance:C0}, " +
+                            $"roth balance: {y.RothBalance:C0}), ");
                     }
                 }
                 Smile();
@@ -89,18 +86,19 @@ namespace MonteCarloSimulation1
             }
 
             Console.WriteLine("\nPer-run summary (ending balance and average annual return):");
-            for (int r = 0; r < result.EndingBalances.Count; r++)
+            for (int r = 0; r < result.Runs.Count; r++)
             {
-                string failureNote = result.FailureYears[r].HasValue
-                    ? $", ran out of money in year {result.FailureYears[r]}"
+                var run = result.Runs[r];
+                string failureNote = run.Failed
+                    ? $", ran out of money in year {run.FailureYear}"
                     : "";
                 Console.WriteLine(
-                    $"Run {r + 1}: Ending balance: {result.EndingBalances[r]:C0}, " +
-                    $"Average annual return: {result.AverageAnnualReturns[r]:P2}, " +
-                    $"Average tax rate: {result.AverageTaxRates[r]:P2}, " +
-                    $"Highest return: year {result.HighestReturnYears[r]} ({result.HighestReturnValues[r]:P2}), " +
-                    $"Lowest return: year {result.LowestReturnYears[r]} ({result.LowestReturnValues[r]:P2}), " +
-                    $"Lowest balance: {result.LowestBalanceValues[r]:C0} in year {result.LowestBalanceYears[r]}{failureNote}");
+                    $"Run {r + 1}: Ending balance: {run.EndingBalance:C0}, " +
+                    $"Average annual return: {run.AverageAnnualReturn:P2}, " +
+                    $"Average tax rate: {run.AverageTaxRate:P2}, " +
+                    $"Highest return: year {run.HighestReturnYear} ({run.HighestReturnValue:P2}), " +
+                    $"Lowest return: year {run.LowestReturnYear} ({run.LowestReturnValue:P2}), " +
+                    $"Lowest balance: {run.LowestBalanceValue:C0} in year {run.LowestBalanceYear}{failureNote}");
             }
 
             Console.WriteLine("\nSimulation complete.");

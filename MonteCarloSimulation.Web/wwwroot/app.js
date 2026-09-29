@@ -201,24 +201,23 @@ function renderRunDetailTable(yearDetails) {
 }
 
 function renderPerRunTable(result) {
-    const rows = result.endingBalances.map((balance, i) => {
-        const failureYear = result.failureYears[i];
-        const failureNote = (failureYear !== null && failureYear !== undefined)
-            ? `<span class="failure">ran out of money in year ${failureYear}</span>`
+    const rows = result.runs.map((run, i) => {
+        const failureNote = run.failed
+            ? `<span class="failure">ran out of money in year ${run.failureYear}</span>`
             : '<span class="success">&mdash;</span>';
         return `
             <tr>
                 <td><button type="button" class="run-toggle" aria-expanded="false">${i + 1} <span class="run-toggle-icon">&#9656;</span></button></td>
-                <td>${formatCurrency(balance)}</td>
-                <td>${formatCurrency(result.lowestBalanceValues[i])} in year ${result.lowestBalanceYears[i]}</td>
-                <td>${formatPercent(result.averageAnnualReturns[i])}</td>
-                <td>${formatPercent(result.averageTaxRates[i])}</td>
-                <td>Year ${result.highestReturnYears[i]} (${formatPercent(result.highestReturnValues[i])})</td>
-                <td>Year ${result.lowestReturnYears[i]} (${formatPercent(result.lowestReturnValues[i])})</td>
+                <td>${formatCurrency(run.endingBalance)}</td>
+                <td>${formatCurrency(run.lowestBalanceValue)} in year ${run.lowestBalanceYear}</td>
+                <td>${formatPercent(run.averageAnnualReturn)}</td>
+                <td>${formatPercent(run.averageTaxRate)}</td>
+                <td>Year ${run.highestReturnYear} (${formatPercent(run.highestReturnValue)})</td>
+                <td>Year ${run.lowestReturnYear} (${formatPercent(run.lowestReturnValue)})</td>
                 <td>${failureNote}</td>
             </tr>
             <tr class="run-detail-row" hidden>
-                <td colspan="8">${renderRunDetailTable(result.runDetails[i])}</td>
+                <td colspan="8">${renderRunDetailTable(run.years)}</td>
             </tr>
         `;
     }).join('');
@@ -247,7 +246,7 @@ function renderSummary(parameters, output) {
     const totalAvgRate = output.allRates.reduce((a, b) => a + b, 0) / output.allRates.length;
     const variance = output.allRates.reduce((a, b) => a + Math.pow(b - totalAvgRate, 2), 0) / output.allRates.length;
     const stdDev = Math.sqrt(variance);
-    const avgLifetimeTax = result.lifetimeTaxesPaid.reduce((a, b) => a + b, 0) / result.lifetimeTaxesPaid.length;
+    const avgLifetimeTax = result.runs.reduce((a, run) => a + run.lifetimeTaxesPaid, 0) / result.runs.length;
     const lifetimeTaxLine = `<p>Average lifetime tax paid: ${formatCurrency(avgLifetimeTax)} per run (ordinary + capital gains, incl. Roth conversions${result.outOfMoneyCount > 0 ? ', through the year a run ran out' : ''})</p>`;
 
     if (result.outOfMoneyCount > 0) {
@@ -287,30 +286,12 @@ function renderDetail(output) {
         `;
     }
 
-    if (!output.lastBalances) return '';
-
-    const rows = output.lastBalances.slice(1).map((balance, idx) => {
-        const ji = idx + 1;
-        return `
-            <tr>
-                <td>${yearWithAge(ji, output.lastAgesInYear[ji])}</td>
-                <td>${moneyBreakdown(output.lastAnnualWithdrawals[ji], output.lastTaxableWithdrawals[ji], output.lastBrokerageWithdrawals[ji], output.lastRothWithdrawals[ji], output.lastTaxableWithdrawalPercents[ji], output.lastSocialSecurityIncomes[ji], output.lastSocialSecurityTaxes[ji])}</td>
-                <td>${taxesBreakdown(output.lastOrdinaryTaxAmounts[ji], output.lastCapitalGainsTaxAmounts[ji], output.lastOrdinaryBracketRates[ji], output.lastAmountsUntilNextBracket[ji], output.lastNextBracketRates[ji], output.lastRothConversionAmounts[ji], output.lastRothConversionTaxes[ji])}</td>
-                <td>${formatCurrency(output.lastAnnualReturns[ji])}</td>
-                <td>${moneyBreakdown(balance, output.lastTaxableBalances[ji], output.lastBrokerageBalances[ji], output.lastRothBalances[ji])}</td>
-            </tr>
-        `;
-    }).join('');
+    if (!output.lastSuccessfulRun) return '';
 
     return `
         <details>
             <summary>Show year-by-year detail for the last successful run</summary>
-            <table class="run-table">
-                <thead>
-                    <tr><th>Year</th><th>Withdrawal</th><th>Taxes</th><th>Year's Return ($)</th><th>Total Balance</th></tr>
-                </thead>
-                <tbody>${rows}</tbody>
-            </table>
+            ${renderRunDetailTable(output.lastSuccessfulRun.slice(1))}
         </details>
     `;
 }

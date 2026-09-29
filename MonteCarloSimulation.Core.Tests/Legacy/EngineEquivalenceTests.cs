@@ -181,28 +181,29 @@ namespace MonteCarloSimulation.Core.Tests.Legacy
             AddList(e, "FailedScenarioAverages", r.FailedScenarioAverages);
             AddList(e, "SuccessMoneyRemaining", r.SuccessMoneyRemaining);
 
-            e.Add(new("Runs.Count", r.EndingBalances.Count));
-            for (int i = 0; i < r.EndingBalances.Count; i++)
+            e.Add(new("Runs.Count", r.Runs.Count));
+            for (int i = 0; i < r.Runs.Count; i++)
             {
+                var run = r.Runs[i];
                 string p = $"Runs[{i}]";
-                e.Add(new($"{p}.EndingBalance", r.EndingBalances[i]));
-                e.Add(new($"{p}.AverageAnnualReturn", r.AverageAnnualReturns[i]));
-                e.Add(new($"{p}.AverageTaxRate", r.AverageTaxRates[i]));
-                e.Add(new($"{p}.LifetimeTaxesPaid", r.LifetimeTaxesPaid[i]));
-                e.Add(new($"{p}.FailureYear", r.FailureYears[i]));
-                e.Add(new($"{p}.HighestReturnYear", r.HighestReturnYears[i]));
-                e.Add(new($"{p}.HighestReturnValue", r.HighestReturnValues[i]));
-                e.Add(new($"{p}.LowestReturnYear", r.LowestReturnYears[i]));
-                e.Add(new($"{p}.LowestReturnValue", r.LowestReturnValues[i]));
-                e.Add(new($"{p}.LowestBalanceYear", r.LowestBalanceYears[i]));
-                e.Add(new($"{p}.LowestBalanceValue", r.LowestBalanceValues[i]));
-                e.Add(new($"{p}.Years.Count", r.RunDetails[i].Count));
-                for (int y = 0; y < r.RunDetails[i].Count; y++)
-                    AddYear(e, $"{p}.Years[{y}]", r.RunDetails[i][y]);
+                e.Add(new($"{p}.EndingBalance", run.EndingBalance));
+                e.Add(new($"{p}.AverageAnnualReturn", run.AverageAnnualReturn));
+                e.Add(new($"{p}.AverageTaxRate", run.AverageTaxRate));
+                e.Add(new($"{p}.LifetimeTaxesPaid", run.LifetimeTaxesPaid));
+                e.Add(new($"{p}.FailureYear", run.FailureYear));
+                e.Add(new($"{p}.HighestReturnYear", run.HighestReturnYear));
+                e.Add(new($"{p}.HighestReturnValue", run.HighestReturnValue));
+                e.Add(new($"{p}.LowestReturnYear", run.LowestReturnYear));
+                e.Add(new($"{p}.LowestReturnValue", run.LowestReturnValue));
+                e.Add(new($"{p}.LowestBalanceYear", run.LowestBalanceYear));
+                e.Add(new($"{p}.LowestBalanceValue", run.LowestBalanceValue));
+                e.Add(new($"{p}.Years.Count", run.Years.Count));
+                for (int y = 0; y < run.Years.Count; y++)
+                    AddYear(e, $"{p}.Years[{y}]", run.Years[y]);
             }
 
             if (r.OutOfMoneyCount == 0)
-                AddLastRun(e, output.LastBalances!.Count, (_, list, j) => ((IList)Prop(output, list)!)[j]);
+                AddLastRun(e, output.LastSuccessfulRun!.Count, (field, _, j) => Prop(output.LastSuccessfulRun![j], field));
             return e;
         }
 

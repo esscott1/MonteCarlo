@@ -9,51 +9,9 @@ namespace MonteCarloSimulation.Core
         // Seedable entry point, so tests can run the same random sequence through two engines.
         internal static SimulationRunOutput Run(SimulationParameters parameters, Random random)
         {
-            var result = new SimulationResult
-            {
-                OutOfMoneyCount = 0,
-                YearsOutOfMoney = new List<int>(),
-                FailedScenarioAverages = new List<double>(),
-                SuccessMoneyRemaining = new List<double>(),
-                EndingBalances = new List<double>(),
-                AverageAnnualReturns = new List<double>(),
-                AverageTaxRates = new List<double>(),
-                LifetimeTaxesPaid = new List<double>(),
-                FailureYears = new List<int?>(),
-                HighestReturnYears = new List<int>(),
-                HighestReturnValues = new List<double>(),
-                LowestReturnYears = new List<int>(),
-                LowestReturnValues = new List<double>(),
-                LowestBalanceYears = new List<int>(),
-                LowestBalanceValues = new List<double>(),
-                RunDetails = new List<List<RunYearDetail>>()
-            };
-
             var outOfMoneyMessage = new StringBuilder();
             var allRates = new List<double>(parameters.Years * parameters.Iterations);
-
-            // For reporting the last successful run
-            List<double> lastBalances = null;
-            List<double> lastAnnualReturns = null;
-            List<double> lastAnnualWithdrawals = null;
-            List<double> lastTaxableBalances = null;
-            List<double> lastBrokerageBalances = null;
-            List<double> lastRothBalances = null;
-            List<double> lastTaxableWithdrawals = null;
-            List<double> lastBrokerageWithdrawals = null;
-            List<double> lastRothWithdrawals = null;
-            List<double> lastTaxRates = null;
-            List<double> lastOrdinaryTaxAmounts = null;
-            List<double> lastCapitalGainsTaxAmounts = null;
-            List<double> lastOrdinaryBracketRates = null;
-            List<double?> lastAmountsUntilNextBracket = null;
-            List<double?> lastNextBracketRates = null;
-            List<double> lastRothConversionAmounts = null;
-            List<double> lastRothConversionTaxes = null;
-            List<double> lastAgesInYear = null;
-            List<double> lastTaxableWithdrawalPercents = null;
-            List<double> lastSocialSecurityIncomes = null;
-            List<double> lastSocialSecurityTaxes = null;
+            var runs = new List<RunSummary>(parameters.Iterations);
 
             for (int i = 0; i < parameters.Iterations; i++)
             {
@@ -71,30 +29,7 @@ namespace MonteCarloSimulation.Core
 
                 double ageAtStartYears = (DateOnly.FromDateTime(DateTime.Today).DayNumber - parameters.Birthdate.DayNumber) / 365.25;
 
-                var rates = new List<double>(parameters.Years);
-                var withdrawals = new List<double>(parameters.Years);
-                var balances = new List<double>(parameters.Years);
-                var annualReturns = new List<double>(parameters.Years);
-                var taxableBalances = new List<double>(parameters.Years);
-                var brokerageBalances = new List<double>(parameters.Years);
-                var rothBalances = new List<double>(parameters.Years);
-                var taxableWithdrawals = new List<double>(parameters.Years);
-                var brokerageWithdrawals = new List<double>(parameters.Years);
-                var rothWithdrawals = new List<double>(parameters.Years);
-                var taxRates = new List<double>(parameters.Years);
-                var ordinaryTaxAmounts = new List<double>(parameters.Years);
-                var capitalGainsTaxAmounts = new List<double>(parameters.Years);
-                var ordinaryBracketRates = new List<double>(parameters.Years);
-                var amountsUntilNextBracket = new List<double?>(parameters.Years);
-                var nextBracketRates = new List<double?>(parameters.Years);
-                var ageEligibleFlags = new List<bool>(parameters.Years);
-                var agesInYear = new List<double>(parameters.Years);
-                var taxableWithdrawalPercents = new List<double>(parameters.Years);
-                var socialSecurityIncomes = new List<double>(parameters.Years);
-                var socialSecurityTaxes = new List<double>(parameters.Years);
-                var rothConversionAmounts = new List<double>(parameters.Years);
-                var rothConversionTaxes = new List<double>(parameters.Years);
-
+                var years = new List<RunYearDetail>(parameters.Years);
                 int? failureYear = null;
 
                 for (int run = 0; run < parameters.Years; run++)
@@ -107,14 +42,12 @@ namespace MonteCarloSimulation.Core
                         ss *= (1 + inflation);
 
                     double interestRate = GetRateBoxMullerTransform(parameters.Mean, parameters.StdDev, random);
-                    rates.Add(interestRate);
                     allRates.Add(interestRate);
 
                     currentWithdrawal *= (1 + inflation);
                     standardDeduction *= (1 + inflation);
                     bracketInflationFactor *= (1 + inflation);
                     double periodWithdrawal = currentWithdrawal;
-                    withdrawals.Add(periodWithdrawal);
 
                     // Social Security is income in the year received: 85% of it is ordinary income stacked
                     // first in the brackets (so everything else - Tax Deferred draws, conversions - stacks on
@@ -124,8 +57,6 @@ namespace MonteCarloSimulation.Core
                     double ssNet = ss - ssTax;
                     double need = Math.Max(0, periodWithdrawal - ssNet);
                     double ssSurplus = Math.Max(0, ssNet - periodWithdrawal);
-                    socialSecurityIncomes.Add(ss);
-                    socialSecurityTaxes.Add(ssTax);
 
                     // Start-of-year (prior year-end) Tax Deferred balance - the basis RMDs are computed on
                     double taxableStartOfYear = taxable;
@@ -139,8 +70,6 @@ namespace MonteCarloSimulation.Core
                     // withdrawal restrictions. Brokerage and Roth contributions (basis) are always accessible.
                     double ageInYear = ageAtStartYears + run;
                     bool ageEligible = ageInYear >= 59.5;
-                    ageEligibleFlags.Add(ageEligible);
-                    agesInYear.Add(ageInYear);
 
                     double eligibleTaxable = ageEligible ? taxable : 0;
                     double eligibleRoth = ageEligible ? roth : rothBasis;
@@ -268,23 +197,14 @@ namespace MonteCarloSimulation.Core
                         capitalGainsTaxAmount += taxSale - rothConversionTax;
                         grossBrokerageWithdrawal += taxSale;
                     }
-                    rothConversionAmounts.Add(rothConversion);
-                    rothConversionTaxes.Add(rothConversionTax);
 
                     // Blended effective tax rate across all buckets (Roth always contributes 0)
                     double totalGrossWithdrawal = grossTaxableWithdrawal + grossBrokerageWithdrawal + desiredRothWithdrawal + ss;
                     double totalTax = ordinaryTaxAmount + capitalGainsTaxAmount;
                     double yearTaxRate = totalGrossWithdrawal > 0 ? totalTax / totalGrossWithdrawal : 0;
-                    taxRates.Add(yearTaxRate);
-
-                    ordinaryTaxAmounts.Add(ordinaryTaxAmount);
-                    capitalGainsTaxAmounts.Add(capitalGainsTaxAmount);
 
                     var (currentBracketRate, amountUntilNextBracket, nextBracketRate) = GetOrdinaryBracketRoom(
                         ssTaxable + grossTaxableWithdrawal + rothConversion, standardDeduction, bracketInflationFactor, FederalTaxBrackets.Single2026);
-                    ordinaryBracketRates.Add(currentBracketRate);
-                    amountsUntilNextBracket.Add(amountUntilNextBracket);
-                    nextBracketRates.Add(nextBracketRate);
 
                     // Add new money (e.g., inheritance) as after-tax cash in the year it arrives -
                     // it's a cash contribution, not a gain, so it increases both balance and basis
@@ -298,121 +218,62 @@ namespace MonteCarloSimulation.Core
                     brokerage += ssSurplus;
                     brokerageBasis += ssSurplus;
 
-                    // Track balances
-                    taxableBalances.Add(taxable);
-                    brokerageBalances.Add(brokerage);
-                    rothBalances.Add(roth);
-                    // Track withdrawals
-                    taxableWithdrawals.Add(grossTaxableWithdrawal);
-                    taxableWithdrawalPercents.Add(taxableStartOfYear > 0 ? grossTaxableWithdrawal / taxableStartOfYear : 0);
-                    brokerageWithdrawals.Add(grossBrokerageWithdrawal);
-                    rothWithdrawals.Add(desiredRothWithdrawal);
-
                     // Calculate annual return for reporting
                     double annualReturn = (taxable + brokerage + roth)
                         - (taxable / (1 + interestRate) + brokerage / (1 + interestRate) + roth / (1 + interestRate));
-                    annualReturns.Add(annualReturn);
 
                     // Recombine for balance and next year
                     double endingBalance = taxable + brokerage + roth;
-                    balances.Add(endingBalance);
+
+                    years.Add(new RunYearDetail
+                    {
+                        Year = run,
+                        RateOfReturn = interestRate,
+                        ReturnAmount = annualReturn,
+                        Withdrawal = periodWithdrawal,
+                        TaxableWithdrawal = grossTaxableWithdrawal,
+                        BrokerageWithdrawal = grossBrokerageWithdrawal,
+                        RothWithdrawal = desiredRothWithdrawal,
+                        TaxRate = yearTaxRate,
+                        Balance = endingBalance,
+                        TaxableBalance = taxable,
+                        BrokerageBalance = brokerage,
+                        RothBalance = roth,
+                        OrdinaryTaxAmount = ordinaryTaxAmount,
+                        CapitalGainsTaxAmount = capitalGainsTaxAmount,
+                        OrdinaryBracketRate = currentBracketRate,
+                        AmountUntilNextBracket = amountUntilNextBracket,
+                        NextBracketRate = nextBracketRate,
+                        AgeEligible = ageEligible,
+                        RothConversionAmount = rothConversion,
+                        RothConversionTax = rothConversionTax,
+                        AgeInYear = ageInYear,
+                        TaxableWithdrawalPercentOfBalance = taxableStartOfYear > 0 ? grossTaxableWithdrawal / taxableStartOfYear : 0,
+                        SocialSecurityIncome = ss,
+                        SocialSecurityTax = ssTax
+                    });
 
                     if (endingBalance < 0 || taxable < 0 || brokerage < 0 || roth < 0 || isShortfall)
                     {
-                        result.YearsOutOfMoney.Add(run);
-                        result.OutOfMoneyCount++;
                         failureYear = run;
-                        for (int c = 0; c < rates.Count; c++)
+                        foreach (var y in years)
                         {
-                            outOfMoneyMessage.Append($"\nYear {c}\nRate of return: {rates[c]:P2} \nwithdrawal: {withdrawals[c]:C0}(taxable {taxableWithdrawals[c]:C0}, brokerage {brokerageWithdrawals[c]:C0}, roth {rothWithdrawals[c]:C0}) \ntax rate: {taxRates[c]:P2} \nbal: {balances[c]:C0} (tax {taxableBalances[c]:C0}, brokerage {brokerageBalances[c]:C0}, roth {rothBalances[c]:C0})\n");
+                            outOfMoneyMessage.Append($"\nYear {y.Year}\nRate of return: {y.RateOfReturn:P2} \nwithdrawal: {y.Withdrawal:C0}(taxable {y.TaxableWithdrawal:C0}, brokerage {y.BrokerageWithdrawal:C0}, roth {y.RothWithdrawal:C0}) \ntax rate: {y.TaxRate:P2} \nbal: {y.Balance:C0} (tax {y.TaxableBalance:C0}, brokerage {y.BrokerageBalance:C0}, roth {y.RothBalance:C0})\n");
                         }
                         outOfMoneyMessage.Append('\n');
-                        result.FailedScenarioAverages.Add(rates.Average());
                         break;
                     }
-
-                    // Only store the last successful run for reporting
-                    result.SuccessMoneyRemaining.Add(balances[^1]);
-                    lastBalances = balances;
-                    lastAnnualReturns = annualReturns;
-                    lastAnnualWithdrawals = withdrawals;
-                    lastTaxableBalances = taxableBalances;
-                    lastBrokerageBalances = brokerageBalances;
-                    lastRothBalances = rothBalances;
-                    lastTaxableWithdrawals = taxableWithdrawals;
-                    lastBrokerageWithdrawals = brokerageWithdrawals;
-                    lastRothWithdrawals = rothWithdrawals;
-                    lastTaxRates = taxRates;
-                    lastOrdinaryTaxAmounts = ordinaryTaxAmounts;
-                    lastCapitalGainsTaxAmounts = capitalGainsTaxAmounts;
-                    lastOrdinaryBracketRates = ordinaryBracketRates;
-                    lastAmountsUntilNextBracket = amountsUntilNextBracket;
-                    lastNextBracketRates = nextBracketRates;
-                    lastRothConversionAmounts = rothConversionAmounts;
-                    lastRothConversionTaxes = rothConversionTaxes;
-                    lastAgesInYear = agesInYear;
-                    lastTaxableWithdrawalPercents = taxableWithdrawalPercents;
-                    lastSocialSecurityIncomes = socialSecurityIncomes;
-                    lastSocialSecurityTaxes = socialSecurityTaxes;
                 }
 
-                result.EndingBalances.Add(balances[^1]);
-                result.AverageAnnualReturns.Add(rates.Average());
-                result.AverageTaxRates.Add(taxRates.Average());
-                result.LifetimeTaxesPaid.Add(ordinaryTaxAmounts.Sum() + capitalGainsTaxAmounts.Sum());
-                result.FailureYears.Add(failureYear);
-
-                double highestReturn = rates.Max();
-                double lowestReturn = rates.Min();
-                result.HighestReturnYears.Add(rates.IndexOf(highestReturn));
-                result.HighestReturnValues.Add(highestReturn);
-                result.LowestReturnYears.Add(rates.IndexOf(lowestReturn));
-                result.LowestReturnValues.Add(lowestReturn);
-
-                double lowestBalance = balances.Min();
-                result.LowestBalanceYears.Add(balances.IndexOf(lowestBalance));
-                result.LowestBalanceValues.Add(lowestBalance);
-
-                var runDetails = new List<RunYearDetail>(rates.Count);
-                for (int c = 0; c < rates.Count; c++)
-                {
-                    runDetails.Add(new RunYearDetail(
-                        c, rates[c], annualReturns[c], withdrawals[c],
-                        taxableWithdrawals[c], brokerageWithdrawals[c], rothWithdrawals[c],
-                        taxRates[c], balances[c], taxableBalances[c], brokerageBalances[c], rothBalances[c],
-                        ordinaryTaxAmounts[c], capitalGainsTaxAmounts[c], ordinaryBracketRates[c], amountsUntilNextBracket[c], nextBracketRates[c],
-                        ageEligibleFlags[c], rothConversionAmounts[c], rothConversionTaxes[c],
-                        agesInYear[c], taxableWithdrawalPercents[c], socialSecurityIncomes[c], socialSecurityTaxes[c]));
-                }
-                result.RunDetails.Add(runDetails);
+                runs.Add(new RunSummary { Years = years, FailureYear = failureYear });
             }
 
             return new SimulationRunOutput
             {
-                Result = result,
+                Result = new SimulationResult { Runs = runs },
                 AllRates = allRates,
                 OutOfMoneyMessage = outOfMoneyMessage.ToString(),
-                LastBalances = lastBalances,
-                LastAnnualReturns = lastAnnualReturns,
-                LastAnnualWithdrawals = lastAnnualWithdrawals,
-                LastTaxableBalances = lastTaxableBalances,
-                LastBrokerageBalances = lastBrokerageBalances,
-                LastRothBalances = lastRothBalances,
-                LastTaxableWithdrawals = lastTaxableWithdrawals,
-                LastBrokerageWithdrawals = lastBrokerageWithdrawals,
-                LastRothWithdrawals = lastRothWithdrawals,
-                LastTaxRates = lastTaxRates,
-                LastOrdinaryTaxAmounts = lastOrdinaryTaxAmounts,
-                LastCapitalGainsTaxAmounts = lastCapitalGainsTaxAmounts,
-                LastOrdinaryBracketRates = lastOrdinaryBracketRates,
-                LastAmountsUntilNextBracket = lastAmountsUntilNextBracket,
-                LastNextBracketRates = lastNextBracketRates,
-                LastRothConversionAmounts = lastRothConversionAmounts,
-                LastRothConversionTaxes = lastRothConversionTaxes,
-                LastAgesInYear = lastAgesInYear,
-                LastTaxableWithdrawalPercents = lastTaxableWithdrawalPercents,
-                LastSocialSecurityIncomes = lastSocialSecurityIncomes,
-                LastSocialSecurityTaxes = lastSocialSecurityTaxes
+                LastSuccessfulRun = runs.LastOrDefault(r => !r.Failed)?.Years
             };
         }
 

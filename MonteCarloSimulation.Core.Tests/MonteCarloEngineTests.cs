@@ -29,7 +29,7 @@ namespace MonteCarloSimulation.Core.Tests
             var output = MonteCarloEngine.Run(parameters);
 
             Assert.Equal(0, output.Result.OutOfMoneyCount);
-            Assert.Equal(parameters.Iterations, output.Result.EndingBalances.Count);
+            Assert.Equal(parameters.Iterations, output.Result.Runs.Count);
         }
 
         [Fact]
@@ -147,7 +147,7 @@ namespace MonteCarloSimulation.Core.Tests
 
             var output = MonteCarloEngine.Run(parameters);
 
-            Assert.All(output.Result.AverageTaxRates, rate => Assert.InRange(rate, 0.0, 0.01));
+            Assert.All(output.Result.Runs.Select(r => r.AverageTaxRate), rate => Assert.InRange(rate, 0.0, 0.01));
         }
 
         [Fact]
@@ -176,7 +176,7 @@ namespace MonteCarloSimulation.Core.Tests
 
             var output = MonteCarloEngine.Run(parameters);
 
-            Assert.All(output.Result.AverageTaxRates, rate => Assert.InRange(rate, 0.15, 0.20));
+            Assert.All(output.Result.Runs.Select(r => r.AverageTaxRate), rate => Assert.InRange(rate, 0.15, 0.20));
         }
 
         [Fact]
@@ -206,8 +206,8 @@ namespace MonteCarloSimulation.Core.Tests
             var highBasisOutput = MonteCarloEngine.Run(BuildParameters(basis: 450_000, gain: 50_000));
             var highGainOutput = MonteCarloEngine.Run(BuildParameters(basis: 50_000, gain: 450_000));
 
-            double highBasisAvgTaxRate = highBasisOutput.Result.AverageTaxRates.Average();
-            double highGainAvgTaxRate = highGainOutput.Result.AverageTaxRates.Average();
+            double highBasisAvgTaxRate = highBasisOutput.Result.Runs.Average(r => r.AverageTaxRate);
+            double highGainAvgTaxRate = highGainOutput.Result.Runs.Average(r => r.AverageTaxRate);
 
             Assert.True(highGainAvgTaxRate - highBasisAvgTaxRate > 0.10);
         }
@@ -240,7 +240,7 @@ namespace MonteCarloSimulation.Core.Tests
 
             // The withdrawal taken the year after NewMoney arrives should be nearly untaxed,
             // since the whole brokerage balance at that point is basis, not gain.
-            double taxRateAfterArrival = output.Result.RunDetails[0][1].TaxRate;
+            double taxRateAfterArrival = output.Result.Runs[0].Years[1].TaxRate;
             Assert.InRange(taxRateAfterArrival, 0.0, 0.01);
         }
 
@@ -270,8 +270,8 @@ namespace MonteCarloSimulation.Core.Tests
 
             var output = MonteCarloEngine.Run(parameters);
 
-            Assert.All(output.Result.RunDetails[0], yd => Assert.Equal(0, yd.TaxableWithdrawal));
-            Assert.All(output.Result.RunDetails[0], yd => Assert.False(yd.AgeEligible));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.Equal(0, yd.TaxableWithdrawal));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.False(yd.AgeEligible));
         }
 
         [Fact]
@@ -301,7 +301,7 @@ namespace MonteCarloSimulation.Core.Tests
             var output = MonteCarloEngine.Run(parameters);
 
             Assert.Equal(0, output.Result.OutOfMoneyCount);
-            Assert.All(output.Result.RunDetails[0], yd => Assert.True(yd.RothBalance >= 0));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.True(yd.RothBalance >= 0));
         }
 
         [Fact]
@@ -359,7 +359,7 @@ namespace MonteCarloSimulation.Core.Tests
 
             var output = MonteCarloEngine.Run(parameters);
 
-            var yearDetails = output.Result.RunDetails[0];
+            var yearDetails = output.Result.Runs[0].Years;
             Assert.False(yearDetails[0].AgeEligible);
             Assert.Equal(0, yearDetails[0].TaxableWithdrawal);
             Assert.True(yearDetails[^1].AgeEligible);
@@ -392,7 +392,7 @@ namespace MonteCarloSimulation.Core.Tests
         public void Run_RothConversion_FillsTo22PercentBracket_WhenNoOrdinaryIncome()
         {
             var output = MonteCarloEngine.Run(ConversionParameters(enable: true));
-            var year0 = output.Result.RunDetails[0][0];
+            var year0 = output.Result.Runs[0].Years[0];
 
             // Tax Deferred is locked (age 40), so all ordinary income comes from the conversion,
             // which should fill exactly to the (inflation-scaled) start of the 22% bracket.
@@ -410,8 +410,8 @@ namespace MonteCarloSimulation.Core.Tests
         {
             var output = MonteCarloEngine.Run(ConversionParameters(enable: false));
 
-            Assert.All(output.Result.RunDetails[0], yd => Assert.Equal(0, yd.RothConversionAmount));
-            Assert.All(output.Result.RunDetails[0], yd => Assert.Equal(0, yd.RothBalance));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.Equal(0, yd.RothConversionAmount));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.Equal(0, yd.RothBalance));
         }
 
         [Fact]
@@ -426,8 +426,8 @@ namespace MonteCarloSimulation.Core.Tests
 
             var output = MonteCarloEngine.Run(parameters);
 
-            Assert.All(output.Result.RunDetails[0], yd => Assert.True(yd.OrdinaryBracketRate >= 0.22));
-            Assert.All(output.Result.RunDetails[0], yd => Assert.Equal(0, yd.RothConversionAmount));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.True(yd.OrdinaryBracketRate >= 0.22));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.Equal(0, yd.RothConversionAmount));
         }
 
         [Fact]
@@ -439,12 +439,12 @@ namespace MonteCarloSimulation.Core.Tests
             parameters.InitialRothBasis = 200_000;
 
             var output = MonteCarloEngine.Run(parameters);
-            var year0 = output.Result.RunDetails[0][0];
+            var year0 = output.Result.Runs[0].Years[0];
 
             Assert.Equal(0, output.Result.OutOfMoneyCount);
             Assert.True(year0.RothConversionAmount > 0);
             Assert.True(year0.RothConversionAmount < 50_400 * 1.025);
-            Assert.All(output.Result.RunDetails[0], yd => Assert.True(yd.BrokerageBalance >= -0.01));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.True(yd.BrokerageBalance >= -0.01));
         }
 
         // Year 0 (inflation 1.025, no standard deduction): 12% ceiling = 50,400 * 1.025 = 51,660 gross,
@@ -477,7 +477,7 @@ namespace MonteCarloSimulation.Core.Tests
         [Fact]
         public void TaxOptimized_SmallNeed_ComesEntirelyFromTaxDeferred()
         {
-            var year0 = MonteCarloEngine.Run(TaxOptimizedParameters(age: 70, withdrawal: 20_000)).Result.RunDetails[0][0];
+            var year0 = MonteCarloEngine.Run(TaxOptimizedParameters(age: 70, withdrawal: 20_000)).Result.Runs[0].Years[0];
 
             Assert.True(year0.TaxableWithdrawal > 0);
             Assert.Equal(0, year0.BrokerageWithdrawal);
@@ -487,7 +487,7 @@ namespace MonteCarloSimulation.Core.Tests
         [Fact]
         public void TaxOptimized_LargeNeed_FillsTaxDeferredTo12PercentCeiling_ThenBrokerage()
         {
-            var year0 = MonteCarloEngine.Run(TaxOptimizedParameters(age: 70, withdrawal: 80_000)).Result.RunDetails[0][0];
+            var year0 = MonteCarloEngine.Run(TaxOptimizedParameters(age: 70, withdrawal: 80_000)).Result.Runs[0].Years[0];
 
             Assert.Equal(TaxOptCeilingGross, year0.TaxableWithdrawal, 3);
             Assert.Equal(0.12, year0.OrdinaryBracketRate);
@@ -502,7 +502,7 @@ namespace MonteCarloSimulation.Core.Tests
             var parameters = TaxOptimizedParameters(age: 70, withdrawal: 80_000);
             parameters.InitialBrokerageBasis = 10_000;
 
-            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
             Assert.Equal(10_000, year0.BrokerageWithdrawal, 3);
             Assert.Equal(0, year0.BrokerageBalance, 3);
@@ -518,7 +518,7 @@ namespace MonteCarloSimulation.Core.Tests
             parameters.InitialTaxableBalance = 30_000;
             parameters.InitialBrokerageBasis = 10_000;
 
-            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
             Assert.Equal(30_000, year0.TaxableWithdrawal, 3);
             Assert.Equal(10_000, year0.BrokerageWithdrawal, 3);
@@ -538,7 +538,7 @@ namespace MonteCarloSimulation.Core.Tests
             var output = MonteCarloEngine.Run(parameters);
 
             Assert.Equal(0, output.Result.OutOfMoneyCount);
-            Assert.All(output.Result.RunDetails[0], yd => Assert.True(yd.TaxableWithdrawal > TaxOptCeilingGross));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.True(yd.TaxableWithdrawal > TaxOptCeilingGross));
         }
 
         [Fact]
@@ -547,9 +547,9 @@ namespace MonteCarloSimulation.Core.Tests
             var output = MonteCarloEngine.Run(TaxOptimizedParameters(age: 40, withdrawal: 20_000));
 
             Assert.Equal(0, output.Result.OutOfMoneyCount);
-            Assert.All(output.Result.RunDetails[0], yd => Assert.Equal(0, yd.TaxableWithdrawal));
-            Assert.All(output.Result.RunDetails[0], yd => Assert.True(yd.BrokerageWithdrawal > 0));
-            Assert.All(output.Result.RunDetails[0], yd => Assert.Equal(0, yd.RothWithdrawal));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.Equal(0, yd.TaxableWithdrawal));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.True(yd.BrokerageWithdrawal > 0));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.Equal(0, yd.RothWithdrawal));
         }
 
         [Fact]
@@ -558,7 +558,7 @@ namespace MonteCarloSimulation.Core.Tests
             var parameters = TaxOptimizedParameters(age: 70, withdrawal: 20_000);
             parameters.EnableRothConversions = true;
 
-            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
             Assert.True(year0.RothConversionAmount > 0);
             Assert.Equal(TaxOptCeilingGross, year0.TaxableWithdrawal + year0.RothConversionAmount, 3);
@@ -601,7 +601,7 @@ namespace MonteCarloSimulation.Core.Tests
             var parameters = SocialSecurityParameters(age: 70, withdrawal: 50_000);
             parameters.InitialBrokerageBasis = 500_000; // all basis, so the Brokerage draw is untaxed and gross == net
 
-            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
             Assert.Equal(30_000, year0.SocialSecurityIncome);
             Assert.Equal(SsTaxYear0, year0.SocialSecurityTax, 6);
@@ -614,7 +614,7 @@ namespace MonteCarloSimulation.Core.Tests
             var parameters = SocialSecurityParameters(age: 70, withdrawal: 50_000);
             parameters.InitialTaxableBalance = 1_000_000;
 
-            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
             // Need 22,160 net. SS already sits $9,100 into the 10% bracket (top 12,710), leaving 3,610 gross
             // (3,249 net) at 10%; the other 18,911 net is at 12% -> 21,489.77 gross. Total gross 25,099.77.
@@ -632,7 +632,7 @@ namespace MonteCarloSimulation.Core.Tests
             parameters.InitialTaxableBalance = 1_000_000;
             parameters.InitialBrokerageBasis = 500_000;
 
-            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
             Assert.Equal(StdDedYear0 + TaxOptCeilingGross - SsTaxableYear0, year0.TaxableWithdrawal, 3);
             Assert.Equal(0.12, year0.OrdinaryBracketRate);
@@ -647,7 +647,7 @@ namespace MonteCarloSimulation.Core.Tests
             parameters.InitialBrokerageBasis = 500_000;
             parameters.EnableRothConversions = true;
 
-            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
             Assert.Equal(0, year0.TaxableWithdrawal);
             Assert.Equal(StdDedYear0 + TaxOptCeilingGross - SsTaxableYear0, year0.RothConversionAmount, 3);
@@ -659,7 +659,7 @@ namespace MonteCarloSimulation.Core.Tests
             var parameters = SocialSecurityParameters(age: 70, withdrawal: 10_000);
             parameters.InitialBrokerageBasis = 100_000;
 
-            var year0 = MonteCarloEngine.Run(parameters).Result.RunDetails[0][0];
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
             Assert.Equal(0, year0.BrokerageWithdrawal);
             Assert.Equal(100_000 + (SsNetYear0 - 10_000 * 1.025), year0.BrokerageBalance, 6);
@@ -674,7 +674,7 @@ namespace MonteCarloSimulation.Core.Tests
 
             var output = MonteCarloEngine.Run(parameters);
 
-            Assert.All(output.Result.RunDetails[0], yd => Assert.Equal(500_000, yd.TaxableBalance, 6));
+            Assert.All(output.Result.Runs[0].Years, yd => Assert.Equal(500_000, yd.TaxableBalance, 6));
         }
 
         [Fact]
