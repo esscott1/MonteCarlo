@@ -14,3 +14,16 @@ Beyond the retirement simulation itself, this repo doubles as a small, direct il
 - **Tool use in an application, not just tooling** — [MonteCarloSimulation.Web/ChangeRequestAgent.cs](MonteCarloSimulation.Web/ChangeRequestAgent.cs) calls the Anthropic API with a single forced tool call to compose a Jira story's fields from a visitor's change-request submission, and [MonteCarloSimulation.Web/JiraClient.cs](MonteCarloSimulation.Web/JiraClient.cs) is the only thing that actually writes to Jira (the model itself never reaches Jira directly). `Program.cs` wires the two together behind the `/api/change-request` endpoint, with the flow exposed to visitors through a flyout form in the web UI.
 
 It's worth being explicit: the tool-calling/AI round trip in the change-request flow isn't load-bearing for the application's actual purpose. It's included specifically to demonstrate the pattern — a real production application in this situation would most likely not choose to route a simple, deterministic string-composition task through an LLM call at all.
+
+## Deployment
+
+The web app deploys to Azure via [.github/workflows/deploy-azure.yml](.github/workflows/deploy-azure.yml), triggered on every push to `master` that touches `MonteCarloSimulation.Web/**`, `MonteCarloSimulation.Core/**`, or the workflow file itself:
+
+1. Checks out the code and sets up .NET 9.
+2. Runs `dotnet test MonteCarlo.sln --configuration Release` — tests must pass before anything is published.
+3. Publishes `MonteCarloSimulation.Web` in Release configuration.
+4. Deploys the published output via `azure/webapps-deploy@v3` to the Azure Web App `montecarlo-otsconsulting`, authenticating with a publish profile stored in the `AZURE_WEBAPP_PUBLISH_PROFILE` GitHub secret.
+
+Provisioned resources (see [docs/azure-custom-domain.md](docs/azure-custom-domain.md) for the full one-time setup): resource group `rg-montecarlo`, region `westus2`, Web App `montecarlo-otsconsulting`, live at `https://montecarlo-otsconsulting.azurewebsites.net/` and also reachable at the custom domain `https://montecarlo.otsconsulting.ai` via a GoDaddy CNAME/TXT record and a free Azure-managed SSL certificate.
+
+Only `MonteCarloSimulation.Web` (which references `MonteCarloSimulation.Core` directly) ships to Azure — the console app, `MonteCarloSimulation1`, is a local dev tool only and is never deployed.

@@ -98,6 +98,34 @@ function initMoneyInputs() {
     });
 }
 
+function updateBalanceTotals() {
+    const taxDeferred = parseNumber(form.elements['initialTaxableBalance'].value) || 0;
+    const rothBasis = parseNumber(form.elements['initialRothBasis'].value) || 0;
+    const rothGain = parseNumber(form.elements['initialRothUnrealizedGain'].value) || 0;
+    const basis = parseNumber(form.elements['initialBrokerageBasis'].value) || 0;
+    const gain = parseNumber(form.elements['initialBrokerageUnrealizedGain'].value) || 0;
+
+    document.getElementById('roth-total').textContent =
+        `Total Roth = ${formatCurrency(rothBasis + rothGain)}`;
+    document.getElementById('brokerage-total').textContent =
+        `Total Brokerage = ${formatCurrency(basis + gain)}`;
+    document.getElementById('grand-total').textContent =
+        `Total money = ${formatCurrency(taxDeferred + rothBasis + rothGain + basis + gain)}`;
+}
+
+// A required input hidden inside the collapsed section can't show its validation message,
+// so expand the section whenever any field fails validation on submit.
+function initCollapsibleInputs() {
+    const section = document.getElementById('inputs-section');
+    form.addEventListener('invalid', () => { section.open = true; }, true);
+}
+
+function initBalanceTotals() {
+    ['initialTaxableBalance', 'initialRothBasis', 'initialRothUnrealizedGain', 'initialBrokerageBasis', 'initialBrokerageUnrealizedGain']
+        .forEach((name) => form.elements[name].addEventListener('input', updateBalanceTotals));
+    updateBalanceTotals();
+}
+
 // User-supplied text is echoed back into the change-request result panel, so it has to be
 // escaped rather than interpolated raw.
 function escapeHtml(value) {
@@ -111,21 +139,57 @@ function renderErrors(errors) {
     results.innerHTML = `<div class="error-box"><p>Please fix the following:</p><ul>${list}</ul></div>`;
 }
 
+function bulletList(items) {
+    return `<ul class="breakdown-list">${items.map((item) => `<li>${item}</li>`).join('')}</ul>`;
+}
+
+// The engine's day-count/365.25 age can land a hair under a whole number on a birthday
+// (e.g. 64.9993), so allow ~2 days of slack before flooring to completed years.
+function yearWithAge(year, ageInYear) {
+    return `${year} (${Math.floor(ageInYear + 0.005)}yrs)`;
+}
+
+function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance) {
+    const taxablePct = taxablePercentOfBalance === undefined ? '' : ` (${formatPercent(taxablePercentOfBalance)} of balance)`;
+    return bulletList([
+        `Total: ${formatCurrency(total)}`,
+        `Taxable: ${formatCurrency(taxableAmt)}${taxablePct}`,
+        `Brokerage: ${formatCurrency(brokerageAmt)}`,
+        `Roth: ${formatCurrency(rothAmt)}`,
+    ]);
+}
+
+function taxesBreakdown(ordinaryTaxAmount, capitalGainsTaxAmount, ordinaryBracketRate, amountUntilNextBracket, nextBracketRate, rothConversionAmount, rothConversionTax) {
+    const items = [
+        `${formatCurrency(capitalGainsTaxAmount)} cap gains paid`,
+        `${formatCurrency(ordinaryTaxAmount)} ord tax paid (${(ordinaryBracketRate * 100).toFixed(0)}% bracket)`,
+    ];
+    items.push(nextBracketRate !== null && nextBracketRate !== undefined
+        ? `${formatCurrency(amountUntilNextBracket)} until ${(nextBracketRate * 100).toFixed(0)}% bracket`
+        : 'Already in top ordinary tax bracket');
+    if (rothConversionAmount > 0) {
+        items.push(`${formatCurrency(rothConversionAmount)} converted to Roth (${formatCurrency(rothConversionTax)} tax)`);
+    }
+    return bulletList(items);
+}
+
 function renderRunDetailTable(yearDetails) {
-    const rows = yearDetails.map((yd) => `
+    const rows = yearDetails.map((yd) => {
+        return `
         <tr>
-            <td>${yd.year}</td>
-            <td>${formatCurrency(yd.withdrawal)} (taxable ${formatCurrency(yd.taxableWithdrawal)}, nontaxable ${formatCurrency(yd.nontaxableWithdrawal)})</td>
-            <td>${formatPercent(yd.taxRate)}</td>
+            <td>${yearWithAge(yd.year, yd.ageInYear)}</td>
+            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance)}</td>
+            <td>${taxesBreakdown(yd.ordinaryTaxAmount, yd.capitalGainsTaxAmount, yd.ordinaryBracketRate, yd.amountUntilNextBracket, yd.nextBracketRate, yd.rothConversionAmount, yd.rothConversionTax)}</td>
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
-            <td>${formatCurrency(yd.balance)} (taxable ${formatCurrency(yd.taxableBalance)}, nontaxable ${formatCurrency(yd.nontaxableBalance)})</td>
+            <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
 
     return `
         <table class="run-table">
             <thead>
-                <tr><th>Year</th><th>Withdrawal</th><th>Tax Rate</th><th>Return</th><th>Total Balance</th></tr>
+                <tr><th>Year</th><th>Withdrawal</th><th>Taxes</th><th>Return</th><th>Total Balance</th></tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>
@@ -221,11 +285,11 @@ function renderDetail(output) {
         const ji = idx + 1;
         return `
             <tr>
-                <td>${ji}</td>
-                <td>${formatCurrency(output.lastAnnualWithdrawals[ji])} (taxable ${formatCurrency(output.lastTaxableWithdrawals[ji])}, nontaxable ${formatCurrency(output.lastNontaxableWithdrawals[ji])})</td>
-                <td>${formatPercent(output.lastTaxRates[ji])}</td>
+                <td>${yearWithAge(ji, output.lastAgesInYear[ji])}</td>
+                <td>${moneyBreakdown(output.lastAnnualWithdrawals[ji], output.lastTaxableWithdrawals[ji], output.lastBrokerageWithdrawals[ji], output.lastRothWithdrawals[ji], output.lastTaxableWithdrawalPercents[ji])}</td>
+                <td>${taxesBreakdown(output.lastOrdinaryTaxAmounts[ji], output.lastCapitalGainsTaxAmounts[ji], output.lastOrdinaryBracketRates[ji], output.lastAmountsUntilNextBracket[ji], output.lastNextBracketRates[ji], output.lastRothConversionAmounts[ji], output.lastRothConversionTaxes[ji])}</td>
                 <td>${formatCurrency(output.lastAnnualReturns[ji])}</td>
-                <td>${formatCurrency(balance)} (taxable ${formatCurrency(output.lastTaxableBalances[ji])}, nontaxable ${formatCurrency(output.lastNontaxableBalances[ji])})</td>
+                <td>${moneyBreakdown(balance, output.lastTaxableBalances[ji], output.lastBrokerageBalances[ji], output.lastRothBalances[ji])}</td>
             </tr>
         `;
     }).join('');
@@ -235,7 +299,7 @@ function renderDetail(output) {
             <summary>Show year-by-year detail for the last successful run</summary>
             <table class="run-table">
                 <thead>
-                    <tr><th>Year</th><th>Withdrawal</th><th>Tax Rate</th><th>Year's Return ($)</th><th>Total Balance</th></tr>
+                    <tr><th>Year</th><th>Withdrawal</th><th>Taxes</th><th>Year's Return ($)</th><th>Total Balance</th></tr>
                 </thead>
                 <tbody>${rows}</tbody>
             </table>
@@ -299,6 +363,7 @@ function initEditFlyout() {
         flyout.hidden = false;
         toggle.setAttribute('aria-expanded', 'true');
         flyout.querySelector('input, textarea').focus();
+        document.dispatchEvent(new CustomEvent('flyout-opened', { detail: 'edit' }));
     }
 
     function closeFlyout() {
@@ -309,6 +374,12 @@ function initEditFlyout() {
         editResult.innerHTML = '';
         toggle.focus();
     }
+
+    // Lets the hamburger menu/Observe flyout close this one when it opens, so only one
+    // popup in the header is ever open at a time.
+    document.addEventListener('flyout-opened', (e) => {
+        if (e.detail !== 'edit' && !flyout.hidden) closeFlyout();
+    });
 
     toggle.addEventListener('click', () => {
         if (flyout.hidden) openFlyout(); else closeFlyout();
@@ -405,6 +476,125 @@ function initEditFlyout() {
     });
 }
 
+function initObserveMenu() {
+    const hamburgerToggle = document.getElementById('hamburger-toggle');
+    const hamburgerMenu = document.getElementById('hamburger-menu');
+    const observeMenuItem = document.getElementById('observe-menu-item');
+    const header = hamburgerToggle.closest('.page-header');
+
+    const observeFlyout = document.getElementById('observe-flyout');
+    const observeCancel = document.getElementById('observe-cancel');
+    const observeCloseButton = document.getElementById('observe-close');
+    const observeResult = document.getElementById('observe-result');
+    const observeSubmitButton = observeFlyout.querySelector('button[type="submit"]');
+
+    let badPassphraseCloseTimer = null;
+
+    function openMenu() {
+        hamburgerMenu.hidden = false;
+        hamburgerToggle.setAttribute('aria-expanded', 'true');
+        document.dispatchEvent(new CustomEvent('flyout-opened', { detail: 'observe' }));
+    }
+
+    function closeMenu() {
+        hamburgerMenu.hidden = true;
+        hamburgerToggle.setAttribute('aria-expanded', 'false');
+    }
+
+    function openPassphraseFlyout() {
+        closeMenu();
+        observeFlyout.hidden = false;
+        observeFlyout.querySelector('input').focus();
+        document.dispatchEvent(new CustomEvent('flyout-opened', { detail: 'observe' }));
+    }
+
+    function closePassphraseFlyout() {
+        if (badPassphraseCloseTimer !== null) {
+            clearTimeout(badPassphraseCloseTimer);
+            badPassphraseCloseTimer = null;
+        }
+        observeFlyout.hidden = true;
+        observeFlyout.reset();
+        observeResult.innerHTML = '';
+        hamburgerToggle.focus();
+    }
+
+    // Lets the pencil-icon flyout close these when it opens, so only one popup in the
+    // header is ever open at a time.
+    document.addEventListener('flyout-opened', (e) => {
+        if (e.detail === 'observe') return;
+        if (!hamburgerMenu.hidden) closeMenu();
+        if (!observeFlyout.hidden) closePassphraseFlyout();
+    });
+
+    hamburgerToggle.addEventListener('click', () => {
+        if (hamburgerMenu.hidden) openMenu(); else closeMenu();
+    });
+
+    observeMenuItem.addEventListener('click', openPassphraseFlyout);
+    observeCancel.addEventListener('click', closePassphraseFlyout);
+    observeCloseButton.addEventListener('click', closePassphraseFlyout);
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (!hamburgerMenu.hidden) closeMenu();
+        if (!observeFlyout.hidden) closePassphraseFlyout();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (header.contains(e.target)) return;
+        if (!hamburgerMenu.hidden) closeMenu();
+        if (!observeFlyout.hidden) closePassphraseFlyout();
+    });
+
+    observeFlyout.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const passphrase = observeFlyout.elements.passphrase.value;
+
+        observeSubmitButton.disabled = true;
+        observeResult.innerHTML = '<p class="loading">Checking passphrase&hellip;</p>';
+
+        try {
+            const response = await fetch('/api/observe-access', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ passphrase })
+            });
+
+            // The rate limiter rejects before the endpoint runs, so there's no JSON body to read.
+            if (response.status === 429) {
+                observeResult.innerHTML = '<div class="error-box"><p>Too many attempts from this address. Try again later.</p></div>';
+                return;
+            }
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                observeResult.innerHTML = `<div class="error-box"><p>${escapeHtml(data.message || 'Incorrect passphrase.')}</p></div>`;
+                // Notifies the visitor, then drops them back to the plain main page rather
+                // than leaving the form open for silent retries.
+                badPassphraseCloseTimer = setTimeout(closePassphraseFlyout, 2000);
+                return;
+            }
+
+            sessionStorage.setItem('observeToken', data.token);
+            window.location.href = 'observe.html';
+        } catch (err) {
+            observeResult.innerHTML = `<div class="error-box"><p>Request failed: ${escapeHtml(err.message)}</p></div>`;
+        } finally {
+            observeSubmitButton.disabled = false;
+        }
+    });
+
+    // A direct visit to observe.html without a valid session token bounces back here with
+    // this query flag, so the passphrase flyout reopens immediately for the visitor.
+    if (new URLSearchParams(location.search).get('observe') === 'denied') {
+        openPassphraseFlyout();
+        history.replaceState(null, '', location.pathname);
+    }
+}
+
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -414,13 +604,18 @@ form.addEventListener('submit', async (e) => {
         years: Number(formData.get('years')),
         iterations: Number(formData.get('iterations')),
         withdrawal: parseNumber(formData.get('withdrawal')),
+        birthdate: formData.get('birthdate'),
         initialTaxableBalance: parseNumber(formData.get('initialTaxableBalance')),
-        initialNontaxableBalance: parseNumber(formData.get('initialNontaxableBalance')),
+        initialRothBasis: parseNumber(formData.get('initialRothBasis')),
+        initialRothUnrealizedGain: parseNumber(formData.get('initialRothUnrealizedGain')),
+        initialBrokerageBasis: parseNumber(formData.get('initialBrokerageBasis')),
+        initialBrokerageUnrealizedGain: parseNumber(formData.get('initialBrokerageUnrealizedGain')),
         newMoney: parseNumber(formData.get('newMoney')),
         yearNewMoney: Number(formData.get('yearNewMoney')),
         socialSecurityYearsUntilStart: Number(formData.get('socialSecurityYearsUntilStart')),
         socialSecurityAnnualAmount: parseNumber(formData.get('socialSecurityAnnualAmount')),
-        annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction'))
+        annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction')),
+        enableRothConversions: form.elements['enableRothConversions'].checked
     };
 
     results.innerHTML = '<p class="loading">Running simulation&hellip;</p>';
@@ -447,5 +642,8 @@ form.addEventListener('submit', async (e) => {
 
 loadScenarios();
 initMoneyInputs();
+initBalanceTotals();
+initCollapsibleInputs();
 initRunToggles();
 initEditFlyout();
+initObserveMenu();
