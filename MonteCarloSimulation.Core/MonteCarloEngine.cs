@@ -12,6 +12,7 @@ namespace MonteCarloSimulation.Core
             var outOfMoneyMessage = new StringBuilder();
             var allRates = new List<double>(parameters.Years * parameters.Iterations);
             var runs = new List<RunSummary>(parameters.Iterations);
+            var strategy = WithdrawalStrategies.For(parameters.WithdrawalStrategy);
 
             for (int i = 0; i < parameters.Iterations; i++)
             {
@@ -68,75 +69,14 @@ namespace MonteCarloSimulation.Core
                     double brokerage = accounts.Brokerage;
                     double gainFraction = accounts.BrokerageGainFraction;
 
-                    double desiredTaxableWithdrawal, grossTaxableWithdrawal;
-                    double desiredBrokerageWithdrawal, grossBrokerageWithdrawal;
-                    double desiredRothWithdrawal;
-                    bool isShortfall;
+                    var plan = strategy.Plan(new WithdrawalContext(need, ssTaxable, taxYear, eligibleTaxable, brokerage, gainFraction, eligibleRoth));
+                    double grossTaxableWithdrawal = plan.GrossTaxable;
+                    double grossBrokerageWithdrawal = plan.GrossBrokerage;
+                    double desiredRothWithdrawal = plan.Roth;
+                    bool isShortfall = plan.IsShortfall;
 
-                    if (parameters.WithdrawalStrategy == WithdrawalStrategy.TaxOptimized)
-                    {
-                        // Ordered draw: Tax Deferred up to the top of the 12% bracket, then Brokerage, then
-                        // more Tax Deferred into the 22%+ brackets, then Roth as last resort. The 12% ceiling
-                        // is a preference, not a hard cap - otherwise a run fails with Tax Deferred money still
-                        // on the books once Brokerage and Roth run dry. Each draw is capped at what that bucket
-                        // can net after tax, so no bucket goes negative; anything still unmet is a shortfall.
-                        double remaining = need;
-
-                        double maxTaxableGross = Math.Min(Math.Max(0, taxYear.Bracket22CeilingGross - ssTaxable), Math.Max(0, eligibleTaxable));
-                        double maxTaxableNet = maxTaxableGross - taxYear.IncrementalOrdinaryTax(ssTaxable, maxTaxableGross);
-                        desiredTaxableWithdrawal = Math.Min(remaining, maxTaxableNet);
-                        // Clamp: re-grossing a net derived from the full cap can overshoot it by float rounding,
-                        // which would leave the bucket at -1e-10 and falsely trip the negative-balance failure.
-                        grossTaxableWithdrawal = Math.Min(maxTaxableGross, taxYear.GrossUpOrdinary(desiredTaxableWithdrawal, ssTaxable));
-                        remaining -= desiredTaxableWithdrawal;
-
-                        double brokerageNetCapacity = TaxAssumptions.BrokerageNetCapacity(brokerage, gainFraction);
-                        desiredBrokerageWithdrawal = Math.Min(remaining, brokerageNetCapacity);
-                        grossBrokerageWithdrawal = Math.Min(Math.Max(0, brokerage), TaxAssumptions.GrossUpLtcg(desiredBrokerageWithdrawal, gainFraction));
-                        remaining -= desiredBrokerageWithdrawal;
-
-                        if (remaining > 0 && eligibleTaxable > 0)
-                        {
-                            double fullTaxableGross = eligibleTaxable;
-                            double fullTaxableNet = fullTaxableGross - taxYear.IncrementalOrdinaryTax(ssTaxable, fullTaxableGross);
-                            double totalTaxableNet = Math.Min(desiredTaxableWithdrawal + remaining, fullTaxableNet);
-                            remaining -= totalTaxableNet - desiredTaxableWithdrawal;
-                            desiredTaxableWithdrawal = totalTaxableNet;
-                            grossTaxableWithdrawal = Math.Min(fullTaxableGross, taxYear.GrossUpOrdinary(desiredTaxableWithdrawal, ssTaxable));
-                        }
-
-                        desiredRothWithdrawal = Math.Min(remaining, Math.Max(0, eligibleRoth));
-                        remaining -= desiredRothWithdrawal;
-
-                        isShortfall = remaining > 0.01;
-                    }
-                    else
-                    {
-                        // Pro-rata withdrawal calculation - restricted to what's currently accessible.
-                        // Once ageEligible is true this reduces to exactly the unrestricted 3-way split.
-                        double eligibleTotal = eligibleTaxable + brokerage + eligibleRoth;
-                        double taxableProportion = eligibleTotal > 0 ? eligibleTaxable / eligibleTotal : 0;
-                        double brokerageProportion = eligibleTotal > 0 ? brokerage / eligibleTotal : 0;
-                        double rothProportion = eligibleTotal > 0 ? eligibleRoth / eligibleTotal : 0;
-
-                        // If accessible money can't cover the desired withdrawal - even though locked funds
-                        // still exist - cap what's actually withdrawn and treat the year as a failure below.
-                        isShortfall = eligibleTotal < need;
-                        double baseWithdrawal = Math.Min(need, eligibleTotal);
-
-                        // Calculate grossed-up withdrawal from taxable (to net the correct after-tax amount),
-                        // stacked on top of the taxable share of Social Security in the inflation-scaled brackets
-                        desiredTaxableWithdrawal = baseWithdrawal * taxableProportion;
-                        grossTaxableWithdrawal = taxYear.GrossUpOrdinary(desiredTaxableWithdrawal, ssTaxable);
-
-                        desiredBrokerageWithdrawal = baseWithdrawal * brokerageProportion;
-                        grossBrokerageWithdrawal = TaxAssumptions.GrossUpLtcg(desiredBrokerageWithdrawal, gainFraction);
-
-                        desiredRothWithdrawal = baseWithdrawal * rothProportion;
-                    }
-
-                    double ordinaryTaxAmount = (grossTaxableWithdrawal - desiredTaxableWithdrawal) + ssTax;
-                    double capitalGainsTaxAmount = grossBrokerageWithdrawal - desiredBrokerageWithdrawal;
+                    double ordinaryTaxAmount = plan.TaxableTax + ssTax;
+                    double capitalGainsTaxAmount = plan.CapitalGainsTax;
 
                     accounts.WithdrawTaxable(grossTaxableWithdrawal);
                     accounts.SellBrokerage(grossBrokerageWithdrawal);
