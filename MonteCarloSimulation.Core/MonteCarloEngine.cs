@@ -21,11 +21,7 @@ namespace MonteCarloSimulation.Core
                 double standardDeduction = parameters.AnnualStandardDeduction;
                 double bracketInflationFactor = 1.0;
 
-                double taxable = parameters.InitialTaxableBalance;
-                double brokerage = parameters.InitialBrokerageBasis + parameters.InitialBrokerageUnrealizedGain;
-                double brokerageBasis = parameters.InitialBrokerageBasis;
-                double roth = parameters.InitialRothBasis + parameters.InitialRothUnrealizedGain;
-                double rothBasis = parameters.InitialRothBasis;
+                var accounts = Accounts.FromParameters(parameters);
 
                 double ageAtStartYears = (DateOnly.FromDateTime(DateTime.Today).DayNumber - parameters.Birthdate.DayNumber) / 365.25;
 
@@ -60,25 +56,17 @@ namespace MonteCarloSimulation.Core
                     double ssSurplus = Math.Max(0, ssNet - periodWithdrawal);
 
                     // Start-of-year (prior year-end) Tax Deferred balance - the basis RMDs are computed on
-                    double taxableStartOfYear = taxable;
+                    double taxableStartOfYear = accounts.Taxable;
 
-                    // Apply returns (basis is never grown - it only moves via contributions/withdrawals)
-                    taxable *= (1 + interestRate);
-                    brokerage *= (1 + interestRate);
-                    roth *= (1 + interestRate);
+                    accounts.ApplyReturn(interestRate);
 
-                    // Age gate: Taxable and Roth-gains are locked until 59.5, mirroring real-world early-
-                    // withdrawal restrictions. Brokerage and Roth contributions (basis) are always accessible.
                     double ageInYear = ageAtStartYears + run;
                     bool ageEligible = ageInYear >= 59.5;
 
-                    double eligibleTaxable = ageEligible ? taxable : 0;
-                    double eligibleRoth = ageEligible ? roth : rothBasis;
-
-                    // Brokerage: only the embedded-gain fraction of a withdrawal is taxed, at a flat LTCG rate -
-                    // the rest is a tax-free return of principal (average-cost basis, not per-lot tracking).
-                    double gainFraction = brokerage > 0 ? (brokerage - brokerageBasis) / brokerage : 0;
-                    gainFraction = Math.Clamp(gainFraction, 0.0, 1.0);
+                    double eligibleTaxable = accounts.EligibleTaxable(ageEligible);
+                    double eligibleRoth = accounts.EligibleRoth(ageEligible);
+                    double brokerage = accounts.Brokerage;
+                    double gainFraction = accounts.BrokerageGainFraction;
 
                     double desiredTaxableWithdrawal, grossTaxableWithdrawal;
                     double desiredBrokerageWithdrawal, grossBrokerageWithdrawal;
@@ -150,14 +138,9 @@ namespace MonteCarloSimulation.Core
                     double ordinaryTaxAmount = (grossTaxableWithdrawal - desiredTaxableWithdrawal) + ssTax;
                     double capitalGainsTaxAmount = grossBrokerageWithdrawal - desiredBrokerageWithdrawal;
 
-                    // Withdraw from each account
-                    taxable -= grossTaxableWithdrawal;
-                    double brokerageBeforeWithdrawal = brokerage;
-                    brokerage -= grossBrokerageWithdrawal;
-                    brokerageBasis *= brokerageBeforeWithdrawal > 0 ? brokerage / brokerageBeforeWithdrawal : 0;
-                    double rothBeforeWithdrawal = roth;
-                    roth -= desiredRothWithdrawal;
-                    rothBasis *= rothBeforeWithdrawal > 0 ? roth / rothBeforeWithdrawal : 0;
+                    accounts.WithdrawTaxable(grossTaxableWithdrawal);
+                    accounts.SellBrokerage(grossBrokerageWithdrawal);
+                    accounts.WithdrawRoth(desiredRothWithdrawal);
 
                     // Roth conversion: fill the remaining 10%/12% bracket room with Tax Deferred -> Roth,
                     // paying the tax by selling Brokerage. A conversion isn't a withdrawal, so the 59.5 gate
@@ -167,11 +150,11 @@ namespace MonteCarloSimulation.Core
                     if (parameters.EnableRothConversions)
                     {
                         double ordinaryIncomeSoFar = ssTaxable + grossTaxableWithdrawal;
-                        rothConversion = Math.Min(Math.Max(0, taxYear.Bracket22CeilingGross - ordinaryIncomeSoFar), Math.Max(0, taxable));
+                        rothConversion = Math.Min(Math.Max(0, taxYear.Bracket22CeilingGross - ordinaryIncomeSoFar), Math.Max(0, accounts.Taxable));
                         rothConversionTax = taxYear.IncrementalOrdinaryTax(ordinaryIncomeSoFar, rothConversion);
 
-                        double conversionGainFraction = brokerage > 0 ? Math.Clamp((brokerage - brokerageBasis) / brokerage, 0.0, 1.0) : 0;
-                        double maxTaxPayable = TaxAssumptions.BrokerageNetCapacity(brokerage, conversionGainFraction);
+                        double conversionGainFraction = accounts.BrokerageGainFraction;
+                        double maxTaxPayable = TaxAssumptions.BrokerageNetCapacity(accounts.Brokerage, conversionGainFraction);
                         if (rothConversionTax > maxTaxPayable)
                         {
                             // Tax on extra income is convex with f(0)=0, so f(k*x) <= k*f(x): scaling the
@@ -181,13 +164,8 @@ namespace MonteCarloSimulation.Core
                         }
 
                         double taxSale = TaxAssumptions.GrossUpLtcg(rothConversionTax, conversionGainFraction);
-                        double brokerageBeforeTaxSale = brokerage;
-                        brokerage -= taxSale;
-                        brokerageBasis *= brokerageBeforeTaxSale > 0 ? brokerage / brokerageBeforeTaxSale : 0;
-
-                        taxable -= rothConversion;
-                        roth += rothConversion;
-                        rothBasis += rothConversion;
+                        accounts.SellBrokerage(taxSale);
+                        accounts.ConvertToRoth(rothConversion);
 
                         ordinaryTaxAmount += rothConversionTax;
                         capitalGainsTaxAmount += taxSale - rothConversionTax;
@@ -205,21 +183,16 @@ namespace MonteCarloSimulation.Core
                     // Add new money (e.g., inheritance) as after-tax cash in the year it arrives -
                     // it's a cash contribution, not a gain, so it increases both balance and basis
                     if (run == parameters.YearNewMoney)
-                    {
-                        brokerage += parameters.NewMoney;
-                        brokerageBasis += parameters.NewMoney;
-                    }
+                        accounts.DepositBrokerageCash(parameters.NewMoney);
 
                     // After-tax Social Security beyond this year's spending is saved to Brokerage as basis
-                    brokerage += ssSurplus;
-                    brokerageBasis += ssSurplus;
+                    accounts.DepositBrokerageCash(ssSurplus);
 
                     // Calculate annual return for reporting
-                    double annualReturn = (taxable + brokerage + roth)
-                        - (taxable / (1 + interestRate) + brokerage / (1 + interestRate) + roth / (1 + interestRate));
+                    double annualReturn = accounts.Total
+                        - (accounts.Taxable / (1 + interestRate) + accounts.Brokerage / (1 + interestRate) + accounts.Roth / (1 + interestRate));
 
-                    // Recombine for balance and next year
-                    double endingBalance = taxable + brokerage + roth;
+                    double endingBalance = accounts.Total;
 
                     years.Add(new RunYearDetail
                     {
@@ -232,9 +205,9 @@ namespace MonteCarloSimulation.Core
                         RothWithdrawal = desiredRothWithdrawal,
                         TaxRate = yearTaxRate,
                         Balance = endingBalance,
-                        TaxableBalance = taxable,
-                        BrokerageBalance = brokerage,
-                        RothBalance = roth,
+                        TaxableBalance = accounts.Taxable,
+                        BrokerageBalance = accounts.Brokerage,
+                        RothBalance = accounts.Roth,
                         OrdinaryTaxAmount = ordinaryTaxAmount,
                         CapitalGainsTaxAmount = capitalGainsTaxAmount,
                         OrdinaryBracketRate = currentBracketRate,
@@ -249,7 +222,7 @@ namespace MonteCarloSimulation.Core
                         SocialSecurityTax = ssTax
                     });
 
-                    if (endingBalance < 0 || taxable < 0 || brokerage < 0 || roth < 0 || isShortfall)
+                    if (accounts.AnyNegative || isShortfall)
                     {
                         failureYear = run;
                         foreach (var y in years)
