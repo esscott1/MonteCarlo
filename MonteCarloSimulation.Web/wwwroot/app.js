@@ -781,7 +781,61 @@ form.addEventListener('submit', async (e) => {
     }
 });
 
-loadScenarios();
+// "Run in Simulator" on the Optimal page: it leaves one scenario's recommendation and the inputs behind it in
+// sessionStorage. Read it once (so a reload doesn't re-run), fill the form, explain where the values came from, and run.
+const SIMULATOR_HANDOFF_KEY = 'simulatorHandoff';
+
+function readSimulatorHandoff() {
+    try {
+        const raw = sessionStorage.getItem(SIMULATOR_HANDOFF_KEY);
+        sessionStorage.removeItem(SIMULATOR_HANDOFF_KEY);
+        const handoff = raw ? JSON.parse(raw) : null;
+        return handoff && handoff.version === 1 ? handoff : null;
+    } catch {
+        return null;
+    }
+}
+
+function applySimulatorHandoff() {
+    const h = readSimulatorHandoff();
+    if (!h) return;
+
+    const set = (name, value) => { form.elements[name].value = value; };
+    const setMoney = (name, value) => set(name, formatWithCommas(String(value)));
+
+    const radio = form.querySelector(`input[name="scenarioId"][value="${h.scenarioId}"]`);
+    if (radio) radio.checked = true;
+    set('years', h.years);
+    set('iterations', h.iterations);
+    setMoney('withdrawal', h.withdrawalMonthly);
+    set('retirementDate', h.retirementDate);
+    // Birthdate first, then the Social Security start date - marked as the user's own, so the page's
+    // follow-the-62nd-birthday default doesn't overwrite it if the birthdate changes later
+    set('birthdate', h.birthdate);
+    set('socialSecurityStartDate', h.socialSecurityStartDate);
+    form.elements['socialSecurityStartDate'].dispatchEvent(new Event('input'));
+    setMoney('socialSecurityMonthlyAmount', h.socialSecurityMonthlyAmount);
+    setMoney('annualStandardDeduction', h.annualStandardDeduction);
+    ['initialTaxableBalance', 'initialRothBasis', 'initialRothUnrealizedGain', 'initialBrokerageBasis', 'initialBrokerageUnrealizedGain', 'newMoney']
+        .forEach((name) => setMoney(name, h[name]));
+    set('yearNewMoney', h.yearNewMoney);
+    form.elements['enableRothConversions'].checked = h.enableRothConversions;
+    updateBalanceTotals();
+
+    document.getElementById('handoff-note')?.remove();
+    results.insertAdjacentHTML('beforebegin', `
+        <div id="handoff-note" class="handoff-note">
+            Loaded from the Optimal page: <strong>${escapeHtml(h.scenarioDescription)}</strong>, Social Security at ${h.recommendedAge},
+            <strong>${formatCurrency(h.withdrawalMonthly)}/month</strong> &mdash; the spend that survived 82.5% of its simulated markets.
+            This run uses ${h.iterations} new random markets, so its survival rate will be close to, not exactly, 82.5%.
+            It also re-picks the withdrawal order and conversion line for these inputs.
+        </div>`);
+
+    form.requestSubmit();
+    document.getElementById('handoff-note').scrollIntoView({ block: 'start' });
+}
+
+loadScenarios().then(applySimulatorHandoff);
 initMoneyInputs();
 initBalanceTotals();
 initSocialSecurityDefault();
