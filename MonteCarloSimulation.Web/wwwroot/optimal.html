@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Optimal</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="page-header">
+        <a href="index.html" class="icon-button" aria-label="Back to main page">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 12H5" />
+                <path d="M12 19l-7-7 7-7" />
+            </svg>
+        </a>
+        <h1>Optimal</h1>
+    </div>
+
+    <p class="page-intro">How much can you spend each year and still have the money last in 80&ndash;85% of simulated markets &mdash; and when should you start Social Security? Spending is in today's dollars, inflated each year; balances are as of your retirement date.</p>
+
+    <form id="optimal-form">
+        <div class="field-grid">
+            <div class="subgroup-row">
+                <fieldset class="subgroup">
+                    <legend>Scenario</legend>
+                    <label>Retire On Date
+                        <input type="date" name="retirementDate" value="2027-01-01" required>
+                    </label>
+                    <label>Years money lasts
+                        <input type="number" name="years" min="1" max="100" step="1" value="30" style="width: calc(3ch + 1.6rem)" required>
+                    </label>
+                    <label>Birthdate
+                        <input type="date" name="birthdate" value="1970-01-01" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend>Social Security (monthly, today's $)</legend>
+                    <label>At age 62
+                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt62" pattern="[0-9,]*\.?[0-9]*" value="2,750" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label>At age 67
+                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt67" pattern="[0-9,]*\.?[0-9]*" value="3,900" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label>At age 70
+                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt70" pattern="[0-9,]*\.?[0-9]*" value="4,800" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label>Standard Ded. (Annual)
+                        <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend>Tax Deferred Accts</legend>
+                    <label>Balance
+                        <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="950,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="enableRothConversions" checked>
+                        Roth conversions
+                    </label>
+                    <div class="radio-group" role="radiogroup" aria-label="Withdrawal order">
+                        <span>Withdrawal order</span>
+                        <label class="checkbox-label">
+                            <input type="radio" name="withdrawalStrategy" value="ProRata">
+                            Pro-rata
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="radio" name="withdrawalStrategy" value="TaxOptimized" checked>
+                            Tax-optimized
+                        </label>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="subgroup-row">
+                <fieldset class="subgroup">
+                    <legend>Roth Accts</legend>
+                    <label>Basis
+                        <input type="text" inputmode="decimal" class="money-input" name="initialRothBasis" pattern="[0-9,]*\.?[0-9]*" value="15,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label>Unrealized Gains
+                        <input type="text" inputmode="decimal" class="money-input" name="initialRothUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="5,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend>Brokerage Accts</legend>
+                    <label>Basis
+                        <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageBasis" pattern="[0-9,]*\.?[0-9]*" value="200,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label>Unrealized Gains
+                        <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="200,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend>Inheritance</legend>
+                    <label>New Money
+                        <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label>When (years after retiring)
+                        <input type="number" name="yearNewMoney" min="0" step="1" value="10" style="width: calc(16ch + 1.6rem)" required>
+                    </label>
+                </fieldset>
+            </div>
+        </div>
+
+        <button type="submit" id="optimal-submit">Find optimal</button>
+    </form>
+
+    <section id="optimal-results" aria-live="polite"></section>
+
+    <script src="optimal.js"></script>
+</body>
+</html>

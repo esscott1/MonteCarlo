@@ -431,3 +431,28 @@ details pre {
     color: #888;
     font-style: italic;
 }
+
+/* Optimal page link in the main menu - styled like the menu's buttons */
+.dropdown-menu a {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.dropdown-menu a:hover,
+.dropdown-menu a:focus-visible {
+    background: rgba(26, 115, 232, 0.1);
+    color: #1a73e8;
+}
+
+/* Optimal page */
+.page-intro {
+    margin: 0 0 1rem;
+    color: #555;
+}
+
+.recommended-row td {
+    font-weight: 600;
+}

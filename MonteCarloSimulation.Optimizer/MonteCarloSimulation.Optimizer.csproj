@@ -7,8 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="MonteCarloSimulation.Core.Tests" />
-    <InternalsVisibleTo Include="MonteCarloSimulation.Optimizer" />
+    <ProjectReference Include="..\MonteCarloSimulation.Core\MonteCarloSimulation.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MonteCarloSimulation.Optimizer.Tests" />
   </ItemGroup>
 
 </Project>
