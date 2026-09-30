@@ -135,6 +135,47 @@ namespace MonteCarloSimulation.StrategyLab.Tests
         }
 
         [Fact]
+        public void EveryCombinationCode_HasADefinition()
+        {
+            var defined = Candidates.Definitions().Select(d => d.Code).ToHashSet();
+            foreach (var combination in Candidates.All)
+            {
+                Assert.Contains(combination.Order.Code, defined);
+                Assert.Contains(combination.Policy.Code, defined);
+            }
+
+            // The conversion lines are real 2026 dollar amounts: deduction plus the bracket threshold
+            var lines = Candidates.Definitions().Where(d => d.Kind == "conversion").ToDictionary(d => d.Code, d => d.Line2026);
+            Assert.Null(lines["C0"]);
+            Assert.Equal(66_400, lines["C1"]);
+            Assert.Equal(66_400, lines["C2"]);
+            Assert.Equal(121_700, lines["C3"]);
+            Assert.Equal(217_775, lines["C4"]);
+        }
+
+        [Fact]
+        public void PublishedModelInfoData_IsACurrentSummary()
+        {
+            // The Model Info page's data, committed in the web app: it must deserialize to the lab's current Summary
+            // shape and cover every combination, so a stale or hand-edited file fails here.
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "MonteCarlo.sln"))) dir = dir.Parent;
+            Assert.NotNull(dir);
+            var path = Path.Combine(dir!.FullName, SummaryJson.PublishedPath);
+
+            var summary = System.Text.Json.JsonSerializer.Deserialize<Summary>(File.ReadAllText(path), SummaryJson.Options);
+
+            Assert.NotNull(summary);
+            Assert.Equal(Candidates.All.Select(c => c.Code).OrderBy(c => c), summary!.VsBaseline.Select(c => c.Code).OrderBy(c => c));
+            Assert.Equal(Candidates.Definitions().Count, summary.Definitions.Count);
+            Assert.Equal(Candidates.Baseline.Code, summary.Baseline);
+            Assert.Equal(4, summary.Subsets.Count);
+            Assert.Equal(4, summary.PageDefault.Count);
+            Assert.NotNull(summary.CaseStudy);
+            Assert.True(summary.ScenariosCompared > 0);
+        }
+
+        [Fact]
         public void SpendAtSurvival_ReadsThePercentileOffSortedBreakEvens()
         {
             var sorted = Enumerable.Range(1, 200).Select(i => i * 100.0).ToArray();
