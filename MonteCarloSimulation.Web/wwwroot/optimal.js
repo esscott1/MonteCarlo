@@ -7,6 +7,11 @@ function formatCurrency(value) {
     return Number(value).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 }
 
+// The optimizer works in annual spend; the page shows it per month.
+function perMonth(annual) {
+    return formatCurrency(annual / 12);
+}
+
 function formatPercent(value, digits = 1) {
     return (Number(value) * 100).toFixed(digits) + '%';
 }
@@ -73,15 +78,15 @@ function renderClaimingTable(scenario) {
                 <td>${c.age}${isRecommended ? ' &#9733;' : ''}</td>
                 <td>${formatMonthYear(c.startDate)}</td>
                 <td>${formatCurrency(c.monthlyBenefit)}</td>
-                <td>${formatCurrency(c.spendAt85)}</td>
-                <td>${formatCurrency(c.spendAtMidpoint)}</td>
-                <td>${formatCurrency(c.spendAt80)}</td>
+                <td>${perMonth(c.spendAt85)}</td>
+                <td>${perMonth(c.spendAtMidpoint)}</td>
+                <td>${perMonth(c.spendAt80)}</td>
             </tr>`;
     }).join('');
     return `
         <table class="run-table">
             <thead>
-                <tr><th>Start SS at</th><th>First payment</th><th>Monthly benefit</th><th>Spend @ 85%</th><th>@ 82.5%</th><th>@ 80%</th></tr>
+                <tr><th>Start SS at</th><th>First payment</th><th>Monthly benefit</th><th>Spend/mo @ 85%</th><th>@ 82.5%</th><th>@ 80%</th></tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>`;
@@ -96,11 +101,11 @@ function renderScenario(scenario) {
     return `
         <div class="summary-box ${inBand ? 'ok' : 'warn'}">
             <p><strong>${escapeHtml(scenario.description)}</strong></p>
-            <p>Spend about <strong>${formatCurrency(r.spendAtMidpoint)}/yr</strong>
-               (between ${formatCurrency(r.spendAt85)} at 85% survival and ${formatCurrency(r.spendAt80)} at 80%).</p>
+            <p>Spend about <strong>${perMonth(r.spendAtMidpoint)}/month</strong>
+               (between ${perMonth(r.spendAt85)} at 85% survival and ${perMonth(r.spendAt80)} at 80%).</p>
             <p>Start Social Security at <strong>${r.age}</strong> (${formatMonthYear(r.startDate)}),
                about ${formatCurrency(r.monthlyBenefit)}/month in today's dollars.</p>
-            <p>At ${formatCurrency(r.spendAtMidpoint)}/yr, ${formatPercent(scenario.verifiedSurvivalRate)} of the simulated markets last the full period.</p>
+            <p>At ${perMonth(r.spendAtMidpoint)}/month, ${formatPercent(scenario.verifiedSurvivalRate)} of the simulated markets last the full period.</p>
             ${bandNote}
             <details>
                 <summary>Compare Social Security start ages</summary>

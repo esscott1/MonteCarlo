@@ -68,10 +68,7 @@ namespace MonteCarloSimulation1
                             $"brokerage: {y.BrokerageWithdrawal:C0}, " +
                             $"roth: {y.RothWithdrawal:C0})\n " +
                             $"tax rate: {y.TaxRate:P2}\n " +
-                            $"capital gains: {y.CapitalGainsTaxAmount:C0} ({y.CapitalGainsBracketRate:P0} LTCG bracket" +
-                            (y.NextCapitalGainsBracketRate.HasValue
-                                ? $", {y.AmountUntilNextCapitalGainsBracket:C0} until {y.NextCapitalGainsBracketRate:P0})"
-                                : ", top bracket)") +
+                            $"capital gains: {y.CapitalGainsTaxAmount:C0} ({y.CapitalGainsBracketRate:P0} LTCG bracket)" +
                             (y.HarvestedGains > 0 ? $", harvested {y.HarvestedGains:C0} at 0%" : "") + "\n " +
                             $"roth conversion: {y.RothConversionAmount:C0} (tax {y.RothConversionTax:C0})\n " +
                             $"social security: {y.SocialSecurityIncome:C0} ({y.SocialSecurityMonths} mo, tax {y.SocialSecurityTax:C0})\n " +
@@ -143,7 +140,7 @@ namespace MonteCarloSimulation1
 
             int years = PromptYears();
             int iterations = PromptIterations();
-            double withdrawal = PromptWithdrawal();
+            double withdrawal = PromptMonthlyWithdrawal() * 12; // the model works in annual amounts
             var birthdate = PromptBirthdate();
             var retirementDate = PromptRetirementDate(birthdate);
 
@@ -220,9 +217,9 @@ namespace MonteCarloSimulation1
             }
         }
 
-        public static double PromptWithdrawal()
+        public static double PromptMonthlyWithdrawal()
         {
-            Console.Write("Enter the annual withdrawal amount (e.g., 120000): ");
+            Console.Write("Enter the monthly withdrawal amount in today's dollars (e.g., 8000): ");
             while (true)
             {
                 string input = Console.ReadLine();
