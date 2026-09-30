@@ -115,6 +115,29 @@ function updateBalanceTotals() {
 
 // A required input hidden inside the collapsed section can't show its validation message,
 // so expand the section whenever any field fails validation on submit.
+// Adds whole years to a yyyy-mm-dd date, clamping Feb 29 to Feb 28 in non-leap years (like DateOnly.AddYears).
+function addYears(isoDate, years) {
+    const [y, m, d] = isoDate.split('-').map(Number);
+    const date = new Date(Date.UTC(y + years, m - 1, d));
+    if (date.getUTCMonth() !== m - 1) date.setUTCDate(0);
+    return date.toISOString().slice(0, 10);
+}
+
+// The Social Security start date defaults to the 62nd birthday and follows the birthdate until the user picks
+// a start date of their own.
+function initSocialSecurityDefault() {
+    const birthdate = form.elements['birthdate'];
+    const startDate = form.elements['socialSecurityStartDate'];
+    let chosenByUser = false;
+    const followBirthdate = () => {
+        if (!chosenByUser && birthdate.value) startDate.value = addYears(birthdate.value, 62);
+    };
+    startDate.addEventListener('input', () => { chosenByUser = true; });
+    birthdate.addEventListener('input', followBirthdate);
+    birthdate.addEventListener('change', followBirthdate);
+    followBirthdate();
+}
+
 function initCollapsibleInputs() {
     const section = document.getElementById('inputs-section');
     form.addEventListener('invalid', () => { section.open = true; }, true);
@@ -650,6 +673,7 @@ form.addEventListener('submit', async (e) => {
 loadScenarios();
 initMoneyInputs();
 initBalanceTotals();
+initSocialSecurityDefault();
 initCollapsibleInputs();
 initRunToggles();
 initEditFlyout();
