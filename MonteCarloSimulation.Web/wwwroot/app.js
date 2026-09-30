@@ -208,8 +208,10 @@ function zeroRateBandFilledBySales(yd) {
     return yd.realizedGains > 0.5 && yd.zeroRateGains > 0.5 && !(yd.harvestedGains > 0.5) && bandFull;
 }
 
-function footnote(text) {
-    return `<sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note">1</a><span class="footnote-tip" role="tooltip">${text}</span></sup>`;
+// A superscript marker with a hover/focus/tap tooltip. Each note in a cell gets its own number, in the order the
+// notes appear.
+function footnote(text, number) {
+    return `<sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note ${number}">${number}</a><span class="footnote-tip" role="tooltip">${text}</span></sup>`;
 }
 
 function zeroRateBandNote(yd, conversionsEnabled) {
@@ -219,17 +221,48 @@ function zeroRateBandNote(yd, conversionsEnabled) {
     } else if (conversionsEnabled) {
         ending = ', so no Roth conversion was made this year';
     }
-    return footnote(
-        `Brokerage sales this year realized <strong>${formatCurrency(yd.realizedGains)}</strong> of gains, filling the 0% capital gains band. `
-        + `Each additional dollar of taxable income (a Tax Deferred withdrawal or Roth conversion) would move a dollar of these gains to the 15% rate${ending}.`);
+    return `Brokerage sales this year realized <strong>${formatCurrency(yd.realizedGains)}</strong> of gains, filling the 0% capital gains band. `
+        + `Each additional dollar of taxable income (a Tax Deferred withdrawal or Roth conversion) would move a dollar of these gains to the 15% rate${ending}.`;
+}
+
+// Which account paid the year's ordinary income tax. The parts add up to the "ord tax paid" line; the conversion's
+// capital gains cost is on the LTCG line, not here.
+function ordinaryTaxSourcesNote(yd) {
+    const parts = [];
+    if (yd.taxDeferredWithdrawalTax > 0.5) {
+        parts.push(`<strong>${formatCurrency(yd.taxDeferredWithdrawalTax)}</strong> on the Tax Deferred withdrawal, withheld from it`);
+    }
+    if (yd.socialSecurityTax > 0.5) {
+        parts.push(`<strong>${formatCurrency(yd.socialSecurityTax)}</strong> on Social Security, paid out of the benefit`);
+    }
+    const fromBrokerage = yd.rothConversionOrdinaryTaxFromBrokerage;
+    const fromConversion = yd.rothConversionOrdinaryTaxFromConversion;
+    if (fromBrokerage + fromConversion > 0.5) {
+        const total = `<strong>${formatCurrency(fromBrokerage + fromConversion)}</strong> on the Roth conversion`;
+        if (fromBrokerage > 0.5 && fromConversion > 0.5) {
+            parts.push(`${total}: <strong>${formatCurrency(fromBrokerage)}</strong> by selling Brokerage, <strong>${formatCurrency(fromConversion)}</strong> out of the converted amount`);
+        } else {
+            parts.push(`${total}, paid ${fromBrokerage > 0.5 ? 'by selling Brokerage' : 'out of the converted amount'}`);
+        }
+    }
+    return `Who paid this year's <strong>${formatCurrency(yd.ordinaryTaxAmount)}</strong> of ordinary income tax:<br>`
+        + parts.map((p) => `&bull; ${p}`).join('<br>');
 }
 
 function taxesBreakdown(yd, conversionsEnabled) {
-    const note = zeroRateBandFilledBySales(yd) ? zeroRateBandNote(yd, conversionsEnabled) : '';
-    const noteOnConversion = note && yd.rothConversionAmount > 0;
+    const zeroRateNote = zeroRateBandFilledBySales(yd) ? zeroRateBandNote(yd, conversionsEnabled) : '';
+    const zeroRateOnConversion = zeroRateNote && yd.rothConversionAmount > 0;
+    const sourcesNote = yd.ordinaryTaxAmount > 0.5 ? ordinaryTaxSourcesNote(yd) : '';
+
+    // Number the notes in the order they appear: LTCG line, then ordinary tax line, then conversion line
+    let next = 1;
+    const zeroRateOnGainsLine = zeroRateNote && !zeroRateOnConversion ? footnote(zeroRateNote, next++) : '';
+    const sourcesMarker = sourcesNote ? footnote(sourcesNote, next++) : '';
+    const zeroRateOnConversionLine = zeroRateOnConversion ? footnote(zeroRateNote, next++) : '';
+
     const items = [
-        `${formatCurrency(yd.capitalGainsTaxAmount)} cap gains paid (${ratePercent(yd.capitalGainsBracketRate)} LTCG bracket)${noteOnConversion ? '' : note}`,
-        `${formatCurrency(yd.ordinaryTaxAmount)} ord tax paid (${ratePercent(yd.ordinaryBracketRate)} bracket)`,
+        `${formatCurrency(yd.capitalGainsTaxAmount)} cap gains paid (${ratePercent(yd.capitalGainsBracketRate)} LTCG bracket)${zeroRateOnGainsLine}`,
+        `${formatCurrency(yd.ordinaryTaxAmount)} ord tax paid (${ratePercent(yd.ordinaryBracketRate)} bracket)${sourcesMarker}`,
         hasNextBracket(yd.nextBracketRate)
             ? `${formatCurrency(yd.amountUntilNextBracket)} until ${ratePercent(yd.nextBracketRate)} bracket`
             : 'Already in top ordinary tax bracket',
@@ -238,7 +271,7 @@ function taxesBreakdown(yd, conversionsEnabled) {
         items.push(`${formatCurrency(yd.harvestedGains)} gains harvested at 0%`);
     }
     if (yd.rothConversionAmount > 0) {
-        items.push(`${formatCurrency(yd.rothConversionAmount)} converted to Roth (${formatCurrency(yd.rothConversionTax)} tax)${noteOnConversion ? note : ''}`);
+        items.push(`${formatCurrency(yd.rothConversionAmount)} converted to Roth (${formatCurrency(yd.rothConversionTax)} tax)${zeroRateOnConversionLine}`);
     }
     return bulletList(items);
 }
@@ -307,6 +340,26 @@ function renderPerRunTable(result, conversionsEnabled) {
     `;
 }
 
+// Which accounts the engine drew from: the order it ran (with Automatic, the one it picked for these inputs) and
+// the conversion-tax rule from the parameters the server ran with. The app chooses these, not the user.
+const WITHDRAWAL_ORDER_NAMES = { TaxOptimized: 'Tax-optimized', ProRata: 'Pro-rata' };
+const CONVERSION_TAX_FUNDING = {
+    Brokerage: 'paid by selling Brokerage',
+    FromConversion: 'paid out of the converted amount',
+    BrokerageThenConversion: 'paid by selling Brokerage, then out of the converted amount',
+    BridgeAware: "paid by selling Brokerage (keeping what's needed before 59½), then out of the converted amount",
+};
+
+function accountChoiceLine(parameters, output) {
+    const used = output.withdrawalStrategy ?? parameters.withdrawalStrategy;
+    const order = WITHDRAWAL_ORDER_NAMES[used] ?? used;
+    const picked = parameters.withdrawalStrategy === 'Automatic' ? ', the better of the two for your inputs' : '';
+    const funding = parameters.enableRothConversions
+        ? `; Roth conversion tax ${CONVERSION_TAX_FUNDING[parameters.conversionTaxFunding] ?? parameters.conversionTaxFunding}`
+        : '';
+    return `<p>Accounts drawn in the ${order} order${picked}${funding} &mdash; chosen by the app (<a href="model-info.html" class="summary-link">why</a>)</p>`;
+}
+
 function renderSummary(parameters, output) {
     const result = output.result;
     const totalAvgRate = output.allRates.reduce((a, b) => a + b, 0) / output.allRates.length;
@@ -327,6 +380,7 @@ function renderSummary(parameters, output) {
                 <p>Inheritance of ${formatCurrency(parameters.newMoney)} in ${new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney} was considered</p>
                 <p>Average year of failure: ${avgFailureYear.toFixed(0)}, with an average return of ${formatPercent(avgFailureReturn)}</p>
                 ${lifetimeTaxLine}
+                ${accountChoiceLine(parameters, output)}
             </div>
         `;
     }
@@ -338,6 +392,7 @@ function renderSummary(parameters, output) {
             <p>Scenario: ${parameters.scenarioDescription} &mdash; Initial mean: ${formatPercent(parameters.mean)}, Initial std dev: ${formatPercent(parameters.stdDev)}</p>
             <p>Average balance remaining: ${formatCurrency(avgBalance)}</p>
             ${lifetimeTaxLine}
+            ${accountChoiceLine(parameters, output)}
         </div>
     `;
 }
@@ -681,8 +736,7 @@ form.addEventListener('submit', async (e) => {
         socialSecurityStartDate: formData.get('socialSecurityStartDate'),
         socialSecurityMonthlyAmount: parseNumber(formData.get('socialSecurityMonthlyAmount')),
         annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction')),
-        enableRothConversions: form.elements['enableRothConversions'].checked,
-        withdrawalStrategy: formData.get('withdrawalStrategy')
+        enableRothConversions: form.elements['enableRothConversions'].checked
     };
 
     results.innerHTML = '<p class="loading">Running simulation&hellip;</p>';

@@ -388,6 +388,130 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.Equal(conversion.Amount, accounts.Roth, 6);
         }
 
+        // --- Conversion tax funding ---
+
+        private static RothConversion Convert(Accounts accounts, ConversionTaxFunding rule, bool ageEligible = true, double bridgeNeed = 0,
+            double ordinaryIncomeSoFar = 0, double gainsSoFar = 0, double deduction = 0) =>
+            RothConversion.Apply(accounts, TaxYear(deduction), ordinaryIncomeSoFar, gainsSoFar, RothConversion.DefaultCeiling,
+                new ConversionFunding(rule, ageEligible, bridgeNeed));
+
+        [Fact]
+        public void FromConversion_PaysTheTaxOutOfTheConvertedAmount()
+        {
+            // 50,400 converted to the 22% line costs 1,240 + 4,560 = 5,800, withheld from the conversion itself.
+            var accounts = Accounts(taxable: 500_000, brokerageBasis: 100_000);
+
+            var conversion = Convert(accounts, ConversionTaxFunding.FromConversion);
+
+            Assert.Equal(50_400, conversion.Amount, 6);
+            Assert.Equal(5_800, conversion.Tax, 6);
+            Assert.Equal(5_800, conversion.Withheld, 6);
+            Assert.Equal(0, conversion.TaxSale);
+            Assert.Equal(5_800, conversion.OrdinaryTaxFromConversion, 6);
+            Assert.Equal(0, conversion.OrdinaryTaxFromBrokerage, 6);
+            Assert.Equal(449_600, accounts.Taxable, 6);
+            Assert.Equal(44_600, accounts.Roth, 6);
+            Assert.Equal(44_600, accounts.RothBasis, 6);
+            Assert.Equal(100_000, accounts.Brokerage, 6); // untouched
+        }
+
+        [Fact]
+        public void BrokerageThenConversion_UsesBrokerageFirst_AndNeverShrinksTheConversion()
+        {
+            // All-basis Brokerage of 1,000 pays 1,000 of the 5,800; the other 4,800 comes out of the conversion.
+            var accounts = Accounts(taxable: 500_000, brokerageBasis: 1_000);
+
+            var conversion = Convert(accounts, ConversionTaxFunding.BrokerageThenConversion);
+
+            Assert.Equal(50_400, conversion.Amount, 6);
+            Assert.Equal(1_000, conversion.TaxSale, 6);
+            Assert.Equal(4_800, conversion.Withheld, 6);
+            Assert.Equal(1_000, conversion.OrdinaryTaxFromBrokerage, 6);
+            Assert.Equal(4_800, conversion.OrdinaryTaxFromConversion, 6);
+            Assert.Equal(0, accounts.Brokerage, 6);
+            Assert.Equal(45_600, accounts.Roth, 6);
+        }
+
+        [Fact]
+        public void WithoutBrokerage_OnlyTheBrokerageRuleStalls()
+        {
+            foreach (var rule in Enum.GetValues<ConversionTaxFunding>())
+            {
+                var accounts = Accounts(taxable: 500_000);
+                var conversion = Convert(accounts, rule, ageEligible: false, bridgeNeed: 200_000);
+                Assert.Equal(rule == ConversionTaxFunding.Brokerage ? 0 : 50_400, conversion.Amount, 6);
+            }
+        }
+
+        [Fact]
+        public void BridgeAware_KeepsTheBridgeInBrokerage_BeforeTheGateOpens()
+        {
+            // Before 59.5 with 97,000 of spending still to come before the gate, only the 3,000 beyond it may pay tax.
+            var before = Accounts(taxable: 500_000, brokerageBasis: 100_000);
+            var early = Convert(before, ConversionTaxFunding.BridgeAware, ageEligible: false, bridgeNeed: 97_000);
+            Assert.Equal(3_000, early.TaxSale, 6);
+            Assert.Equal(2_800, early.Withheld, 6);
+            Assert.Equal(97_000, before.Brokerage, 6);
+
+            // Once the gate is open Brokerage pays it all, like BrokerageThenConversion.
+            var after = Accounts(taxable: 500_000, brokerageBasis: 100_000);
+            var late = Convert(after, ConversionTaxFunding.BridgeAware, ageEligible: true, bridgeNeed: 97_000);
+            Assert.Equal(5_800, late.TaxSale, 6);
+            Assert.Equal(0, late.Withheld, 6);
+        }
+
+        [Theory]
+        [InlineData(ConversionTaxFunding.FromConversion)]
+        [InlineData(ConversionTaxFunding.BrokerageThenConversion)]
+        public void YearTaxAttribution_SumsToTotalTax_WhenTheConversionPaysItsOwnTax(ConversionTaxFunding rule)
+        {
+            // Small high-gain Brokerage: the conversion bumps the year's gains and its own sale realizes more.
+            var accounts = Accounts(taxable: 800_000, brokerageBasis: 3_000, brokerageGain: 7_000);
+            var taxYear = TaxYear(16_000, 1.025);
+            double ssTaxable = 20_000;
+            var context = new WithdrawalContext(12_000, ssTaxable, taxYear, accounts.Taxable, accounts.Brokerage, accounts.BrokerageGainFraction, 0);
+
+            var plan = new TaxOptimizedWithdrawalStrategy().Plan(context);
+            accounts.WithdrawTaxable(plan.GrossTaxable);
+            accounts.SellBrokerage(plan.GrossBrokerage);
+            var conversion = RothConversion.Apply(accounts, taxYear, ssTaxable + plan.GrossTaxable, plan.RealizedGains,
+                RothConversion.DefaultCeiling, new ConversionFunding(rule, true, 0));
+
+            double ordinary = ssTaxable + plan.GrossTaxable + conversion.Amount;
+            double gains = plan.RealizedGains + conversion.RealizedGains;
+            Assert.True(conversion.Withheld > 0);
+            Assert.Equal(taxYear.OrdinaryTax(ssTaxable) + plan.TaxableTax + conversion.Tax, taxYear.OrdinaryTax(ordinary), 6);
+            Assert.Equal(plan.CapitalGainsTax + conversion.CapitalGainsTax, taxYear.CapitalGainsTax(ordinary, gains), 6);
+            Assert.Equal(conversion.Tax, conversion.OrdinaryTaxFromBrokerage + conversion.OrdinaryTaxFromConversion, 9);
+        }
+
+        [Theory]
+        [InlineData(ConversionTaxFunding.Brokerage)]
+        [InlineData(ConversionTaxFunding.FromConversion)]
+        [InlineData(ConversionTaxFunding.BrokerageThenConversion)]
+        [InlineData(ConversionTaxFunding.BridgeAware)]
+        public void EveryYear_OrdinaryTaxSources_SumToOrdinaryTax(ConversionTaxFunding rule)
+        {
+            // What the main page's "who paid" footnote shows must add up to the ordinary tax line, every year.
+            var parameters = new SimulationParameters
+            {
+                Years = 30, Iterations = 1, Withdrawal = 70_000,
+                Birthdate = new DateOnly(1971, 5, 1), RetirementDate = new DateOnly(2027, 3, 1),
+                InitialTaxableBalance = 1_400_000, InitialRothBasis = 20_000, InitialRothUnrealizedGain = 10_000,
+                InitialBrokerageBasis = 60_000, InitialBrokerageUnrealizedGain = 90_000,
+                Mean = 0.07, StdDev = 0.12, SocialSecurityStartDate = new DateOnly(2035, 5, 1), SocialSecurityMonthlyAmount = 2_500,
+                AnnualStandardDeduction = 16_000, EnableRothConversions = true, ConversionTaxFunding = rule,
+                WithdrawalStrategy = WithdrawalStrategy.TaxOptimized, ScenarioDescription = "tax sources"
+            };
+            var timeline = RetirementTimeline.Build(parameters);
+            var strategy = WithdrawalStrategies.For(parameters.WithdrawalStrategy);
+
+            for (int seed = 0; seed < 20; seed++)
+                foreach (var y in RunSimulator.Simulate(parameters, timeline, strategy, new Random(seed)).Years)
+                    Assert.Equal(y.OrdinaryTaxAmount,
+                        y.SocialSecurityTax + y.TaxDeferredWithdrawalTax + y.RothConversionOrdinaryTaxFromBrokerage + y.RothConversionOrdinaryTaxFromConversion, 6);
+        }
+
         // --- Social Security ---
 
         [Fact]

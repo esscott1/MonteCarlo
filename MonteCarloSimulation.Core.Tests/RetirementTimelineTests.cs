@@ -10,6 +10,7 @@ namespace MonteCarloSimulation.Core.Tests
                 Birthdate = birthdate,
                 RetirementDate = retire,
                 SocialSecurityStartDate = socialSecurityStart ?? retire.AddYears(100),
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "timeline test"
             };
 

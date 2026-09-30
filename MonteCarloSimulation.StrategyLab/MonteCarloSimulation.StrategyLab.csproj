@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MonteCarloSimulation.Core\MonteCarloSimulation.Core.csproj" />
+    <ProjectReference Include="..\MonteCarloSimulation.Optimizer\MonteCarloSimulation.Optimizer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

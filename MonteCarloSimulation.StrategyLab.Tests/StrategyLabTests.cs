@@ -123,6 +123,7 @@ namespace MonteCarloSimulation.StrategyLab.Tests
                     var t when t == typeof(DateOnly) => new DateOnly(2031, 3, 4),
                     var t when t == typeof(string) => "copied",
                     var t when t == typeof(WithdrawalStrategy) => WithdrawalStrategy.ProRata,
+                    var t when t == typeof(ConversionTaxFunding) => ConversionTaxFunding.BridgeAware,
                     var t => throw new InvalidOperationException($"Add a test value for {t.Name} ({property.Name})")
                 };
                 property.SetValue(original, value);
@@ -132,6 +133,38 @@ namespace MonteCarloSimulation.StrategyLab.Tests
 
             foreach (var property in typeof(SimulationParameters).GetProperties().Where(p => p.CanWrite))
                 Assert.True(Equals(property.GetValue(original), property.GetValue(copy)), $"{property.Name} was not copied");
+        }
+
+        [Fact]
+        public void FundingSet_ComparesEveryRule_AgainstTodaysBrokerageOnlyBaseline()
+        {
+            var set = Candidates.Funding;
+            Assert.Equal("W2+C1+F0", set.Baseline.Code);
+            Assert.Equal(set.All.Count, set.All.Select(c => c.Code).Distinct().Count());
+            // Pro-rata and Tax-optimized x 4 converting policies x 4 rules, plus both orders without conversions
+            Assert.Equal(2 * 4 * 4 + 2, set.All.Count);
+            Assert.Contains(set.All, c => c.Code == set.ProRataCode);
+        }
+
+        [Theory]
+        [InlineData(ConversionTaxFunding.Brokerage)]
+        [InlineData(ConversionTaxFunding.FromConversion)]
+        [InlineData(ConversionTaxFunding.BridgeAware)]
+        public void FundingCombination_RunsExactlyLikeTheEngineWithThatRule(ConversionTaxFunding rule)
+        {
+            var combination = Candidates.Funding.All.Single(c => c.Order == Candidates.TaxOptimized && c.Policy == Candidates.AppDefault && c.Funding!.Value == rule);
+            foreach (var scenario in ScenarioGenerator.Generate(8, seed: 3))
+            {
+                var runner = new PathRunner(scenario.Parameters, combination);
+                var p = Scenario.Copy(scenario.Parameters);
+                p.Withdrawal = scenario.TotalAssets * 0.045;
+                p.Iterations = 1;
+                p.EnableRothConversions = true;
+                p.ConversionTaxFunding = rule;
+                p.WithdrawalStrategy = WithdrawalStrategy.TaxOptimized;
+                for (int path = 0; path < 5; path++)
+                    Assert.Equal(MonteCarloEngine.Run(p, new Random(path)).Result.Runs[0].Years, runner.Run(p.Withdrawal, path, out _).Years);
+            }
         }
 
         [Fact]

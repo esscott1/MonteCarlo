@@ -27,6 +27,7 @@ namespace MonteCarloSimulation.StrategyLab
             _parameters = Scenario.Copy(scenario);
             _parameters.Iterations = 1;
             _parameters.EnableRothConversions = combination.Policy.Converts;
+            if (combination.Funding is not null) _parameters.ConversionTaxFunding = combination.Funding.Value;
             _ceiling = combination.Policy.Ceiling ?? RothConversion.DefaultCeiling;
             _strategy = combination.Order.Strategy;
             _timeline = RetirementTimeline.Build(_parameters);

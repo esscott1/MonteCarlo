@@ -38,6 +38,7 @@ namespace MonteCarloSimulation.StrategyLab
             SocialSecurityMonthlyAmount = p.SocialSecurityMonthlyAmount,
             AnnualStandardDeduction = p.AnnualStandardDeduction,
             EnableRothConversions = p.EnableRothConversions,
+            ConversionTaxFunding = p.ConversionTaxFunding,
             WithdrawalStrategy = p.WithdrawalStrategy,
             ScenarioDescription = p.ScenarioDescription
         };

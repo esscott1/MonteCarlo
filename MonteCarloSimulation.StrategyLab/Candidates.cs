@@ -12,10 +12,21 @@ namespace MonteCarloSimulation.StrategyLab
         public bool Converts => Ceiling is not null;
     }
 
-    // One (order, policy) pair evaluated on every scenario.
-    internal sealed record Combination(WithdrawalOrder Order, ConversionPolicy Policy)
+    // A rule for where a conversion's tax comes from (Core's ConversionTaxFunding).
+    internal sealed record FundingRule(string Code, string Name, string Definition, ConversionTaxFunding Value);
+
+    // One (order, policy[, funding]) combination evaluated on every scenario. A null Funding uses the app's
+    // current default; the code names the funding rule only when it's set explicitly.
+    internal sealed record Combination(WithdrawalOrder Order, ConversionPolicy Policy, FundingRule? Funding = null)
     {
-        public string Code => $"{Order.Code}+{Policy.Code}";
+        public string Code => Funding is null ? $"{Order.Code}+{Policy.Code}" : $"{Order.Code}+{Policy.Code}+{Funding.Code}";
+    }
+
+    // A set of combinations run together. The baseline comes first: every other combination is compared with it.
+    // ProRataCode is the Pro-rata combination the report's case study and subsets compare against the baseline.
+    internal sealed record CandidateSet(string Name, IReadOnlyList<Combination> All, string ProRataCode)
+    {
+        public Combination Baseline => All[0];
     }
 
     internal static class Candidates
@@ -42,6 +53,21 @@ namespace MonteCarloSimulation.StrategyLab
         public static readonly WithdrawalOrder TaxOptimizedNoHarvest = new("W2nh", "Tax-optimized, no 0% harvesting",
             "W2 without the 0% capital gains harvesting, to isolate what harvesting adds.",
             new TaxOptimizedWithoutHarvestStrategy());
+
+        public static readonly FundingRule FundingBrokerage = new("F0", "Brokerage only",
+            "The conversion's tax is paid only by selling Brokerage; a conversion is scaled down to what Brokerage can pay.",
+            ConversionTaxFunding.Brokerage);
+        public static readonly FundingRule FundingFromConversion = new("F1", "Out of the conversion",
+            "The tax always comes out of the converted amount, so less of it reaches Roth.",
+            ConversionTaxFunding.FromConversion);
+        public static readonly FundingRule FundingBrokerageThenConversion = new("F2", "Brokerage, then the conversion",
+            "Brokerage pays while it can; the rest comes out of the converted amount, so conversions never stall.",
+            ConversionTaxFunding.BrokerageThenConversion);
+        public static readonly FundingRule FundingBridgeAware = new("F3", "Bridge-aware",
+            "Like F2, but before 59½ Brokerage pays only from what it holds beyond the spending still to come before 59½.",
+            ConversionTaxFunding.BridgeAware);
+
+        public static readonly IReadOnlyList<FundingRule> Fundings = [FundingBrokerage, FundingFromConversion, FundingBrokerageThenConversion, FundingBridgeAware];
 
         public static readonly ConversionPolicy NoConversions = new("C0", "No conversions",
             "No Roth conversions.", null);
@@ -72,6 +98,24 @@ namespace MonteCarloSimulation.StrategyLab
                 .Append(new Combination(TaxOptimizedNoHarvest, AppDefault))
                 .ToList();
 
+        // The main grid: every order x conversion policy under the app's conversion-tax funding.
+        public static readonly CandidateSet Main = new("main", All, "W1+C1");
+
+        // Where conversion tax comes from: Pro-rata and Tax-optimized x the converting policies x every funding rule,
+        // against today's W2+C1 with Brokerage-only funding (plus both orders without conversions, where funding
+        // doesn't matter).
+        public static readonly CandidateSet Funding = new("funding",
+            new[] { new Combination(TaxOptimized, AppDefault, FundingBrokerage) }
+                .Concat(new[] { ProRata, TaxOptimized }.SelectMany(o => Policies.Where(p => p.Converts)
+                    .SelectMany(p => Fundings.Select(f => new Combination(o, p, f)))))
+                .Where((c, i) => i == 0 || c.Code != "W2+C1+F0")
+                .Concat([new Combination(ProRata, NoConversions), new Combination(TaxOptimized, NoConversions)])
+                .ToList(),
+            "W1+C1+F0");
+
+        public static CandidateSet SetNamed(string name) =>
+            new[] { Main, Funding }.SingleOrDefault(s => s.Name == name) ?? throw new ArgumentException($"Unknown set '{name}' (main, funding)");
+
         // The definitions tables. Conversion lines are evaluated for a 2026 single filer with the lab's $16,000
         // deduction and nothing else counted yet; C1's alternative line applies once gains have been realized.
         public static IReadOnlyList<StrategyDefinition> Definitions()
@@ -82,7 +126,10 @@ namespace MonteCarloSimulation.StrategyLab
             var policies = Policies.Select(p => new StrategyDefinition(p.Code, "conversion", p.Name, p.Definition,
                 p.Ceiling?.Invoke(taxYear2026, 0, 0),
                 p == AppDefault ? taxYear2026.ZeroRateCeilingGross : null));
-            return orders.Concat(policies).ToList();
+            var appFunding = new SimulationParameters { ScenarioDescription = "" }.ConversionTaxFunding;
+            var fundings = Fundings.Select(f => new StrategyDefinition(f.Code, "funding",
+                f.Value == appFunding ? $"{f.Name} (app)" : f.Name, f.Definition, null, null));
+            return orders.Concat(policies).Concat(fundings).ToList();
         }
 
         // Gross ordinary income where the first bracket at `rate` or higher starts.
