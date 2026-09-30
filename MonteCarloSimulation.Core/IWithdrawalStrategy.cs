@@ -58,7 +58,11 @@ namespace MonteCarloSimulation.Core
         private static readonly IWithdrawalStrategy ProRata = new ProRataWithdrawalStrategy();
         private static readonly IWithdrawalStrategy TaxOptimized = new TaxOptimizedWithdrawalStrategy();
 
-        public static IWithdrawalStrategy For(WithdrawalStrategy strategy) =>
-            strategy == WithdrawalStrategy.TaxOptimized ? TaxOptimized : ProRata;
+        public static IWithdrawalStrategy For(WithdrawalStrategy strategy) => strategy switch
+        {
+            WithdrawalStrategy.TaxOptimized => TaxOptimized,
+            WithdrawalStrategy.ProRata => ProRata,
+            _ => throw new InvalidOperationException("Resolve WithdrawalStrategy.Automatic (AutomaticWithdrawal.Resolve) before running.")
+        };
     }
 }

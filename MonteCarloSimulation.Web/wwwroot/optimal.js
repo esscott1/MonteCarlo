@@ -59,7 +59,6 @@ function readRequest() {
         socialSecurityAt70: parseNumber(data.get('socialSecurityAt70')),
         annualStandardDeduction: parseNumber(data.get('annualStandardDeduction')),
         enableRothConversions: data.get('enableRothConversions') === 'on',
-        withdrawalStrategy: data.get('withdrawalStrategy'),
     };
 }
 
@@ -82,16 +81,19 @@ function renderClaimingTable(scenario) {
                 <td>${perMonth(c.spendAt85)}</td>
                 <td>${perMonth(c.spendAtMidpoint)}</td>
                 <td>${perMonth(c.spendAt80)}</td>
+                <td>${ORDER_NAMES[c.withdrawalStrategy] ?? c.withdrawalStrategy}</td>
             </tr>`;
     }).join('');
     return `
         <table class="run-table">
             <thead>
-                <tr><th>Start SS at</th><th>First payment</th><th>Monthly benefit</th><th>Total SS collected</th><th>Spend/mo @ 85%</th><th>@ 82.5%</th><th>@ 80%</th></tr>
+                <tr><th>Start SS at</th><th>First payment</th><th>Monthly benefit</th><th>Total SS collected</th><th>Spend/mo @ 85%</th><th>@ 82.5%</th><th>@ 80%</th><th>Order</th></tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>`;
 }
+
+const ORDER_NAMES = { TaxOptimized: 'Tax-optimized', ProRata: 'Pro-rata' };
 
 function renderScenario(scenario) {
     const r = scenario.recommended;
@@ -108,6 +110,7 @@ function renderScenario(scenario) {
                about ${formatCurrency(r.monthlyBenefit)}/month in today's dollars &mdash;
                <strong>${formatCurrency(r.totalSocialSecurity)}</strong> collected in total over your retirement.</p>
             <p>At ${perMonth(r.spendAtMidpoint)}/month, ${formatPercent(scenario.verifiedSurvivalRate)} of the simulated markets last the full period.</p>
+            <p>Accounts drawn in the ${ORDER_NAMES[r.withdrawalStrategy] ?? r.withdrawalStrategy} order &mdash; the better of the two for these inputs, chosen by the app (<a href="model-info.html" class="summary-link">why</a>).</p>
             ${bandNote}
             <details>
                 <summary>Compare Social Security start ages</summary>

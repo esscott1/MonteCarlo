@@ -21,7 +21,7 @@ namespace MonteCarloSimulation.Core
             {
                 double rate = DrawReturn(parameters.Mean, parameters.StdDev, random);
 
-                var (detail, failed) = SimulateYear(parameters, strategy, conversionCeiling, accounts, retirementYear, rate);
+                var (detail, failed) = SimulateYear(parameters, strategy, conversionCeiling, accounts, retirementYear, BridgeNeed(parameters, timeline, retirementYear), rate);
                 years.Add(detail);
 
                 // A run fails the instant any bucket (or the total) goes negative, or the eligible buckets
@@ -35,7 +35,7 @@ namespace MonteCarloSimulation.Core
 
         private static (RunYearDetail Detail, bool Failed) SimulateYear(
             SimulationParameters parameters, IWithdrawalStrategy strategy, ConversionCeiling conversionCeiling,
-            Accounts accounts, RetirementYear year, double rate)
+            Accounts accounts, RetirementYear year, double bridgeNeed, double rate)
         {
             // Today's-dollar inputs, inflated to this calendar year. Spending and returns are prorated for a partial
             // year; the tax year's deduction and brackets are not (they're annual). Social Security counts the
@@ -62,7 +62,8 @@ namespace MonteCarloSimulation.Core
             accounts.WithdrawRoth(plan.Roth);
 
             var conversion = parameters.EnableRothConversions
-                ? RothConversion.Apply(accounts, taxYear, ss.Taxable + plan.GrossTaxable, plan.RealizedGains, conversionCeiling)
+                ? RothConversion.Apply(accounts, taxYear, ss.Taxable + plan.GrossTaxable, plan.RealizedGains, conversionCeiling,
+                    new ConversionFunding(parameters.ConversionTaxFunding, ageEligible, bridgeNeed))
                 : RothConversion.None;
 
             // The year's taxes come straight from its final income totals - ordinary income (taxable Social
@@ -127,6 +128,9 @@ namespace MonteCarloSimulation.Core
                 AgeEligible = ageEligible,
                 RothConversionAmount = conversion.Amount,
                 RothConversionTax = conversion.Tax,
+                RothConversionOrdinaryTaxFromBrokerage = conversion.OrdinaryTaxFromBrokerage,
+                RothConversionOrdinaryTaxFromConversion = conversion.OrdinaryTaxFromConversion,
+                TaxDeferredWithdrawalTax = plan.TaxableTax,
                 AgeInYear = year.AgeAtStart,
                 TaxableWithdrawalPercentOfBalance = taxableStartOfYear > 0 ? plan.GrossTaxable / taxableStartOfYear : 0,
                 SocialSecurityIncome = ss.Gross,
@@ -135,6 +139,17 @@ namespace MonteCarloSimulation.Core
             };
 
             return (detail, accounts.AnyNegative || plan.IsShortfall);
+        }
+
+        // Spending still to come before the 59.5 gate opens, after this year (today's-dollar spending, inflated):
+        // what the BridgeAware conversion-tax rule keeps in Brokerage. 0 once the gate is open.
+        private static double BridgeNeed(SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, RetirementYear year)
+        {
+            if (year.AgeEligible || parameters.ConversionTaxFunding != ConversionTaxFunding.BridgeAware) return 0;
+            double need = 0;
+            for (int i = year.Index + 1; i < timeline.Count && !timeline[i].AgeEligible; i++)
+                need += parameters.Withdrawal * timeline[i].InflationFactor * timeline[i].Fraction;
+            return need;
         }
 
         // Normally distributed annual return via the Box-Muller transform. One draw per simulated year.

@@ -16,12 +16,10 @@ namespace MonteCarloSimulation.StrategyLab
         IReadOnlyList<CaseStudyYear> Baseline,
         IReadOnlyList<CaseStudyYear> Alternative)
     {
-        public static readonly string AlternativeCode = Candidates.All.Single(c => c.Order == Candidates.ProRata && c.Policy == Candidates.AppDefault).Code;
-
-        public static CaseStudy? Build(IReadOnlyList<Scenario> scenarios, IReadOnlyList<ResultRow> rows, int paths)
+        public static CaseStudy? Build(CandidateSet set, IReadOnlyList<Scenario> scenarios, IReadOnlyList<ResultRow> rows, int paths)
         {
-            var baseline = Candidates.Baseline;
-            var alternative = Candidates.All.Single(c => c.Code == AlternativeCode);
+            var baseline = set.Baseline;
+            var alternative = set.All.Single(c => c.Code == set.ProRataCode);
             var byScenario = rows.GroupBy(r => r.ScenarioId).ToDictionary(g => g.Key, g => g.ToDictionary(r => r.Combination));
 
             var pick = scenarios

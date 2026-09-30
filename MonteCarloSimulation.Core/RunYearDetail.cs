@@ -39,6 +39,12 @@ namespace MonteCarloSimulation.Core
         public required bool AgeEligible { get; init; }
         public required double RothConversionAmount { get; init; }
         public required double RothConversionTax { get; init; }
+        // Who paid the year's ordinary tax (reporting only; with SocialSecurityTax these sum to OrdinaryTaxAmount):
+        // the tax the Tax Deferred withdrawal adds on top of Social Security (withheld from that withdrawal), and the
+        // conversion's ordinary tax split between the Brokerage sale and the converted amount itself.
+        public required double TaxDeferredWithdrawalTax { get; init; }
+        public required double RothConversionOrdinaryTaxFromBrokerage { get; init; }
+        public required double RothConversionOrdinaryTaxFromConversion { get; init; }
         public required double AgeInYear { get; init; }
         public required double TaxableWithdrawalPercentOfBalance { get; init; }
         public required double SocialSecurityIncome { get; init; }

@@ -33,6 +33,11 @@ namespace MonteCarloSimulation1
         // ---- OUTPUT SECTION: Print after all iterations ----
         {
             var result = output.Result;
+            string order = output.WithdrawalStrategy == WithdrawalStrategy.ProRata ? "Pro-rata" : "Tax-optimized";
+            string conversionTax = parameters.EnableRothConversions && parameters.ConversionTaxFunding == ConversionTaxFunding.FromConversion
+                ? "; Roth conversion tax is paid out of the converted amount"
+                : "";
+            Console.WriteLine($"\nAccounts drawn in the {order} order (the better of the two for these inputs, chosen by the app){conversionTax}.");
             if (result.OutOfMoneyCount > 0)
             {
                 Console.WriteLine(output.OutOfMoneyMessage);
@@ -164,7 +169,6 @@ namespace MonteCarloSimulation1
                 SocialSecurityMonthlyAmount = PromptSocialSecurityMonthlyAmount(),
                 AnnualStandardDeduction = PromptAnnualStandardDeduction(),
                 EnableRothConversions = PromptEnableRothConversions(),
-                WithdrawalStrategy = PromptWithdrawalStrategy(),
                 ScenarioDescription = scenario.Description
             };
         }
@@ -228,18 +232,6 @@ namespace MonteCarloSimulation1
                     return value;
                 }
                 Console.Write("Invalid input. Please enter a non-negative number: ");
-            }
-        }
-
-        public static WithdrawalStrategy PromptWithdrawalStrategy()
-        {
-            Console.Write("Withdrawal order: 1) Pro-rata  2) Tax-optimized (Brokerage gains at 0%, Tax Deferred to 12%, more Brokerage, more Tax Deferred, then Roth): ");
-            while (true)
-            {
-                string input = Console.ReadLine()?.Trim();
-                if (input == "1") return WithdrawalStrategy.ProRata;
-                if (input == "2") return WithdrawalStrategy.TaxOptimized;
-                Console.Write("Invalid input. Please enter 1 or 2: ");
             }
         }
 

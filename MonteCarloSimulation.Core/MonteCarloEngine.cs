@@ -9,8 +9,9 @@ namespace MonteCarloSimulation.Core
         // Seedable entry point, so tests can pin the random sequence.
         internal static SimulationRunOutput Run(SimulationParameters parameters, Random random)
         {
-            var strategy = WithdrawalStrategies.For(parameters.WithdrawalStrategy);
             var timeline = RetirementTimeline.Build(parameters);
+            var order = AutomaticWithdrawal.Resolve(parameters, timeline);
+            var strategy = WithdrawalStrategies.For(order);
 
             var runs = new List<RunSummary>(parameters.Iterations);
             for (int i = 0; i < parameters.Iterations; i++)
@@ -21,7 +22,8 @@ namespace MonteCarloSimulation.Core
                 Result = new SimulationResult { Runs = runs },
                 AllRates = runs.SelectMany(r => r.Years.Select(y => y.RateOfReturn)).ToList(),
                 OutOfMoneyMessage = FailureTrace.Build(runs),
-                LastSuccessfulRun = runs.LastOrDefault(r => !r.Failed)?.Years
+                LastSuccessfulRun = runs.LastOrDefault(r => !r.Failed)?.Years,
+                WithdrawalStrategy = order
             };
         }
     }

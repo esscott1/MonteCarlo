@@ -24,22 +24,36 @@ namespace MonteCarloSimulation.Optimizer
             var jobs = inputs.Scenarios.SelectMany(scenario => ages.Select(age => (Scenario: scenario, Age: age))).ToList();
 
             var byJob = new ConcurrentDictionary<(int ScenarioId, int Age), ClaimingAgeResult>();
+            // With the app's Automatic order, each (scenario, age) tries every candidate order and keeps the one with
+            // the highest midpoint spend (ties to the first, Tax-optimized).
+            var orders = template.WithdrawalStrategy == WithdrawalStrategy.Automatic
+                ? AutomaticWithdrawal.Candidates
+                : [template.WithdrawalStrategy];
+
             Parallel.ForEach(jobs, job =>
             {
                 var start = template.Birthdate.AddYears(job.Age);
                 double monthly = curve.MonthlyBenefitAtAge(job.Age);
-                var simulator = new PathSimulator(template, job.Scenario, start, monthly);
 
-                var breakEvens = new double[inputs.Paths];
-                for (int path = 0; path < inputs.Paths; path++)
-                    breakEvens[path] = simulator.BreakEven(path);
-                Array.Sort(breakEvens);
+                ClaimingAgeResult? best = null;
+                foreach (var order in orders)
+                {
+                    var simulator = new PathSimulator(template, job.Scenario, start, monthly, order);
 
-                byJob[(job.Scenario.Id, job.Age)] = new ClaimingAgeResult(
-                    job.Age, start, monthly, simulator.TotalSocialSecurity,
-                    SpendAtSurvival(breakEvens, HighSurvival),
-                    SpendAtSurvival(breakEvens, MidpointSurvival),
-                    SpendAtSurvival(breakEvens, LowSurvival));
+                    var breakEvens = new double[inputs.Paths];
+                    for (int path = 0; path < inputs.Paths; path++)
+                        breakEvens[path] = simulator.BreakEven(path);
+                    Array.Sort(breakEvens);
+
+                    var result = new ClaimingAgeResult(
+                        job.Age, start, monthly, simulator.TotalSocialSecurity,
+                        SpendAtSurvival(breakEvens, HighSurvival),
+                        SpendAtSurvival(breakEvens, MidpointSurvival),
+                        SpendAtSurvival(breakEvens, LowSurvival),
+                        order);
+                    if (best is null || result.SpendAtMidpoint > best.SpendAtMidpoint) best = result;
+                }
+                byJob[(job.Scenario.Id, job.Age)] = best!;
             });
 
             var scenarios = inputs.Scenarios.Select(scenario =>
@@ -51,7 +65,7 @@ namespace MonteCarloSimulation.Optimizer
                 foreach (var candidate in claimingAges.Skip(1))
                     if (candidate.SpendAtMidpoint > recommended.SpendAtMidpoint) recommended = candidate;
 
-                var check = new PathSimulator(template, scenario, recommended.StartDate, recommended.MonthlyBenefit);
+                var check = new PathSimulator(template, scenario, recommended.StartDate, recommended.MonthlyBenefit, recommended.WithdrawalStrategy);
                 int survivors = Enumerable.Range(0, inputs.Paths).Count(path => check.Survives(recommended.SpendAtMidpoint, path));
 
                 return new ScenarioOptimum(scenario.Id, scenario.Description, recommended, (double)survivors / inputs.Paths, claimingAges);

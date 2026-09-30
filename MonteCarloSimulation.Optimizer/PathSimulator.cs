@@ -18,7 +18,9 @@ namespace MonteCarloSimulation.Optimizer
         private readonly IWithdrawalStrategy _strategy;
         private readonly double _initialUpperBound;
 
-        public PathSimulator(SimulationParameters template, InvestmentScenario scenario, DateOnly socialSecurityStart, double monthlyBenefit)
+        // `order` is the withdrawal order to run: SpendingOptimizer resolves the template's Automatic by trying each.
+        public PathSimulator(
+            SimulationParameters template, InvestmentScenario scenario, DateOnly socialSecurityStart, double monthlyBenefit, WithdrawalStrategy order)
         {
             _parameters = ParametersCopy.Of(template);
             _parameters.Mean = scenario.Mean;
@@ -27,6 +29,7 @@ namespace MonteCarloSimulation.Optimizer
             _parameters.Iterations = 1;
             _parameters.SocialSecurityStartDate = socialSecurityStart;
             _parameters.SocialSecurityMonthlyAmount = monthlyBenefit;
+            _parameters.WithdrawalStrategy = order;
 
             // The timeline and strategy don't depend on the withdrawal, so they're built once.
             _timeline = RetirementTimeline.Build(_parameters);

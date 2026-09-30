@@ -61,7 +61,6 @@ app.MapPost("/api/run", (RunRequest request) =>
         SocialSecurityMonthlyAmount = request.SocialSecurityMonthlyAmount,
         AnnualStandardDeduction = request.AnnualStandardDeduction,
         EnableRothConversions = request.EnableRothConversions,
-        WithdrawalStrategy = request.WithdrawalStrategy,
         ScenarioDescription = scenario.Description
     };
 

@@ -25,6 +25,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "Deterministic 7% return, small withdrawal"
             };
 
@@ -54,6 +55,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "Deterministic 0% return, withdrawal far exceeds balance"
             };
 
@@ -82,6 +84,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "Volatile scenario calibrated to land near 80% survival"
             };
 
@@ -111,6 +114,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "Volatile scenario calibrated to land near 20% survival"
             };
 
@@ -140,6 +144,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "All-basis brokerage withdrawal"
             };
 
@@ -170,6 +175,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "All-gain brokerage withdrawal"
             };
 
@@ -198,6 +204,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "Basis-vs-gain contrast"
             };
 
@@ -231,6 +238,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 500_000,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "NewMoney arrives as pure brokerage cash"
             };
 
@@ -262,6 +270,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "Age 40, withdrawal within Brokerage capacity"
             };
 
@@ -291,6 +300,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "Age 40, Roth mostly gain"
             };
 
@@ -320,6 +330,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "Age 40, huge locked Taxable balance, tiny accessible funds"
             };
 
@@ -348,6 +359,7 @@ namespace MonteCarloSimulation.Core.Tests
                 NewMoney = 0,
                 YearNewMoney = 0,
                 AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
                 ScenarioDescription = "Crosses age 59.5 mid-run"
             };
 
@@ -378,6 +390,8 @@ namespace MonteCarloSimulation.Core.Tests
             YearNewMoney = 0,
             AnnualStandardDeduction = 0,
             EnableRothConversions = enable,
+            ConversionTaxFunding = ConversionTaxFunding.Brokerage, // these tests pin the Brokerage-funded conversion
+            WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
             ScenarioDescription = "Roth conversion scenario"
         };
 
@@ -494,6 +508,26 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.True(year0.RothConversionAmount > 0);
             Assert.True(year0.RothConversionAmount < 50_400);
             Assert.All(output.Result.Runs[0].Years, yd => Assert.True(yd.BrokerageBalance >= -0.01));
+        }
+
+        [Fact]
+        public void Run_RothConversion_ByDefault_PaysItsTaxOutOfTheConversion_AndIsNotCapped()
+        {
+            // The same tiny-Brokerage household with the app's default funding: the conversion isn't held back by
+            // Brokerage. Pro-rata spends $20,000 from Tax Deferred, Brokerage and Roth in proportion; the conversion
+            // then fills the rest of the way to the 22% line (50,400 gross, no deduction) and pays its own tax.
+            var parameters = ConversionParameters(enable: true);
+            parameters.InitialBrokerageBasis = 1_000;
+            parameters.InitialBrokerageUnrealizedGain = 0;
+            parameters.InitialRothBasis = 200_000;
+            parameters.ConversionTaxFunding = new SimulationParameters { ScenarioDescription = "" }.ConversionTaxFunding;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
+
+            Assert.Equal(ConversionTaxFunding.FromConversion, parameters.ConversionTaxFunding);
+            Assert.Equal(50_400, year0.TaxableWithdrawal + year0.RothConversionAmount, 3);
+            Assert.Equal(0, year0.RothConversionOrdinaryTaxFromBrokerage, 6);
+            Assert.Equal(year0.RothConversionTax, year0.RothConversionOrdinaryTaxFromConversion, 6);
         }
 
         // Year 0 (inflation factor 1.0, no standard deduction): 12% ceiling = 50,400 gross.

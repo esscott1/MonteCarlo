@@ -650,3 +650,8 @@ details pre {
 .case-study tr.year-first td {
     border-top-width: 2px;
 }
+
+.summary-link {
+    color: inherit;
+    text-decoration: underline;
+}

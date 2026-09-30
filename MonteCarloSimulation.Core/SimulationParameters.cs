@@ -27,7 +27,10 @@ namespace MonteCarloSimulation.Core
         // Annual standard deduction, in today's (2026) dollars.
         public double AnnualStandardDeduction { get; set; }
         public bool EnableRothConversions { get; set; }
-        public WithdrawalStrategy WithdrawalStrategy { get; set; }
+        // Where a conversion's tax comes from. Not a user input: the app's choice, measured with the Strategy Lab.
+        public ConversionTaxFunding ConversionTaxFunding { get; set; } = ConversionTaxFunding.FromConversion;
+        // Which accounts fund each year's spending. Not a user input: the app's choice, measured with the Strategy Lab.
+        public WithdrawalStrategy WithdrawalStrategy { get; set; } = WithdrawalStrategy.Automatic;
         public required string ScenarioDescription { get; set; }
     }
 }

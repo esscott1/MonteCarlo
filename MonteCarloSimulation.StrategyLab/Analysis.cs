@@ -12,13 +12,13 @@ namespace MonteCarloSimulation.StrategyLab
         private const int BootstrapResamples = 2_000;
 
         public static Summary Summarize(
-            IReadOnlyList<Scenario> scenarios, IReadOnlyList<ResultRow> rows, IReadOnlyList<SingleYearCase> singleYear,
+            CandidateSet set, IReadOnlyList<Scenario> scenarios, IReadOnlyList<ResultRow> rows, IReadOnlyList<SingleYearCase> singleYear,
             IReadOnlyList<(Scenario Scenario, IReadOnlyList<ResultRow> Rows)> pageDefault, CaseStudy? caseStudy, RunConfig config)
         {
             var byScenario = rows.GroupBy(r => r.ScenarioId).ToDictionary(g => g.Key, g => g.ToDictionary(r => r.Combination));
-            var baselineCode = Candidates.Baseline.Code;
+            var baselineCode = set.Baseline.Code;
             var included = scenarios
-                .Where(s => byScenario.TryGetValue(s.Id, out var r) && r.Count == Candidates.All.Count
+                .Where(s => byScenario.TryGetValue(s.Id, out var r) && r.Count == set.All.Count
                             && r[baselineCode].Spend825 >= MinimumBaselineSpend)
                 .ToList();
             var rng = new Random(config.Seed);
@@ -29,7 +29,7 @@ namespace MonteCarloSimulation.StrategyLab
                 return b > 0 ? metric(byScenario[s.Id][code]) / b - 1 : 0;
             }
 
-            var vsBaseline = Candidates.All.Select(c => Compare(
+            var vsBaseline = set.All.Select(c => Compare(
                 c.Code, c.Order.Name + " / " + c.Policy.Name,
                 included.Select(s => Diff(s, c.Code, r => r.Spend825)).ToArray(),
                 included.Select(s => Diff(s, c.Code, r => r.Spend50)).ToArray(),
@@ -44,19 +44,23 @@ namespace MonteCarloSimulation.StrategyLab
                     included.Select(s => Ratio(byScenario[s.Id][code].Spend825, byScenario[s.Id][against].Spend825)).ToArray(),
                     included.Select(s => Ratio(byScenario[s.Id][code].Spend50, byScenario[s.Id][against].Spend50)).ToArray(),
                     [], [], [], rng);
-            var direct = new List<Comparison>
-            {
-                Pair("Pro-rata vs Tax-optimized, app conversions on", "W1+C1", "W2+C1"),
-                Pair("Pro-rata vs Tax-optimized, no conversions", "W1+C0", "W2+C0"),
-                Pair("Tax-optimized: app conversions vs none", "W2+C1", "W2+C0"),
-                Pair("Pro-rata: app conversions vs none", "W1+C1", "W1+C0"),
-                Pair("Tax-optimized: 0% harvesting vs none", "W2+C1", "W2nh+C1"),
-            };
+            var codes = set.All.Select(c => c.Code).ToHashSet();
+            var direct = new (string Label, string Code, string Against)[]
+                {
+                    ("Pro-rata vs Tax-optimized, app conversions on", "W1+C1", "W2+C1"),
+                    ("Pro-rata vs Tax-optimized, no conversions", "W1+C0", "W2+C0"),
+                    ("Tax-optimized: app conversions vs none", "W2+C1", "W2+C0"),
+                    ("Pro-rata: app conversions vs none", "W1+C1", "W1+C0"),
+                    ("Tax-optimized: 0% harvesting vs none", "W2+C1", "W2nh+C1"),
+                }
+                .Where(p => codes.Contains(p.Code) && codes.Contains(p.Against))
+                .Select(p => Pair(p.Label, p.Code, p.Against))
+                .ToList();
 
             // Regret: how much more the best of all combinations spends than the baseline, per scenario.
             var regrets = included.Select(s =>
             {
-                var best = Candidates.All.Select(c => byScenario[s.Id][c.Code]).MaxBy(r => r.Spend825)!;
+                var best = set.All.Select(c => byScenario[s.Id][c.Code]).MaxBy(r => r.Spend825)!;
                 return (Scenario: s, Best: best, Regret: best.Spend825 / byScenario[s.Id][baselineCode].Spend825 - 1);
             }).ToList();
             var regretValues = regrets.Select(r => r.Regret).ToArray();
@@ -78,11 +82,11 @@ namespace MonteCarloSimulation.StrategyLab
                     b.MedianTaxesAtCommon, r.Best.MedianTaxesAtCommon, b.MedianAfterTaxWealthAtCommon, r.Best.MedianAfterTaxWealthAtCommon);
             }).ToList();
 
-            var slices = Slices(included, byScenario);
+            var slices = Slices(set, included, byScenario);
 
             // The gap to the best combination for the household types where the baseline does well and badly.
             // Pro-rata column: Pro-rata + app conversions vs the baseline, the user's direct question.
-            string proRataCode = CaseStudy.AlternativeCode;
+            string proRataCode = set.ProRataCode;
             SubsetResult Subset(string label, Func<Scenario, bool> member)
             {
                 var gaps = regrets.Where(r => member(r.Scenario)).Select(r => r.Regret).ToArray();
@@ -103,7 +107,8 @@ namespace MonteCarloSimulation.StrategyLab
 
             return new Summary(
                 config,
-                Candidates.All.Select(c => new CombinationInfo(c.Code, c.Order.Code, c.Order.Name, c.Policy.Code, c.Policy.Name)).ToList(),
+                set.Name,
+                set.All.Select(c => new CombinationInfo(c.Code, c.Order.Code, c.Order.Name, c.Policy.Code, c.Policy.Name, c.Funding?.Code)).ToList(),
                 Candidates.Definitions().ToList(),
                 baselineCode,
                 included.Count,
@@ -116,7 +121,10 @@ namespace MonteCarloSimulation.StrategyLab
                 slices,
                 SummarizeSingleYear(singleYear),
                 pageDefault.Select(p => new PageDefaultResult(p.Scenario.InvestmentScenarioId, p.Scenario.Parameters.ScenarioDescription, p.Rows)).ToList(),
-                caseStudy);
+                caseStudy,
+                null,
+                OrderChoices(included, byScenario, baselineCode, codes),
+                null);
         }
 
         private static double Ratio(double value, double against) => against > 0 ? value / against - 1 : 0;
@@ -133,12 +141,27 @@ namespace MonteCarloSimulation.StrategyLab
                 survival.Length > 0 ? Mean(survival) : null);
 
         // Median % difference vs the baseline within each slice of the scenarios, per combination.
-        private static List<Slice> Slices(List<Scenario> included, Dictionary<int, Dictionary<string, ResultRow>> byScenario)
+        private static List<Slice> Slices(CandidateSet set, List<Scenario> included, Dictionary<int, Dictionary<string, ResultRow>> byScenario)
         {
-            string baselineCode = Candidates.Baseline.Code;
+            string baselineCode = set.Baseline.Code;
+            return Dimensions(baselineCode, byScenario).Select(d => new Slice(d.Name, d.Order.Select(label =>
+            {
+                var members = included.Where(s => d.Bin(s) == label).ToList();
+                var medians = set.All.ToDictionary(c => c.Code, c => members.Count == 0 ? 0 :
+                    Percentile(members.Select(s => byScenario[s.Id][c.Code].Spend825 / byScenario[s.Id][baselineCode].Spend825 - 1).ToArray(), 0.5));
+                var means = set.All.ToDictionary(c => c.Code, c => members.Count == 0 ? 0 :
+                    Mean(members.Select(s => byScenario[s.Id][c.Code].Spend825 / byScenario[s.Id][baselineCode].Spend825 - 1).ToArray()));
+                return new SliceBin(label, members.Count, medians, means);
+            }).ToList())).ToList();
+        }
+
+        // The household types results are sliced by.
+        private static (string Name, Func<Scenario, string> Bin, string[] Order)[] Dimensions(
+            string baselineCode, Dictionary<int, Dictionary<string, ResultRow>> byScenario)
+        {
             double SpendToAssets(Scenario s) => byScenario[s.Id][baselineCode].Spend825 / s.TotalAssets;
 
-            var dimensions = new (string Name, Func<Scenario, string> Bin, string[] Order)[]
+            return new (string Name, Func<Scenario, string> Bin, string[] Order)[]
             {
                 ("Tax Deferred share", s => Bin(s.TaxDeferredShare, [0.25, 0.5, 0.75], ["0-25%", "25-50%", "50-75%", "75-100%"]),
                     ["0-25%", "25-50%", "50-75%", "75-100%"]),
@@ -153,16 +176,42 @@ namespace MonteCarloSimulation.StrategyLab
                     ["Under $750k", "$750k-1.5M", "$1.5-3M", "Over $3M"]),
                 ("Investment scenario", s => $"Scenario {s.InvestmentScenarioId}", ["Scenario 1", "Scenario 2", "Scenario 3", "Scenario 4"]),
             };
+        }
 
-            return dimensions.Select(d => new Slice(d.Name, d.Order.Select(label =>
+        // How the app picks its withdrawal order: under the app's conversion policy (C1), each order's 82.5% spend
+        // against the best order for the same household. An order qualifies as the one fixed rule when it's within
+        // the tie band of the best in at least 95% of households and no household type falls short by more than 1%
+        // on average. Null for a set without every order under C1.
+        private static List<OrderChoice>? OrderChoices(
+            List<Scenario> included, Dictionary<int, Dictionary<string, ResultRow>> byScenario, string baselineCode, HashSet<string> codes)
+        {
+            var orderCodes = Candidates.Orders.Select(o => $"{o.Code}+{Candidates.AppDefault.Code}").ToList();
+            if (!orderCodes.All(codes.Contains) || included.Count == 0) return null;
+
+            var best = included.ToDictionary(s => s.Id, s => orderCodes.Max(c => byScenario[s.Id][c].Spend825));
+            var bins = Dimensions(baselineCode, byScenario)
+                .SelectMany(d => d.Order.Select(label => (Label: $"{d.Name}: {label}", Members: included.Where(s => d.Bin(s) == label).ToList())))
+                .Where(b => b.Members.Count > 0)
+                .ToList();
+
+            OrderChoice Measure(string code, string name, Func<Scenario, double> spend)
             {
-                var members = included.Where(s => d.Bin(s) == label).ToList();
-                var medians = Candidates.All.ToDictionary(c => c.Code, c => members.Count == 0 ? 0 :
-                    Percentile(members.Select(s => byScenario[s.Id][c.Code].Spend825 / byScenario[s.Id][baselineCode].Spend825 - 1).ToArray(), 0.5));
-                var means = Candidates.All.ToDictionary(c => c.Code, c => members.Count == 0 ? 0 :
-                    Mean(members.Select(s => byScenario[s.Id][c.Code].Spend825 / byScenario[s.Id][baselineCode].Spend825 - 1).ToArray()));
-                return new SliceBin(label, members.Count, medians, means);
-            }).ToList())).ToList();
+                double Shortfall(Scenario s) => spend(s) / best[s.Id] - 1;
+                var shortfalls = included.Select(Shortfall).ToArray();
+                var worst = bins.Select(b => (b.Label, Mean: b.Members.Average(Shortfall))).MinBy(b => b.Mean);
+                double within = Share(shortfalls, v => v >= -TieBand);
+                return new OrderChoice(code, name, within, Mean(shortfalls), worst.Label, worst.Mean,
+                    Qualifies: within >= 0.95 && worst.Mean >= -0.01);
+            }
+
+            // The app's Automatic order: Core's two orders, the better one per household (as the Optimal page picks)
+            string proRata = $"{Candidates.ProRata.Code}+{Candidates.AppDefault.Code}";
+            string taxOptimized = $"{Candidates.TaxOptimized.Code}+{Candidates.AppDefault.Code}";
+            return Candidates.Orders
+                .Select(o => Measure($"{o.Code}+{Candidates.AppDefault.Code}", o.Name, s => byScenario[s.Id][$"{o.Code}+{Candidates.AppDefault.Code}"].Spend825))
+                .Append(Measure($"{Candidates.ProRata.Code}/{Candidates.TaxOptimized.Code}+{Candidates.AppDefault.Code}", "Per-household pick of W1 or W2 (app)",
+                    s => Math.Max(byScenario[s.Id][proRata].Spend825, byScenario[s.Id][taxOptimized].Spend825)))
+                .ToList();
         }
 
         private static string Bin(double value, double[] edges, string[] labels)
@@ -246,7 +295,11 @@ namespace MonteCarloSimulation.StrategyLab
 
     internal sealed record RunConfig(int Scenarios, int Paths, int Seed, int SingleYearCases, DateTime GeneratedAtUtc, double RuntimeSeconds);
 
-    internal sealed record CombinationInfo(string Code, string Order, string OrderName, string Policy, string PolicyName);
+    internal sealed record CombinationInfo(string Code, string Order, string OrderName, string Policy, string PolicyName, string? Funding);
+
+    // The conversion-tax funding comparison (the lab's "funding" set), carried in the main summary for the Model
+    // Info page: every funding rule against today's W2+C1 with Brokerage-only funding.
+    internal sealed record FundingComparison(string Baseline, int ScenariosCompared, List<Comparison> VsBaseline, List<SubsetResult> Subsets, List<Slice> Slices);
 
     // Differences are fractions (0.012 = +1.2%). Taxes/Wealth/Survival are at the common (baseline) spend.
     internal sealed record Comparison(
@@ -288,6 +341,7 @@ namespace MonteCarloSimulation.StrategyLab
 
     internal sealed record Summary(
         RunConfig Config,
+        string Set,
         List<CombinationInfo> Combinations,
         List<StrategyDefinition> Definitions,
         string Baseline,
@@ -301,5 +355,14 @@ namespace MonteCarloSimulation.StrategyLab
         List<Slice> Slices,
         SingleYearSummary SingleYear,
         List<PageDefaultResult> PageDefault,
-        CaseStudy? CaseStudy);
+        CaseStudy? CaseStudy,
+        FundingComparison? Funding,
+        List<OrderChoice>? OrderChoice,
+        List<OptimalDefaultsRow>? OptimalDefaults);
+
+    // One withdrawal order under the app's conversion policy, against the best order per household: the share of
+    // households within the tie band of the best, the average shortfall, and the household type where it falls
+    // shortest on average. Qualifies: it meets the rule for being the app's one fixed order.
+    internal sealed record OrderChoice(
+        string Code, string Name, double ShareWithinTieBand, double MeanShortfall, string WorstSlice, double WorstSliceMeanShortfall, bool Qualifies);
 }

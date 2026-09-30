@@ -23,7 +23,6 @@ namespace MonteCarloSimulation.Web
         public double SocialSecurityAt70 { get; set; }
         public double AnnualStandardDeduction { get; set; }
         public bool EnableRothConversions { get; set; }
-        public WithdrawalStrategy WithdrawalStrategy { get; set; }
 
         public Dictionary<string, string> Validate()
         {
@@ -46,7 +45,6 @@ namespace MonteCarloSimulation.Web
             else if (SocialSecurityAt62 > SocialSecurityAt67 || SocialSecurityAt67 > SocialSecurityAt70)
                 errors["socialSecurity"] = "Social Security amounts should increase with age: 62 <= 67 <= 70.";
             if (AnnualStandardDeduction < 0) errors["annualStandardDeduction"] = "Must be non-negative.";
-            if (!Enum.IsDefined(WithdrawalStrategy)) errors["withdrawalStrategy"] = "Select a valid withdrawal order.";
             return errors;
         }
 
@@ -67,7 +65,6 @@ namespace MonteCarloSimulation.Web
                 YearNewMoney = YearNewMoney,
                 AnnualStandardDeduction = AnnualStandardDeduction,
                 EnableRothConversions = EnableRothConversions,
-                WithdrawalStrategy = WithdrawalStrategy,
                 ScenarioDescription = "Optimal"
             },
             SocialSecurity = new SocialSecurityCurve(SocialSecurityAt62, SocialSecurityAt67, SocialSecurityAt70)

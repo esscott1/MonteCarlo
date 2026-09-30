@@ -69,12 +69,13 @@ namespace MonteCarloSimulation.Core
         public void StepUpBrokerageBasis(double gains) => BrokerageBasis += gains;
 
         // Converted dollars count as Roth basis, so they're accessible anytime under the 59.5 gate
-        // (the IRS 5-year seasoning rule isn't modeled).
-        public void ConvertToRoth(double amount)
+        // (the IRS 5-year seasoning rule isn't modeled). `withheld` of the amount pays the conversion's tax and
+        // never reaches Roth.
+        public void ConvertToRoth(double amount, double withheld = 0)
         {
             Taxable -= amount;
-            Roth += amount;
-            RothBasis += amount;
+            Roth += amount - withheld;
+            RothBasis += amount - withheld;
         }
     }
 }
