@@ -456,3 +456,41 @@ details pre {
 .recommended-row td {
     font-weight: 600;
 }
+
+/* Superscript footnote with a hover/focus/tap tooltip (main page year tables) */
+.footnote {
+    position: relative;
+    margin-left: 0.15em;
+}
+
+.footnote-ref {
+    color: #1a73e8;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.footnote-tip {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 1.4em;
+    z-index: 10;
+    width: 20rem;
+    max-width: 70vw;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid #c9d7ef;
+    border-radius: 6px;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    color: #333;
+    font-size: 0.8rem;
+    font-weight: normal;
+    line-height: 1.35;
+    white-space: normal;
+}
+
+.footnote:hover .footnote-tip,
+.footnote:focus-within .footnote-tip,
+.footnote.open .footnote-tip {
+    display: block;
+}

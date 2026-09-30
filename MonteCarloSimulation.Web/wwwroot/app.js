@@ -173,12 +173,16 @@ function yearWithAge(yd) {
     return `${yd.calendarYear} (${Math.floor(yd.ageInYear + 0.005)}yrs)${partial}`;
 }
 
-function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax, socialSecurityMonths) {
+function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax, socialSecurityMonths, brokerageGains) {
     const taxablePct = taxablePercentOfBalance === undefined ? '' : ` (${formatPercent(taxablePercentOfBalance)} of balance)`;
+    // A Brokerage sale is part embedded gain, part tax-free return of basis (average cost)
+    const brokerageSplit = brokerageGains > 0.5 && brokerageAmt > 0
+        ? ` (${formatCurrency(brokerageGains)} gains, ${formatCurrency(brokerageAmt - brokerageGains)} basis)`
+        : '';
     const items = [
         `Total: ${formatCurrency(total)}`,
         `Taxable: ${formatCurrency(taxableAmt)}${taxablePct}`,
-        `Brokerage: ${formatCurrency(brokerageAmt)}`,
+        `Brokerage: ${formatCurrency(brokerageAmt)}${brokerageSplit}`,
         `Roth: ${formatCurrency(rothAmt)}`,
     ];
     if (socialSecurity > 0) {
@@ -196,9 +200,35 @@ function hasNextBracket(nextRate) {
     return nextRate !== null && nextRate !== undefined;
 }
 
-function taxesBreakdown(yd) {
+// The year's own Brokerage sales filled the 0% capital gains band, so more taxable income would have pushed
+// those gains to 15% - which is why Tax Deferred draws and Roth conversions stopped short. Not when the year
+// harvested gains: harvesting only fills room left over, so extra income would just have meant harvesting less.
+function zeroRateBandFilledBySales(yd) {
+    const bandFull = yd.capitalGainsBracketRate > 0 || (yd.amountUntilNextCapitalGainsBracket ?? 0) < 1;
+    return yd.realizedGains > 0.5 && yd.zeroRateGains > 0.5 && !(yd.harvestedGains > 0.5) && bandFull;
+}
+
+function footnote(text) {
+    return `<sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note">1</a><span class="footnote-tip" role="tooltip">${text}</span></sup>`;
+}
+
+function zeroRateBandNote(yd, conversionsEnabled) {
+    let ending = '';
+    if (yd.rothConversionAmount > 0) {
+        ending = `, so the Roth conversion stopped at <strong>${formatCurrency(yd.rothConversionAmount)}</strong>`;
+    } else if (conversionsEnabled) {
+        ending = ', so no Roth conversion was made this year';
+    }
+    return footnote(
+        `Brokerage sales this year realized <strong>${formatCurrency(yd.realizedGains)}</strong> of gains, filling the 0% capital gains band. `
+        + `Each additional dollar of taxable income (a Tax Deferred withdrawal or Roth conversion) would move a dollar of these gains to the 15% rate${ending}.`);
+}
+
+function taxesBreakdown(yd, conversionsEnabled) {
+    const note = zeroRateBandFilledBySales(yd) ? zeroRateBandNote(yd, conversionsEnabled) : '';
+    const noteOnConversion = note && yd.rothConversionAmount > 0;
     const items = [
-        `${formatCurrency(yd.capitalGainsTaxAmount)} cap gains paid (${ratePercent(yd.capitalGainsBracketRate)} LTCG bracket)`,
+        `${formatCurrency(yd.capitalGainsTaxAmount)} cap gains paid (${ratePercent(yd.capitalGainsBracketRate)} LTCG bracket)${noteOnConversion ? '' : note}`,
         `${formatCurrency(yd.ordinaryTaxAmount)} ord tax paid (${ratePercent(yd.ordinaryBracketRate)} bracket)`,
         hasNextBracket(yd.nextBracketRate)
             ? `${formatCurrency(yd.amountUntilNextBracket)} until ${ratePercent(yd.nextBracketRate)} bracket`
@@ -208,18 +238,18 @@ function taxesBreakdown(yd) {
         items.push(`${formatCurrency(yd.harvestedGains)} gains harvested at 0%`);
     }
     if (yd.rothConversionAmount > 0) {
-        items.push(`${formatCurrency(yd.rothConversionAmount)} converted to Roth (${formatCurrency(yd.rothConversionTax)} tax)`);
+        items.push(`${formatCurrency(yd.rothConversionAmount)} converted to Roth (${formatCurrency(yd.rothConversionTax)} tax)${noteOnConversion ? note : ''}`);
     }
     return bulletList(items);
 }
 
-function renderRunDetailTable(yearDetails) {
+function renderRunDetailTable(yearDetails, conversionsEnabled) {
     const rows = yearDetails.map((yd) => {
         return `
         <tr>
             <td>${yearWithAge(yd)}</td>
-            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax, yd.socialSecurityMonths)}</td>
-            <td>${taxesBreakdown(yd)}</td>
+            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax, yd.socialSecurityMonths, yd.realizedGains)}</td>
+            <td>${taxesBreakdown(yd, conversionsEnabled)}</td>
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
             <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>
         </tr>
@@ -236,7 +266,7 @@ function renderRunDetailTable(yearDetails) {
     `;
 }
 
-function renderPerRunTable(result) {
+function renderPerRunTable(result, conversionsEnabled) {
     const rows = result.runs.map((run, i) => {
         const failureNote = run.failed
             ? `<span class="failure">ran out of money in year ${run.failureYear}</span>`
@@ -253,7 +283,7 @@ function renderPerRunTable(result) {
                 <td>${failureNote}</td>
             </tr>
             <tr class="run-detail-row" hidden>
-                <td colspan="8">${renderRunDetailTable(run.years)}</td>
+                <td colspan="8">${renderRunDetailTable(run.years, conversionsEnabled)}</td>
             </tr>
         `;
     }).join('');
@@ -312,7 +342,7 @@ function renderSummary(parameters, output) {
     `;
 }
 
-function renderDetail(output) {
+function renderDetail(output, conversionsEnabled) {
     if (output.result.outOfMoneyCount > 0) {
         return `
             <details>
@@ -327,7 +357,7 @@ function renderDetail(output) {
     return `
         <details>
             <summary>Show year-by-year detail for the last successful run</summary>
-            ${renderRunDetailTable(output.lastSuccessfulRun.slice(1))}
+            ${renderRunDetailTable(output.lastSuccessfulRun.slice(1), conversionsEnabled)}
         </details>
     `;
 }
@@ -335,8 +365,17 @@ function renderDetail(output) {
 function renderResults(parameters, output) {
     results.innerHTML =
         renderSummary(parameters, output) +
-        renderPerRunTable(output.result) +
-        renderDetail(output);
+        renderPerRunTable(output.result, parameters.enableRothConversions) +
+        renderDetail(output, parameters.enableRothConversions);
+}
+
+function initFootnotes() {
+    results.addEventListener('click', (e) => {
+        const ref = e.target.closest('.footnote-ref');
+        if (!ref) return;
+        e.preventDefault();
+        ref.parentElement.classList.toggle('open');
+    });
 }
 
 function initRunToggles() {
@@ -674,5 +713,6 @@ initBalanceTotals();
 initSocialSecurityDefault();
 initCollapsibleInputs();
 initRunToggles();
+initFootnotes();
 initEditFlyout();
 initObserveMenu();

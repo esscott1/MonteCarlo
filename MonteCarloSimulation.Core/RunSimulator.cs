@@ -113,6 +113,8 @@ namespace MonteCarloSimulation.Core
                 AmountUntilNextCapitalGainsBracket = amountUntilNextGainsBracket,
                 NextCapitalGainsBracketRate = nextGainsBracketRate,
                 HarvestedGains = harvestedGains,
+                RealizedGains = realizedGains,
+                ZeroRateGains = taxYear.ZeroRateGains(ordinaryIncome, realizedGains + harvestedGains),
                 AgeEligible = ageEligible,
                 RothConversionAmount = conversion.Amount,
                 RothConversionTax = conversion.Tax,

@@ -31,6 +31,11 @@ namespace MonteCarloSimulation.Core
         public required double? NextCapitalGainsBracketRate { get; init; }
         // Gains realized at 0% by selling and immediately rebuying Brokerage holdings (a basis step-up; no cash moves)
         public required double HarvestedGains { get; init; }
+        // Embedded gain realized by this year's Brokerage sales (spending and conversion-tax sales); the rest of
+        // BrokerageWithdrawal was a tax-free return of basis. Reporting only.
+        public required double RealizedGains { get; init; }
+        // Gain dollars (realized plus harvested) taxed at 0% this year. Reporting only.
+        public required double ZeroRateGains { get; init; }
         public required bool AgeEligible { get; init; }
         public required double RothConversionAmount { get; init; }
         public required double RothConversionTax { get; init; }
