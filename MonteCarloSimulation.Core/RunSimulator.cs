@@ -7,11 +7,12 @@ namespace MonteCarloSimulation.Core
             SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, IWithdrawalStrategy strategy, Random random) =>
             Simulate(parameters, timeline, strategy, random, RothConversion.DefaultCeiling, out _);
 
-        // The same run with a different Roth conversion ceiling, also handing back the final balances (the Strategy
-        // Lab values what's left after tax). Conversions still happen only when EnableRothConversions is set.
+        // The same run with a given Roth conversion ceiling (null: no conversions), also handing back the final
+        // balances (AutomaticStrategy and the Strategy Lab value what's left after tax). Conversions still happen
+        // only when EnableRothConversions is set.
         public static RunSummary Simulate(
             SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, IWithdrawalStrategy strategy, Random random,
-            ConversionCeiling conversionCeiling, out Accounts finalAccounts)
+            ConversionCeiling? conversionCeiling, out Accounts finalAccounts)
         {
             var accounts = Accounts.FromParameters(parameters);
             var years = new List<RunYearDetail>(timeline.Count);
@@ -40,7 +41,7 @@ namespace MonteCarloSimulation.Core
         }
 
         private static (RunYearDetail Detail, bool Failed) SimulateYear(
-            SimulationParameters parameters, IWithdrawalStrategy strategy, ConversionCeiling conversionCeiling,
+            SimulationParameters parameters, IWithdrawalStrategy strategy, ConversionCeiling? conversionCeiling,
             Accounts accounts, RetirementYear year, double bridgeNeed, double? lookbackMagi, double rate)
         {
             // Today's-dollar inputs, inflated to this calendar year. Spending and returns are prorated for a partial
@@ -69,7 +70,7 @@ namespace MonteCarloSimulation.Core
             accounts.SellBrokerage(plan.GrossBrokerage);
             accounts.WithdrawRoth(plan.Roth);
 
-            var conversion = parameters.EnableRothConversions
+            var conversion = parameters.EnableRothConversions && conversionCeiling is not null
                 ? RothConversion.Apply(accounts, taxYear, ss.Taxable + plan.GrossTaxable, plan.RealizedGains, conversionCeiling,
                     new ConversionFunding(parameters.ConversionTaxFunding, ageEligible, bridgeNeed))
                 : RothConversion.None;

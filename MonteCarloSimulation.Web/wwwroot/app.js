@@ -354,14 +354,26 @@ const CONVERSION_TAX_FUNDING = {
     BridgeAware: "paid by selling Brokerage (keeping what's needed before 59½), then out of the converted amount",
 };
 
+// How far conversions filled ordinary income, by RothConversionTarget
+const CONVERSION_TARGETS = {
+    None: 'no Roth conversions',
+    Bracket12: 'Roth conversions filling the 12% bracket',
+    Bracket22: 'Roth conversions up to the top of the 22% bracket',
+    Bracket24: 'Roth conversions up to the top of the 24% bracket',
+};
+
 function accountChoiceLine(parameters, output) {
     const used = output.withdrawalStrategy ?? parameters.withdrawalStrategy;
     const order = WITHDRAWAL_ORDER_NAMES[used] ?? used;
-    const picked = parameters.withdrawalStrategy === 'Automatic' ? ', the better of the two for your inputs' : '';
-    const funding = parameters.enableRothConversions
-        ? `; Roth conversion tax ${CONVERSION_TAX_FUNDING[parameters.conversionTaxFunding] ?? parameters.conversionTaxFunding}`
+    const target = output.rothConversionTarget ?? 'None';
+    const conversions = CONVERSION_TARGETS[target] ?? target;
+    const funding = target !== 'None'
+        ? `, their tax ${CONVERSION_TAX_FUNDING[parameters.conversionTaxFunding] ?? parameters.conversionTaxFunding}`
         : '';
-    return `<p>Accounts drawn in the ${order} order${picked}${funding} &mdash; chosen by the app (<a href="model-info.html" class="summary-link">why</a>)</p>`;
+    const picked = parameters.withdrawalStrategy === 'Automatic' || parameters.rothConversionTarget === 'Automatic'
+        ? ' &mdash; the best combination for your inputs, chosen by the app'
+        : ' &mdash; chosen by the app';
+    return `<p>Accounts drawn in the ${order} order, with ${conversions}${funding}${picked} (<a href="model-info.html" class="summary-link">why</a>)</p>`;
 }
 
 function renderSummary(parameters, output) {

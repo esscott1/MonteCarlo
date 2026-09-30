@@ -64,7 +64,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
         [Fact]
         public void BreakEven_SurvivesAtTheAnswer_AndFailsOneStepAbove()
         {
-            var simulator = new PathSimulator(Template(), Flat, new DateOnly(2033, 1, 1), 3_900, WithdrawalStrategy.TaxOptimized);
+            var simulator = new PathSimulator(Template(), Flat, new DateOnly(2033, 1, 1), 3_900, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
 
             double breakEven = simulator.BreakEven(0);
 
@@ -80,7 +80,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
         [InlineData(95_000, 7)]
         public void Survives_MatchesCoresEngineForTheSameSeededPath(double withdrawal, int path)
         {
-            var simulator = new PathSimulator(Template(), Volatile, new DateOnly(2033, 1, 1), 3_900, WithdrawalStrategy.TaxOptimized);
+            var simulator = new PathSimulator(Template(), Volatile, new DateOnly(2033, 1, 1), 3_900, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
 
             Assert.Equal(simulator.SurvivesViaEngine(withdrawal, path), simulator.Survives(withdrawal, path));
         }
@@ -124,7 +124,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
             // Retire 2026-01-01 for 30 years (window ends 2056-01-01); born 1966, so claiming at 70 starts
             // 2036-01-01: 20 full years of 12 payments. Inflation from 2026 is 2.5% a year through the first 20
             // retirement years (to 2046), then 1%.
-            var simulator = new PathSimulator(Template(), Flat, new DateOnly(2036, 1, 1), 4_800, WithdrawalStrategy.TaxOptimized);
+            var simulator = new PathSimulator(Template(), Flat, new DateOnly(2036, 1, 1), 4_800, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
 
             double expected = Enumerable.Range(2036, 20)
                 .Sum(year => 4_800 * 12 * Math.Pow(1.025, Math.Min(year - 2026, 20)) * Math.Pow(1.01, Math.Max(0, year - 2046)));
@@ -146,7 +146,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
             parameters.SocialSecurityMonthlyAmount = 3_133;
 
             var coreYears = MonteCarloEngine.Run(parameters).Result.Runs[0].Years;
-            var simulator = new PathSimulator(Template(), Volatile, new DateOnly(2031, 7, 15), 3_133, WithdrawalStrategy.TaxOptimized);
+            var simulator = new PathSimulator(Template(), Volatile, new DateOnly(2031, 7, 15), 3_133, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
 
             Assert.Equal(30, coreYears.Count);
             Assert.Equal(coreYears.Sum(y => y.SocialSecurityIncome), simulator.TotalSocialSecurity, 6);
@@ -178,32 +178,52 @@ namespace MonteCarloSimulation.Optimizer.Tests
 
         // --- Isolation guard ---
 
+        private static OptimizationResult RunOptimal(WithdrawalStrategy order, RothConversionTarget target)
+        {
+            var template = Template();
+            template.WithdrawalStrategy = order;
+            template.RothConversionTarget = target;
+            return SpendingOptimizer.Optimize(new OptimizationInputs
+            {
+                Template = template,
+                SocialSecurity = new SocialSecurityCurve(2_750, 3_900, 4_800),
+                Scenarios = [Volatile],
+                Paths = 60
+            });
+        }
+
         [Fact]
         public void AutomaticOrder_KeepsTheBetterOrderForEachClaimingAge()
         {
-            // With the app's Automatic order, every claiming age reports the order with the higher 82.5% spend.
-            OptimizationResult Run(WithdrawalStrategy order)
-            {
-                var template = Template();
-                template.WithdrawalStrategy = order;
-                return SpendingOptimizer.Optimize(new OptimizationInputs
-                {
-                    Template = template,
-                    SocialSecurity = new SocialSecurityCurve(2_750, 3_900, 4_800),
-                    Scenarios = [Volatile],
-                    Paths = 60
-                });
-            }
-            var automatic = Run(WithdrawalStrategy.Automatic).Scenarios[0];
-            var taxOptimized = Run(WithdrawalStrategy.TaxOptimized).Scenarios[0];
-            var proRata = Run(WithdrawalStrategy.ProRata).Scenarios[0];
+            // With two candidates both get a full search, so every claiming age reports the order with the higher
+            // 82.5% spend (the second is warm-started, so it's exact to within the search precision).
+            var automatic = RunOptimal(WithdrawalStrategy.Automatic, RothConversionTarget.Bracket12).Scenarios[0];
+            var taxOptimized = RunOptimal(WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12).Scenarios[0];
+            var proRata = RunOptimal(WithdrawalStrategy.ProRata, RothConversionTarget.Bracket12).Scenarios[0];
 
             for (int i = 0; i < automatic.ClaimingAges.Count; i++)
             {
                 var a = automatic.ClaimingAges[i];
                 double best = Math.Max(taxOptimized.ClaimingAges[i].SpendAtMidpoint, proRata.ClaimingAges[i].SpendAtMidpoint);
-                Assert.Equal(best, a.SpendAtMidpoint);
+                Assert.InRange(a.SpendAtMidpoint, best - PathSimulator.Precision, best + PathSimulator.Precision);
                 Assert.Contains(a.WithdrawalStrategy, new[] { WithdrawalStrategy.TaxOptimized, WithdrawalStrategy.ProRata });
+            }
+        }
+
+        [Fact]
+        public void TwoStagePick_NeverDoesWorseThanTheDefaultCandidate_AndRecordsWhatItChose()
+        {
+            // With all 8 (order, target) pairs, the first candidate (Tax-optimized, 12% line) is searched in full and
+            // only beaten by a finalist that sustains more.
+            var automatic = RunOptimal(WithdrawalStrategy.Automatic, RothConversionTarget.Automatic).Scenarios[0];
+            var baseline = RunOptimal(WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12).Scenarios[0];
+
+            for (int i = 0; i < automatic.ClaimingAges.Count; i++)
+            {
+                var a = automatic.ClaimingAges[i];
+                Assert.True(a.SpendAtMidpoint >= baseline.ClaimingAges[i].SpendAtMidpoint);
+                Assert.NotEqual(WithdrawalStrategy.Automatic, a.WithdrawalStrategy);
+                Assert.NotEqual(RothConversionTarget.Automatic, a.RothConversionTarget);
             }
         }
 
@@ -223,6 +243,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
                     var t when t == typeof(string) => "copied",
                     var t when t == typeof(WithdrawalStrategy) => WithdrawalStrategy.TaxOptimized,
                     var t when t == typeof(ConversionTaxFunding) => ConversionTaxFunding.BridgeAware,
+                    var t when t == typeof(RothConversionTarget) => RothConversionTarget.Bracket24,
                     var t => throw new InvalidOperationException($"Add a test value for {t.Name} ({property.Name})")
                 };
                 property.SetValue(original, value);

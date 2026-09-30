@@ -34,10 +34,17 @@ namespace MonteCarloSimulation1
         {
             var result = output.Result;
             string order = output.WithdrawalStrategy == WithdrawalStrategy.ProRata ? "Pro-rata" : "Tax-optimized";
-            string conversionTax = parameters.EnableRothConversions && parameters.ConversionTaxFunding == ConversionTaxFunding.FromConversion
-                ? "; Roth conversion tax is paid out of the converted amount"
+            string conversions = output.RothConversionTarget switch
+            {
+                RothConversionTarget.Bracket12 => "Roth conversions filling the 12% bracket",
+                RothConversionTarget.Bracket22 => "Roth conversions up to the top of the 22% bracket",
+                RothConversionTarget.Bracket24 => "Roth conversions up to the top of the 24% bracket",
+                _ => "no Roth conversions"
+            };
+            string conversionTax = output.RothConversionTarget != RothConversionTarget.None && parameters.ConversionTaxFunding == ConversionTaxFunding.FromConversion
+                ? ", their tax paid out of the converted amount"
                 : "";
-            Console.WriteLine($"\nAccounts drawn in the {order} order (the better of the two for these inputs, chosen by the app){conversionTax}.");
+            Console.WriteLine($"\nAccounts drawn in the {order} order, with {conversions}{conversionTax} (the best combination for these inputs, chosen by the app).");
             if (result.OutOfMoneyCount > 0)
             {
                 Console.WriteLine(output.OutOfMoneyMessage);

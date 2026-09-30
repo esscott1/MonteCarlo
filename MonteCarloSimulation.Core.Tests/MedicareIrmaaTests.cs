@@ -45,6 +45,7 @@ namespace MonteCarloSimulation.Core.Tests
             SocialSecurityMonthlyAmount = 3_500,
             AnnualStandardDeduction = 16_000,
             EnableRothConversions = true,
+            RothConversionTarget = RothConversionTarget.Bracket12, // written for the 12% line
             WithdrawalStrategy = WithdrawalStrategy.TaxOptimized,
             ScenarioDescription = "IRMAA"
         };

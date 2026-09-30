@@ -12,5 +12,8 @@ namespace MonteCarloSimulation.Core
 
         // The withdrawal order the runs used: the requested one, or the one Automatic chose for these inputs.
         public WithdrawalStrategy WithdrawalStrategy { get; init; }
+
+        // How far conversions filled: the requested target, the one Automatic chose, or None with conversions off.
+        public RothConversionTarget RothConversionTarget { get; init; }
     }
 }

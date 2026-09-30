@@ -27,6 +27,7 @@ namespace MonteCarloSimulation.Optimizer
             AnnualStandardDeduction = p.AnnualStandardDeduction,
             EnableRothConversions = p.EnableRothConversions,
             ConversionTaxFunding = p.ConversionTaxFunding,
+            RothConversionTarget = p.RothConversionTarget,
             WithdrawalStrategy = p.WithdrawalStrategy,
             ScenarioDescription = p.ScenarioDescription
         };

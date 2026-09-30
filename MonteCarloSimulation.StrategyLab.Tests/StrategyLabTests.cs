@@ -25,6 +25,7 @@ namespace MonteCarloSimulation.StrategyLab.Tests
                     p.Iterations = 1;
                     p.WithdrawalStrategy = strategy;
                     p.EnableRothConversions = conversions;
+                    p.RothConversionTarget = RothConversionTarget.Bracket12;
                     for (int path = 0; path < 5; path++)
                     {
                         bool engineSurvives = MonteCarloEngine.Run(p, new Random(path)).Result.OutOfMoneyCount == 0;
@@ -124,6 +125,7 @@ namespace MonteCarloSimulation.StrategyLab.Tests
                     var t when t == typeof(string) => "copied",
                     var t when t == typeof(WithdrawalStrategy) => WithdrawalStrategy.ProRata,
                     var t when t == typeof(ConversionTaxFunding) => ConversionTaxFunding.BridgeAware,
+                    var t when t == typeof(RothConversionTarget) => RothConversionTarget.Bracket24,
                     var t => throw new InvalidOperationException($"Add a test value for {t.Name} ({property.Name})")
                 };
                 property.SetValue(original, value);
@@ -161,6 +163,7 @@ namespace MonteCarloSimulation.StrategyLab.Tests
                 p.Iterations = 1;
                 p.EnableRothConversions = true;
                 p.ConversionTaxFunding = rule;
+                p.RothConversionTarget = RothConversionTarget.Bracket12;
                 p.WithdrawalStrategy = WithdrawalStrategy.TaxOptimized;
                 for (int path = 0; path < 5; path++)
                     Assert.Equal(MonteCarloEngine.Run(p, new Random(path)).Result.Runs[0].Years, runner.Run(p.Withdrawal, path, out _).Years);

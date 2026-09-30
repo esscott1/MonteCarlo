@@ -71,23 +71,44 @@ namespace MonteCarloSimulation.StrategyLab
 
         public static readonly ConversionPolicy NoConversions = new("C0", "No conversions",
             "No Roth conversions.", null);
-        public static readonly ConversionPolicy AppDefault = new("C1", "To 22% line, protecting 0% gains (app)",
-            "The app's policy. Up to the start of the 22% bracket, or lower when more ordinary income would push the gains already realized this year out of the 0% capital gains band.",
+        public static readonly ConversionPolicy AppDefault = new("C1", "12% fill: to the 22% line, protecting 0% gains",
+            "Fills the 12% bracket: up to the start of the 22% bracket, or lower when more ordinary income would push the gains already realized this year out of the 0% capital gains band.",
             RothConversion.DefaultCeiling);
         public static readonly ConversionPolicy To22Line = new("C2", "To 22% line, ignoring 0% gains",
             "Up to the start of the 22% bracket, even if that moves this year's 0% gains to 15%.",
             (t, _, _) => t.Bracket22CeilingGross);
         public static readonly ConversionPolicy Top22 = new("C3", "To top of 22% bracket",
             "Up to the top of the 22% bracket.",
-            (t, _, _) => BracketStart(t, 0.24));
+            ConversionTargets.TopOf22);
         public static readonly ConversionPolicy Top24 = new("C4", "To top of 24% bracket",
             "Up to the top of the 24% bracket.",
-            (t, _, _) => BracketStart(t, 0.32));
+            ConversionTargets.TopOf24);
+        // Lab-only unless it earns a place among the app's targets: up to the top of the 22% bracket, but stopping where
+        // the year's ordinary income plus gains realized so far would cross the first Medicare IRMAA tier.
+        public static readonly ConversionPolicy BelowIrmaa = new("C5", "To top of 22%, below the first IRMAA tier",
+            "Up to the top of the 22% bracket, but stopping where the year's income (ordinary plus gains realized so far) would cross the first Medicare IRMAA tier.",
+            (t, _, gains) => Math.Min(ConversionTargets.BracketStart(t, 0.24),
+                FederalTaxBrackets.MedicareIrmaaSingle2026[0].MagiAbove * t.InflationFactor - gains));
 
         public static readonly IReadOnlyList<WithdrawalOrder> Orders =
             [ProRata, TaxOptimized, TaxDeferredToBracketFirst, BrokerageFirst, TaxDeferredFirst, Greedy];
 
-        public static readonly IReadOnlyList<ConversionPolicy> Policies = [NoConversions, AppDefault, To22Line, Top22, Top24];
+        public static readonly IReadOnlyList<ConversionPolicy> Policies = [NoConversions, AppDefault, To22Line, Top22, Top24, BelowIrmaa];
+
+        // The app's candidate targets, as lab policies (AutomaticStrategy.Targets).
+        public static readonly IReadOnlyDictionary<RothConversionTarget, ConversionPolicy> AppTargets = new Dictionary<RothConversionTarget, ConversionPolicy>
+        {
+            [RothConversionTarget.None] = NoConversions,
+            [RothConversionTarget.Bracket12] = AppDefault,
+            [RothConversionTarget.Bracket22] = Top22,
+            [RothConversionTarget.Bracket24] = Top24,
+        };
+
+        public static readonly IReadOnlyDictionary<WithdrawalStrategy, WithdrawalOrder> AppOrders = new Dictionary<WithdrawalStrategy, WithdrawalOrder>
+        {
+            [WithdrawalStrategy.TaxOptimized] = TaxOptimized,
+            [WithdrawalStrategy.ProRata] = ProRata,
+        };
 
         // Today's default (W2+C1) comes first: it's the baseline every other combination is measured against.
         public static readonly Combination Baseline = new(TaxOptimized, AppDefault);
@@ -106,7 +127,7 @@ namespace MonteCarloSimulation.StrategyLab
         // doesn't matter).
         public static readonly CandidateSet Funding = new("funding",
             new[] { new Combination(TaxOptimized, AppDefault, FundingBrokerage) }
-                .Concat(new[] { ProRata, TaxOptimized }.SelectMany(o => Policies.Where(p => p.Converts)
+                .Concat(new[] { ProRata, TaxOptimized }.SelectMany(o => new[] { AppDefault, To22Line, Top22, Top24 }
                     .SelectMany(p => Fundings.Select(f => new Combination(o, p, f)))))
                 .Where((c, i) => i == 0 || c.Code != "W2+C1+F0")
                 .Concat([new Combination(ProRata, NoConversions), new Combination(TaxOptimized, NoConversions)])
@@ -131,10 +152,6 @@ namespace MonteCarloSimulation.StrategyLab
                 f.Value == appFunding ? $"{f.Name} (app)" : f.Name, f.Definition, null, null));
             return orders.Concat(policies).Concat(fundings).ToList();
         }
-
-        // Gross ordinary income where the first bracket at `rate` or higher starts.
-        private static double BracketStart(TaxYear t, double rate) =>
-            t.StandardDeduction + t.Brackets.First(b => b.Rate >= rate).LowerBound * t.InflationFactor;
     }
 
     // One row of the Model Info page's definitions tables. For a conversion policy, Line2026 is the gross ordinary

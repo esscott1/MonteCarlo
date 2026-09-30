@@ -26,7 +26,10 @@ namespace MonteCarloSimulation.Core
         public double SocialSecurityMonthlyAmount { get; set; }
         // Annual standard deduction, in today's (2026) dollars.
         public double AnnualStandardDeduction { get; set; }
+        // The user's switch: allow Roth conversions at all. How far to convert is the app's choice (below).
         public bool EnableRothConversions { get; set; }
+        // How far a year's conversion fills ordinary income. Not a user input: the app's choice, measured with the Strategy Lab.
+        public RothConversionTarget RothConversionTarget { get; set; } = RothConversionTarget.Automatic;
         // Where a conversion's tax comes from. Not a user input: the app's choice, measured with the Strategy Lab.
         public ConversionTaxFunding ConversionTaxFunding { get; set; } = ConversionTaxFunding.FromConversion;
         // Which accounts fund each year's spending. Not a user input: the app's choice, measured with the Strategy Lab.

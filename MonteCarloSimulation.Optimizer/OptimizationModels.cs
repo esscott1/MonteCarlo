@@ -15,7 +15,8 @@ namespace MonteCarloSimulation.Optimizer
     // One Social Security claiming age for one investment scenario: the most annual spending (today's dollars)
     // that survives 85%, 82.5% and 80% of the simulated market paths. TotalSocialSecurity is every benefit payment
     // received from the start date to the end of the retirement window, in actual (inflated) dollars.
-    // WithdrawalStrategy is the order these spends were found with (the better one when the app chooses).
+    // WithdrawalStrategy and RothConversionTarget are the order and conversion target these spends were found with
+    // (the best pair when the app chooses).
     public sealed record ClaimingAgeResult(
         int Age,
         DateOnly StartDate,
@@ -24,7 +25,8 @@ namespace MonteCarloSimulation.Optimizer
         double SpendAt85,
         double SpendAtMidpoint,
         double SpendAt80,
-        WithdrawalStrategy WithdrawalStrategy);
+        WithdrawalStrategy WithdrawalStrategy,
+        RothConversionTarget RothConversionTarget);
 
     // The recommendation for one investment scenario: the claiming age with the highest midpoint (82.5%) spend,
     // the share of paths that actually survive at that spend, and every claiming age for comparison.
