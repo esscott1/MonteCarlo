@@ -4,16 +4,24 @@ namespace MonteCarloSimulation.Core
     internal static class RunSimulator
     {
         public static RunSummary Simulate(
-            SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, IWithdrawalStrategy strategy, Random random)
+            SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, IWithdrawalStrategy strategy, Random random) =>
+            Simulate(parameters, timeline, strategy, random, RothConversion.DefaultCeiling, out _);
+
+        // The same run with a different Roth conversion ceiling, also handing back the final balances (the Strategy
+        // Lab values what's left after tax). Conversions still happen only when EnableRothConversions is set.
+        public static RunSummary Simulate(
+            SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, IWithdrawalStrategy strategy, Random random,
+            ConversionCeiling conversionCeiling, out Accounts finalAccounts)
         {
             var accounts = Accounts.FromParameters(parameters);
             var years = new List<RunYearDetail>(timeline.Count);
+            finalAccounts = accounts;
 
             foreach (var retirementYear in timeline)
             {
                 double rate = DrawReturn(parameters.Mean, parameters.StdDev, random);
 
-                var (detail, failed) = SimulateYear(parameters, strategy, accounts, retirementYear, rate);
+                var (detail, failed) = SimulateYear(parameters, strategy, conversionCeiling, accounts, retirementYear, rate);
                 years.Add(detail);
 
                 // A run fails the instant any bucket (or the total) goes negative, or the eligible buckets
@@ -26,7 +34,8 @@ namespace MonteCarloSimulation.Core
         }
 
         private static (RunYearDetail Detail, bool Failed) SimulateYear(
-            SimulationParameters parameters, IWithdrawalStrategy strategy, Accounts accounts, RetirementYear year, double rate)
+            SimulationParameters parameters, IWithdrawalStrategy strategy, ConversionCeiling conversionCeiling,
+            Accounts accounts, RetirementYear year, double rate)
         {
             // Today's-dollar inputs, inflated to this calendar year. Spending and returns are prorated for a partial
             // year; the tax year's deduction and brackets are not (they're annual). Social Security counts the
@@ -53,7 +62,7 @@ namespace MonteCarloSimulation.Core
             accounts.WithdrawRoth(plan.Roth);
 
             var conversion = parameters.EnableRothConversions
-                ? RothConversion.Apply(accounts, taxYear, ss.Taxable + plan.GrossTaxable, plan.RealizedGains)
+                ? RothConversion.Apply(accounts, taxYear, ss.Taxable + plan.GrossTaxable, plan.RealizedGains, conversionCeiling)
                 : RothConversion.None;
 
             // The year's taxes come straight from its final income totals - ordinary income (taxable Social

@@ -1,5 +1,10 @@
 namespace MonteCarloSimulation.Core
 {
+    // The gross ordinary income a year's Roth conversion fills up to, given the ordinary income and realized gains
+    // already counted that year. The app always uses RothConversion.DefaultCeiling; the Strategy Lab plugs in
+    // alternatives to compare against it.
+    internal delegate double ConversionCeiling(TaxYear taxYear, double ordinaryIncomeSoFar, double gainsSoFar);
+
     // Converts Tax Deferred money to Roth after the year's regular withdrawal, filling the remaining cheap bracket
     // room up to TaxYear.OrdinaryFillCeiling (the start of the 22% bracket, or lower if the conversion would push
     // this year's 0%-band gains into 15%); years already past it convert nothing. A conversion isn't a
@@ -16,9 +21,15 @@ namespace MonteCarloSimulation.Core
         // gains tax on the sale that funded it.
         public double CapitalGainsTax => TaxSale - Tax;
 
-        public static RothConversion Apply(Accounts accounts, TaxYear taxYear, double ordinaryIncomeSoFar, double gainsSoFar)
+        public static readonly ConversionCeiling DefaultCeiling = (taxYear, ordinaryIncome, gains) => taxYear.OrdinaryFillCeiling(ordinaryIncome, gains);
+
+        public static RothConversion Apply(Accounts accounts, TaxYear taxYear, double ordinaryIncomeSoFar, double gainsSoFar) =>
+            Apply(accounts, taxYear, ordinaryIncomeSoFar, gainsSoFar, DefaultCeiling);
+
+        public static RothConversion Apply(
+            Accounts accounts, TaxYear taxYear, double ordinaryIncomeSoFar, double gainsSoFar, ConversionCeiling conversionCeiling)
         {
-            double ceiling = taxYear.OrdinaryFillCeiling(ordinaryIncomeSoFar, gainsSoFar);
+            double ceiling = conversionCeiling(taxYear, ordinaryIncomeSoFar, gainsSoFar);
             double fullAmount = Math.Min(Math.Max(0, ceiling - ordinaryIncomeSoFar), Math.Max(0, accounts.Taxable));
             if (fullAmount <= 0) return None;
 

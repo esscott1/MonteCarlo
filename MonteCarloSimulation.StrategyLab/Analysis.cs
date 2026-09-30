@@ -1,0 +1,273 @@
+namespace MonteCarloSimulation.StrategyLab
+{
+    // Turns the per-(scenario, combination) rows into the report's numbers. Every comparison is paired: the same
+    // scenario and market paths, only the combination changes. The main figure is each combination's Spend825 as
+    // a % difference from the baseline's (today's default, W2+C1) on the same scenario.
+    internal static class Analysis
+    {
+        // Differences within +/-0.5% count as ties: break-evens are found to $100, so smaller gaps are noise.
+        public const double TieBand = 0.005;
+        // Scenarios the baseline can't fund at $1,000 a year are left out of % comparisons (nothing to scale by).
+        public const double MinimumBaselineSpend = 1_000;
+        private const int BootstrapResamples = 2_000;
+
+        public static Summary Summarize(
+            IReadOnlyList<Scenario> scenarios, IReadOnlyList<ResultRow> rows, IReadOnlyList<SingleYearCase> singleYear,
+            IReadOnlyList<(Scenario Scenario, IReadOnlyList<ResultRow> Rows)> pageDefault, RunConfig config)
+        {
+            var byScenario = rows.GroupBy(r => r.ScenarioId).ToDictionary(g => g.Key, g => g.ToDictionary(r => r.Combination));
+            var baselineCode = Candidates.Baseline.Code;
+            var included = scenarios
+                .Where(s => byScenario.TryGetValue(s.Id, out var r) && r.Count == Candidates.All.Count
+                            && r[baselineCode].Spend825 >= MinimumBaselineSpend)
+                .ToList();
+            var rng = new Random(config.Seed);
+
+            double Diff(Scenario s, string code, Func<ResultRow, double> metric)
+            {
+                double b = metric(byScenario[s.Id][baselineCode]);
+                return b > 0 ? metric(byScenario[s.Id][code]) / b - 1 : 0;
+            }
+
+            var vsBaseline = Candidates.All.Select(c => Compare(
+                c.Code, c.Order.Name + " / " + c.Policy.Name,
+                included.Select(s => Diff(s, c.Code, r => r.Spend825)).ToArray(),
+                included.Select(s => Diff(s, c.Code, r => r.Spend50)).ToArray(),
+                included.Select(s => Diff(s, c.Code, r => r.MedianTaxesAtCommon)).ToArray(),
+                included.Select(s => Diff(s, c.Code, r => r.MedianAfterTaxWealthAtCommon)).ToArray(),
+                included.Select(s => byScenario[s.Id][c.Code].SurvivalAtCommon).ToArray(),
+                rng)).ToList();
+
+            // The user's direct question: Pro-rata against Tax-optimized, with conversions on and off.
+            Comparison Pair(string label, string code, string against) =>
+                Compare(code + " vs " + against, label,
+                    included.Select(s => Ratio(byScenario[s.Id][code].Spend825, byScenario[s.Id][against].Spend825)).ToArray(),
+                    included.Select(s => Ratio(byScenario[s.Id][code].Spend50, byScenario[s.Id][against].Spend50)).ToArray(),
+                    [], [], [], rng);
+            var direct = new List<Comparison>
+            {
+                Pair("Pro-rata vs Tax-optimized, app conversions on", "W1+C1", "W2+C1"),
+                Pair("Pro-rata vs Tax-optimized, no conversions", "W1+C0", "W2+C0"),
+                Pair("Tax-optimized: app conversions vs none", "W2+C1", "W2+C0"),
+                Pair("Pro-rata: app conversions vs none", "W1+C1", "W1+C0"),
+                Pair("Tax-optimized: 0% harvesting vs none", "W2+C1", "W2nh+C1"),
+            };
+
+            // Regret: how much more the best of all combinations spends than the baseline, per scenario.
+            var regrets = included.Select(s =>
+            {
+                var best = Candidates.All.Select(c => byScenario[s.Id][c.Code]).MaxBy(r => r.Spend825)!;
+                return (Scenario: s, Best: best, Regret: best.Spend825 / byScenario[s.Id][baselineCode].Spend825 - 1);
+            }).ToList();
+            var regretValues = regrets.Select(r => r.Regret).ToArray();
+            var bestCounts = regrets.Where(r => r.Regret > TieBand)
+                .GroupBy(r => r.Best.Combination).OrderByDescending(g => g.Count())
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            var regret = new RegretSummary(
+                Mean(regretValues), Percentile(regretValues, 0.5), Percentile(regretValues, 0.9), Percentile(regretValues, 0.95),
+                regretValues.DefaultIfEmpty().Max(),
+                Share(regretValues, v => v > 0.01), Share(regretValues, v => v > 0.03), Share(regretValues, v => v > TieBand),
+                bestCounts);
+
+            var topRegret = regrets.OrderByDescending(r => r.Regret).Take(10).Select(r =>
+            {
+                var b = byScenario[r.Scenario.Id][baselineCode];
+                return new RegretCase(Describe(r.Scenario), b.Spend825, r.Best.Combination, r.Best.Spend825, r.Regret,
+                    b.MedianTaxesAtCommon, r.Best.MedianTaxesAtCommon, b.MedianAfterTaxWealthAtCommon, r.Best.MedianAfterTaxWealthAtCommon);
+            }).ToList();
+
+            var slices = Slices(included, byScenario);
+
+            var excludedCount = scenarios.Count(s => byScenario.ContainsKey(s.Id)) - included.Count;
+
+            return new Summary(
+                config,
+                Candidates.All.Select(c => new CombinationInfo(c.Code, c.Order.Code, c.Order.Name, c.Policy.Code, c.Policy.Name)).ToList(),
+                baselineCode,
+                included.Count,
+                excludedCount,
+                vsBaseline,
+                direct,
+                regret,
+                topRegret,
+                slices,
+                SummarizeSingleYear(singleYear),
+                pageDefault.Select(p => new PageDefaultResult(p.Scenario.InvestmentScenarioId, p.Scenario.Parameters.ScenarioDescription, p.Rows)).ToList());
+        }
+
+        private static double Ratio(double value, double against) => against > 0 ? value / against - 1 : 0;
+
+        private static Comparison Compare(
+            string code, string label, double[] spend825, double[] spend50, double[] taxes, double[] wealth, double[] survival, Random rng) =>
+            new(code, label, spend825.Length,
+                Mean(spend825), Percentile(spend825, 0.5), Percentile(spend825, 0.05), Percentile(spend825, 0.95),
+                Share(spend825, v => v > TieBand), Share(spend825, v => v < -TieBand),
+                Bootstrap(spend825, Mean, rng), Bootstrap(spend825, v => Percentile(v, 0.5), rng),
+                Percentile(spend50, 0.5), Mean(spend50),
+                taxes.Length > 0 ? Percentile(taxes, 0.5) : null,
+                wealth.Length > 0 ? Percentile(wealth, 0.5) : null,
+                survival.Length > 0 ? Mean(survival) : null);
+
+        // Median % difference vs the baseline within each slice of the scenarios, per combination.
+        private static List<Slice> Slices(List<Scenario> included, Dictionary<int, Dictionary<string, ResultRow>> byScenario)
+        {
+            string baselineCode = Candidates.Baseline.Code;
+            double SpendToAssets(Scenario s) => byScenario[s.Id][baselineCode].Spend825 / s.TotalAssets;
+
+            var dimensions = new (string Name, Func<Scenario, string> Bin, string[] Order)[]
+            {
+                ("Tax Deferred share", s => Bin(s.TaxDeferredShare, [0.25, 0.5, 0.75], ["0-25%", "25-50%", "50-75%", "75-100%"]),
+                    ["0-25%", "25-50%", "50-75%", "75-100%"]),
+                ("Brokerage gain fraction", s => Bin(s.BrokerageGainFraction, [0.3, 0.6], ["0-30%", "30-60%", "60-90%"]),
+                    ["0-30%", "30-60%", "60-90%"]),
+                ("Retires before 59½", s => s.RetiresBefore59Half ? "Yes" : "No", ["Yes", "No"]),
+                ("Social Security (monthly, today's $)", s => Bin(s.Parameters.SocialSecurityMonthlyAmount, [1, 2_000, 3_500], ["None", "Under $2,000", "$2,000-3,500", "Over $3,500"]),
+                    ["None", "Under $2,000", "$2,000-3,500", "Over $3,500"]),
+                ("Spend-to-assets (baseline 82.5% spend)", s => Bin(SpendToAssets(s), [0.03, 0.045, 0.06], ["Under 3%", "3-4.5%", "4.5-6%", "Over 6%"]),
+                    ["Under 3%", "3-4.5%", "4.5-6%", "Over 6%"]),
+                ("Total assets", s => Bin(s.TotalAssets, [750_000, 1_500_000, 3_000_000], ["Under $750k", "$750k-1.5M", "$1.5-3M", "Over $3M"]),
+                    ["Under $750k", "$750k-1.5M", "$1.5-3M", "Over $3M"]),
+                ("Investment scenario", s => $"Scenario {s.InvestmentScenarioId}", ["Scenario 1", "Scenario 2", "Scenario 3", "Scenario 4"]),
+            };
+
+            return dimensions.Select(d => new Slice(d.Name, d.Order.Select(label =>
+            {
+                var members = included.Where(s => d.Bin(s) == label).ToList();
+                var medians = Candidates.All.ToDictionary(c => c.Code, c => members.Count == 0 ? 0 :
+                    Percentile(members.Select(s => byScenario[s.Id][c.Code].Spend825 / byScenario[s.Id][baselineCode].Spend825 - 1).ToArray(), 0.5));
+                var means = Candidates.All.ToDictionary(c => c.Code, c => members.Count == 0 ? 0 :
+                    Mean(members.Select(s => byScenario[s.Id][c.Code].Spend825 / byScenario[s.Id][baselineCode].Spend825 - 1).ToArray()));
+                return new SliceBin(label, members.Count, medians, means);
+            }).ToList())).ToList();
+        }
+
+        private static string Bin(double value, double[] edges, string[] labels)
+        {
+            for (int i = 0; i < edges.Length; i++)
+                if (value < edges[i]) return labels[i];
+            return labels[^1];
+        }
+
+        private static SingleYearSummary SummarizeSingleYear(IReadOnlyList<SingleYearCase> cases)
+        {
+            var checkable = cases.Where(c => !c.Shortfall).ToList();
+            var gaps = checkable.Select(c => c.Gap).ToArray();
+            bool Material(SingleYearCase c) => c.Gap > 5;
+            var material = checkable.Where(Material).ToList();
+
+            // Which way the plan differed from the one-year minimum
+            var moreTaxDeferred = material.Where(c => c.PlanGrossTaxable > c.BestGrossTaxable + 1).ToList();
+            var lessTaxDeferred = material.Where(c => c.PlanGrossTaxable < c.BestGrossTaxable - 1).ToList();
+
+            return new SingleYearSummary(
+                cases.Count, cases.Count(c => c.Shortfall), checkable.Count,
+                checkable.Count(c => c.Gap <= 5), material.Count,
+                moreTaxDeferred.Count, lessTaxDeferred.Count,
+                gaps.Length > 0 ? Mean(gaps) : 0,
+                material.Count > 0 ? Percentile(material.Select(c => c.Gap).ToArray(), 0.5) : 0,
+                gaps.DefaultIfEmpty().Max(),
+                material.Count > 0 ? Percentile(material.Select(c => c.Gap / c.Need).ToArray(), 0.5) : 0,
+                checkable.Count(c => c.Gap < -5),
+                cases.Count(c => c.RothBeforeOthers),
+                material.OrderByDescending(c => c.Gap).Take(10).ToList(),
+                BinGaps(material, c => c.GainFraction, [0.2, 0.4, 0.6, 0.8], ["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"], checkable));
+        }
+
+        private static List<GapBin> BinGaps(List<SingleYearCase> material, Func<SingleYearCase, double> key, double[] edges, string[] labels, List<SingleYearCase> all) =>
+            labels.Select(label => new GapBin(
+                label,
+                all.Count(c => Bin(key(c), edges, labels) == label),
+                material.Count(c => Bin(key(c), edges, labels) == label),
+                material.Where(c => Bin(key(c), edges, labels) == label).Select(c => c.Gap).DefaultIfEmpty().Average())).ToList();
+
+        public static string Describe(Scenario s)
+        {
+            var p = s.Parameters;
+            string ss = p.SocialSecurityMonthlyAmount > 0 ? $"SS ${p.SocialSecurityMonthlyAmount:N0}/mo at {s.SocialSecurityStartAge}" : "no SS";
+            string inheritance = p.NewMoney > 0 ? $", inherits ${p.NewMoney / 1000:N0}k in yr {p.YearNewMoney}" : "";
+            return $"#{s.Id}: retire {p.RetirementDate:yyyy} at {s.RetirementAge:0.0} for {p.Years} yrs; ${s.TotalAssets / 1000:N0}k " +
+                   $"({s.TaxDeferredShare:P0} TD, {s.RothShare:P0} Roth, {1 - s.TaxDeferredShare - s.RothShare:P0} brokerage @ {s.BrokerageGainFraction:P0} gains); " +
+                   $"{ss}{inheritance}; inv. scenario {s.InvestmentScenarioId}";
+        }
+
+        private static double Mean(double[] v) => v.Length == 0 ? 0 : v.Average();
+
+        private static double Share(double[] v, Func<double, bool> test) => v.Length == 0 ? 0 : v.Count(test) / (double)v.Length;
+
+        // Linear-interpolated percentile.
+        public static double Percentile(double[] values, double p)
+        {
+            if (values.Length == 0) return 0;
+            var sorted = values.OrderBy(v => v).ToArray();
+            double position = p * (sorted.Length - 1);
+            int lower = (int)Math.Floor(position);
+            int upper = Math.Min(lower + 1, sorted.Length - 1);
+            return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+        }
+
+        // 95% bootstrap interval (percentile method), resampling scenarios.
+        private static double[] Bootstrap(double[] values, Func<double[], double> statistic, Random rng)
+        {
+            if (values.Length == 0) return [0, 0];
+            var stats = new double[BootstrapResamples];
+            var sample = new double[values.Length];
+            for (int b = 0; b < BootstrapResamples; b++)
+            {
+                for (int i = 0; i < sample.Length; i++) sample[i] = values[rng.Next(values.Length)];
+                stats[b] = statistic(sample);
+            }
+            return [Percentile(stats, 0.025), Percentile(stats, 0.975)];
+        }
+    }
+
+    internal sealed record RunConfig(int Scenarios, int Paths, int Seed, int SingleYearCases, DateTime GeneratedAtUtc, double RuntimeSeconds);
+
+    internal sealed record CombinationInfo(string Code, string Order, string OrderName, string Policy, string PolicyName);
+
+    // Differences are fractions (0.012 = +1.2%). Taxes/Wealth/Survival are at the common (baseline) spend.
+    internal sealed record Comparison(
+        string Code, string Label, int Scenarios,
+        double MeanSpendDiff, double MedianSpendDiff, double P5SpendDiff, double P95SpendDiff,
+        double WinRate, double LossRate, double[] MeanCi, double[] MedianCi,
+        double MedianSpend50Diff, double MeanSpend50Diff,
+        double? MedianTaxDiffAtCommon, double? MedianWealthDiffAtCommon, double? MeanSurvivalAtCommon);
+
+    internal sealed record RegretSummary(
+        double Mean, double Median, double P90, double P95, double Max,
+        double ShareOver1Pct, double ShareOver3Pct, double ShareOverTieBand,
+        Dictionary<string, int> BestCombinationCounts);
+
+    internal sealed record RegretCase(
+        string Scenario, double BaselineSpend825, string BestCombination, double BestSpend825, double Regret,
+        double BaselineMedianTaxes, double BestMedianTaxes, double BaselineMedianWealth, double BestMedianWealth);
+
+    internal sealed record Slice(string Dimension, List<SliceBin> Bins);
+
+    internal sealed record SliceBin(string Label, int Scenarios, Dictionary<string, double> MedianDiff, Dictionary<string, double> MeanDiff);
+
+    internal sealed record SingleYearSummary(
+        int Cases, int Shortfalls, int Checked, int WithinFiveDollars, int MaterialGaps,
+        int PlanUsedMoreTaxDeferred, int PlanUsedLessTaxDeferred,
+        double MeanGap, double MedianMaterialGap, double MaxGap, double MedianMaterialGapShareOfNeed,
+        int PlanBeatBruteForce, int RothBeforeOthers,
+        List<SingleYearCase> LargestGaps, List<GapBin> ByGainFraction);
+
+    internal sealed record GapBin(string Label, int Cases, int MaterialGaps, double MeanMaterialGap);
+
+    internal sealed record PageDefaultResult(int InvestmentScenarioId, string Description, IReadOnlyList<ResultRow> Rows);
+
+    internal sealed record Summary(
+        RunConfig Config,
+        List<CombinationInfo> Combinations,
+        string Baseline,
+        int ScenariosCompared,
+        int ScenariosExcluded,
+        List<Comparison> VsBaseline,
+        List<Comparison> DirectQuestion,
+        RegretSummary Regret,
+        List<RegretCase> TopRegret,
+        List<Slice> Slices,
+        SingleYearSummary SingleYear,
+        List<PageDefaultResult> PageDefault);
+}
