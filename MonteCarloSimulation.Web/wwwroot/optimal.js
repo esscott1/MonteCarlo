@@ -78,6 +78,7 @@ function renderClaimingTable(scenario) {
                 <td>${c.age}${isRecommended ? ' &#9733;' : ''}</td>
                 <td>${formatMonthYear(c.startDate)}</td>
                 <td>${formatCurrency(c.monthlyBenefit)}</td>
+                <td>${formatCurrency(c.totalSocialSecurity)}</td>
                 <td>${perMonth(c.spendAt85)}</td>
                 <td>${perMonth(c.spendAtMidpoint)}</td>
                 <td>${perMonth(c.spendAt80)}</td>
@@ -86,7 +87,7 @@ function renderClaimingTable(scenario) {
     return `
         <table class="run-table">
             <thead>
-                <tr><th>Start SS at</th><th>First payment</th><th>Monthly benefit</th><th>Spend/mo @ 85%</th><th>@ 82.5%</th><th>@ 80%</th></tr>
+                <tr><th>Start SS at</th><th>First payment</th><th>Monthly benefit</th><th>Total SS collected</th><th>Spend/mo @ 85%</th><th>@ 82.5%</th><th>@ 80%</th></tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>`;
@@ -104,7 +105,8 @@ function renderScenario(scenario) {
             <p>Spend about <strong>${perMonth(r.spendAtMidpoint)}/month</strong>
                (between ${perMonth(r.spendAt85)} at 85% survival and ${perMonth(r.spendAt80)} at 80%).</p>
             <p>Start Social Security at <strong>${r.age}</strong> (${formatMonthYear(r.startDate)}),
-               about ${formatCurrency(r.monthlyBenefit)}/month in today's dollars.</p>
+               about ${formatCurrency(r.monthlyBenefit)}/month in today's dollars &mdash;
+               <strong>${formatCurrency(r.totalSocialSecurity)}</strong> collected in total over your retirement.</p>
             <p>At ${perMonth(r.spendAtMidpoint)}/month, ${formatPercent(scenario.verifiedSurvivalRate)} of the simulated markets last the full period.</p>
             ${bandNote}
             <details>

@@ -36,7 +36,7 @@ namespace MonteCarloSimulation.Optimizer
                 Array.Sort(breakEvens);
 
                 byJob[(job.Scenario.Id, job.Age)] = new ClaimingAgeResult(
-                    job.Age, start, monthly,
+                    job.Age, start, monthly, simulator.TotalSocialSecurity,
                     SpendAtSurvival(breakEvens, HighSurvival),
                     SpendAtSurvival(breakEvens, MidpointSurvival),
                     SpendAtSurvival(breakEvens, LowSurvival));

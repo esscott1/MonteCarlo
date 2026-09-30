@@ -13,11 +13,13 @@ namespace MonteCarloSimulation.Optimizer
     }
 
     // One Social Security claiming age for one investment scenario: the most annual spending (today's dollars)
-    // that survives 85%, 82.5% and 80% of the simulated market paths.
+    // that survives 85%, 82.5% and 80% of the simulated market paths. TotalSocialSecurity is every benefit payment
+    // received from the start date to the end of the retirement window, in actual (inflated) dollars.
     public sealed record ClaimingAgeResult(
         int Age,
         DateOnly StartDate,
         double MonthlyBenefit,
+        double TotalSocialSecurity,
         double SpendAt85,
         double SpendAtMidpoint,
         double SpendAt80);
