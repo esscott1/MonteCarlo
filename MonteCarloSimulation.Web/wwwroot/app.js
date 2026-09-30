@@ -145,11 +145,12 @@ function bulletList(items) {
 
 // The engine's day-count/365.25 age can land a hair under a whole number on a birthday
 // (e.g. 64.9993), so allow ~2 days of slack before flooring to completed years.
-function yearWithAge(year, ageInYear) {
-    return `${year} (${Math.floor(ageInYear + 0.005)}yrs)`;
+function yearWithAge(yd) {
+    const partial = yd.yearFraction < 0.9995 ? `<br><small>partial: ${Math.round(yd.yearFraction * 12)} mo</small>` : '';
+    return `${yd.calendarYear} (${Math.floor(yd.ageInYear + 0.005)}yrs)${partial}`;
 }
 
-function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax) {
+function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax, socialSecurityMonths) {
     const taxablePct = taxablePercentOfBalance === undefined ? '' : ` (${formatPercent(taxablePercentOfBalance)} of balance)`;
     const items = [
         `Total: ${formatCurrency(total)}`,
@@ -158,7 +159,8 @@ function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercent
         `Roth: ${formatCurrency(rothAmt)}`,
     ];
     if (socialSecurity > 0) {
-        items.push(`Social Security: ${formatCurrency(socialSecurity)} (${formatCurrency(socialSecurityTax)} tax)`);
+        const months = socialSecurityMonths < 12 ? `${socialSecurityMonths} mo, ` : '';
+        items.push(`Social Security: ${formatCurrency(socialSecurity)} (${months}${formatCurrency(socialSecurityTax)} tax)`);
     }
     return bulletList(items);
 }
@@ -195,8 +197,8 @@ function renderRunDetailTable(yearDetails) {
     const rows = yearDetails.map((yd) => {
         return `
         <tr>
-            <td>${yearWithAge(yd.year, yd.ageInYear)}</td>
-            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax)}</td>
+            <td>${yearWithAge(yd)}</td>
+            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax, yd.socialSecurityMonths)}</td>
             <td>${taxesBreakdown(yd)}</td>
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
             <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>
@@ -272,7 +274,7 @@ function renderSummary(parameters, output) {
                 <p><strong>${survival > 0.8 ? '🙂' : '🙁'} ${result.outOfMoneyCount} of ${parameters.iterations} portfolios did not survive ${parameters.years} years.</strong> Survival rate: ${formatPercent(survival)}</p>
                 <p>Scenario: ${parameters.scenarioDescription} &mdash; Initial mean: ${formatPercent(parameters.mean)}, Initial std dev: ${formatPercent(parameters.stdDev)}</p>
                 <p>Actual realized average return: ${formatPercent(totalAvgRate)} with std dev ${stdDev.toFixed(4)}</p>
-                <p>Inheritance of ${formatCurrency(parameters.newMoney)} in year ${parameters.yearNewMoney} was considered</p>
+                <p>Inheritance of ${formatCurrency(parameters.newMoney)} in ${new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney} was considered</p>
                 <p>Average year of failure: ${avgFailureYear.toFixed(0)}, with an average return of ${formatPercent(avgFailureReturn)}</p>
                 ${lifetimeTaxLine}
             </div>
@@ -608,6 +610,7 @@ form.addEventListener('submit', async (e) => {
         iterations: Number(formData.get('iterations')),
         withdrawal: parseNumber(formData.get('withdrawal')),
         birthdate: formData.get('birthdate'),
+        retirementDate: formData.get('retirementDate'),
         initialTaxableBalance: parseNumber(formData.get('initialTaxableBalance')),
         initialRothBasis: parseNumber(formData.get('initialRothBasis')),
         initialRothUnrealizedGain: parseNumber(formData.get('initialRothUnrealizedGain')),
@@ -615,8 +618,8 @@ form.addEventListener('submit', async (e) => {
         initialBrokerageUnrealizedGain: parseNumber(formData.get('initialBrokerageUnrealizedGain')),
         newMoney: parseNumber(formData.get('newMoney')),
         yearNewMoney: Number(formData.get('yearNewMoney')),
-        socialSecurityYearsUntilStart: Number(formData.get('socialSecurityYearsUntilStart')),
-        socialSecurityAnnualAmount: parseNumber(formData.get('socialSecurityAnnualAmount')),
+        socialSecurityStartDate: formData.get('socialSecurityStartDate'),
+        socialSecurityMonthlyAmount: parseNumber(formData.get('socialSecurityMonthlyAmount')),
         annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction')),
         enableRothConversions: form.elements['enableRothConversions'].checked,
         withdrawalStrategy: formData.get('withdrawalStrategy')

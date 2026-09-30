@@ -77,8 +77,11 @@
             <div class="subgroup-row">
                 <fieldset class="subgroup">
                     <legend>Scenario</legend>
+                    <label>Retire On Date
+                        <input type="date" name="retirementDate" value="2027-01-01" title="Withdrawals begin on this date. Enter account balances as you expect them on this date; dollar amounts are in today's dollars." required>
+                    </label>
                     <label>Years money lasts
-                        <input type="number" name="years" min="1" max="999" step="1" value="30" style="width: calc(3ch + 1.6rem)" required>
+                        <input type="number" name="years" min="1" max="999" step="1" value="30" style="width: calc(3ch + 1.6rem)" title="Counted from the Retire On Date." required>
                     </label>
                     <label>Iterations / Runs (99 max)
                         <input type="number" name="iterations" min="1" max="99" step="1" value="10" style="width: calc(3ch + 2rem)" required>
@@ -92,11 +95,11 @@
                 </fieldset>
                 <fieldset class="subgroup">
                     <legend>Gov't</legend>
-                    <label>Initial SS (annual)
-                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAnnualAmount" pattern="[0-9,]*\.?[0-9]*" value="30,000" style="width: calc(16ch + 1rem)" required>
+                    <label>Initial SS (monthly)
+                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityMonthlyAmount" pattern="[0-9,]*\.?[0-9]*" value="2,500" style="width: calc(16ch + 1rem)" title="Monthly benefit in today's dollars (as on your SSA statement)." required>
                     </label>
-                    <label>Years Until Social Security
-                        <input type="number" name="socialSecurityYearsUntilStart" min="0" step="1" value="5" style="width: calc(16ch + 1.6rem)" required>
+                    <label>Social Security Start
+                        <input type="date" name="socialSecurityStartDate" value="2037-01-01" title="Date of your first payment; between ages 62 and 70." required>
                     </label>
                     <label>Standard Ded. (Annual)
                         <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" style="width: calc(16ch + 1rem)" required>

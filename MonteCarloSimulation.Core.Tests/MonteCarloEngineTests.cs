@@ -2,6 +2,9 @@ namespace MonteCarloSimulation.Core.Tests
 {
     public class MonteCarloEngineTests
     {
+        // Retiring on Jan 1 of the bracket-table year makes year 0 a full year with inflation factor 1.0.
+        private static readonly DateOnly Retire = new(2026, 1, 1);
+
         [Fact]
         public void Run_AllIterationsSucceed_WhenReturnsExceedWithdrawals()
         {
@@ -10,7 +13,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 20,
                 Iterations = 50,
                 Withdrawal = 20_000,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70),
+                Birthdate = Retire.AddYears(-70),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 500_000,
                 InitialRothBasis = 250_000,
                 InitialRothUnrealizedGain = 0,
@@ -20,8 +24,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0, // every run gets exactly Mean as its return every year - fully deterministic
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "Deterministic 7% return, small withdrawal"
             };
@@ -40,7 +42,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 20,
                 Iterations = 50,
                 Withdrawal = 500_000,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70),
+                Birthdate = Retire.AddYears(-70),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 300_000,
                 InitialRothBasis = 150_000,
                 InitialRothUnrealizedGain = 0,
@@ -50,8 +53,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0, // every run gets exactly 0% return every year - fully deterministic
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "Deterministic 0% return, withdrawal far exceeds balance"
             };
@@ -69,7 +70,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 30,
                 Iterations = 150,
                 Withdrawal = 45_000,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70),
+                Birthdate = Retire.AddYears(-70),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 700_000,
                 InitialRothBasis = 350_000,
                 InitialRothUnrealizedGain = 0,
@@ -79,8 +81,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0.1915, // "Last 95 years of S&P" preset volatility
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "Volatile scenario calibrated to land near 80% survival"
             };
@@ -99,7 +99,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 30,
                 Iterations = 300,
                 Withdrawal = 105_000,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70),
+                Birthdate = Retire.AddYears(-70),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 700_000,
                 InitialRothBasis = 350_000,
                 InitialRothUnrealizedGain = 0,
@@ -109,8 +110,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0.1915, // "Last 95 years of S&P" preset volatility
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "Volatile scenario calibrated to land near 20% survival"
             };
@@ -129,7 +128,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 10,
                 Iterations = 20,
                 Withdrawal = 20_000,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70),
+                Birthdate = Retire.AddYears(-70),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 0,
                 InitialRothBasis = 0,
                 InitialRothUnrealizedGain = 0,
@@ -139,8 +139,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0,
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "All-basis brokerage withdrawal"
             };
@@ -160,7 +158,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 10,
                 Iterations = 20,
                 Withdrawal = withdrawal,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70),
+                Birthdate = Retire.AddYears(-70),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 0,
                 InitialRothBasis = 0,
                 InitialRothUnrealizedGain = 0,
@@ -170,8 +169,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0,
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "All-gain brokerage withdrawal"
             };
@@ -189,7 +186,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 10,
                 Iterations = 20,
                 Withdrawal = 150_000, // large enough that high-gain sales run past the 0% band
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70),
+                Birthdate = Retire.AddYears(-70),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 0,
                 InitialRothBasis = 0,
                 InitialRothUnrealizedGain = 0,
@@ -199,8 +197,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0,
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "Basis-vs-gain contrast"
             };
@@ -223,7 +219,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 5,
                 Iterations = 10,
                 Withdrawal = 20_000,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70),
+                Birthdate = Retire.AddYears(-70),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 0,
                 InitialRothBasis = 0,
                 InitialRothUnrealizedGain = 0,
@@ -233,8 +230,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0,
                 NewMoney = 500_000,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "NewMoney arrives as pure brokerage cash"
             };
@@ -255,7 +250,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 10,
                 Iterations = 5,
                 Withdrawal = 20_000,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-40),
+                Birthdate = Retire.AddYears(-40),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 500_000,
                 InitialRothBasis = 0,
                 InitialRothUnrealizedGain = 0,
@@ -265,8 +261,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0,
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "Age 40, withdrawal within Brokerage capacity"
             };
@@ -285,7 +279,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 10,
                 Iterations = 5,
                 Withdrawal = 20_000,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-40),
+                Birthdate = Retire.AddYears(-40),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 0,
                 InitialRothBasis = 20_000,
                 InitialRothUnrealizedGain = 200_000,
@@ -295,8 +290,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0,
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "Age 40, Roth mostly gain"
             };
@@ -315,7 +308,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 10,
                 Iterations = 5,
                 Withdrawal = 60_000,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-40),
+                Birthdate = Retire.AddYears(-40),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 5_000_000,
                 InitialRothBasis = 5_000,
                 InitialRothUnrealizedGain = 5_000,
@@ -325,8 +319,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0,
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "Age 40, huge locked Taxable balance, tiny accessible funds"
             };
@@ -344,7 +336,8 @@ namespace MonteCarloSimulation.Core.Tests
                 Years = 5,
                 Iterations = 3,
                 Withdrawal = 20_000,
-                Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-59).AddMonths(-5),
+                Birthdate = Retire.AddYears(-59).AddMonths(-5),
+                RetirementDate = Retire,
                 InitialTaxableBalance = 500_000,
                 InitialRothBasis = 50_000,
                 InitialRothUnrealizedGain = 50_000,
@@ -354,8 +347,6 @@ namespace MonteCarloSimulation.Core.Tests
                 StdDev = 0,
                 NewMoney = 0,
                 YearNewMoney = 0,
-                SocialSecurityYearsUntilStart = 0,
-                SocialSecurityAnnualAmount = 0,
                 AnnualStandardDeduction = 0,
                 ScenarioDescription = "Crosses age 59.5 mid-run"
             };
@@ -374,7 +365,8 @@ namespace MonteCarloSimulation.Core.Tests
             Years = 5,
             Iterations = 2,
             Withdrawal = 20_000,
-            Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-40),
+            Birthdate = Retire.AddYears(-40),
+            RetirementDate = Retire,
             InitialTaxableBalance = 500_000,
             InitialRothBasis = 0,
             InitialRothUnrealizedGain = 0,
@@ -384,8 +376,6 @@ namespace MonteCarloSimulation.Core.Tests
             StdDev = 0,
             NewMoney = 0,
             YearNewMoney = 0,
-            SocialSecurityYearsUntilStart = 0,
-            SocialSecurityAnnualAmount = 0,
             AnnualStandardDeduction = 0,
             EnableRothConversions = enable,
             ScenarioDescription = "Roth conversion scenario"
@@ -402,7 +392,7 @@ namespace MonteCarloSimulation.Core.Tests
 
             // Tax Deferred is locked (age 40), so all ordinary income comes from the conversion,
             // which should fill exactly to the (inflation-scaled) start of the 22% bracket.
-            Assert.Equal(50_400 * 1.025, year0.RothConversionAmount, 3);
+            Assert.Equal(50_400, year0.RothConversionAmount, 3);
             Assert.True(year0.RothConversionTax > 0);
             Assert.Equal(year0.RothConversionTax, year0.OrdinaryTaxAmount, 6);
             Assert.Equal(0, year0.CapitalGainsTaxAmount, 9);
@@ -417,12 +407,12 @@ namespace MonteCarloSimulation.Core.Tests
         {
             // Pro-rata, age 40: the $20,500 spending draw is all Brokerage (gain fraction 0.25), realizing
             // $5,125 of gain at 0%. The conversion stops where ordinary income plus those gains reaches the
-            // inflated 0% ceiling (49,450 * 1.025), rather than at the 22% line.
+            // 0% ceiling (49,450), rather than at the 22% line.
             var output = MonteCarloEngine.Run(ConversionParameters(enable: true));
             var year0 = output.Result.Runs[0].Years[0];
-            double spendingSale = 20_000 * 1.025;
+            double spendingSale = 20_000;
 
-            Assert.Equal(49_450 * 1.025 - 0.25 * spendingSale, year0.RothConversionAmount, 3);
+            Assert.Equal(49_450 - 0.25 * spendingSale, year0.RothConversionAmount, 3);
             Assert.Equal(year0.RothConversionTax, year0.OrdinaryTaxAmount, 6);
             // Only the conversion's funding sale lands above the 0% ceiling: its gain (a quarter of the sale)
             // is taxed at 15%, while the spending sale's gains stay untaxed.
@@ -445,7 +435,7 @@ namespace MonteCarloSimulation.Core.Tests
         public void Run_RothConversion_None_WhenAlreadyIn22PercentBracket()
         {
             var parameters = ConversionParameters(enable: true);
-            parameters.Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-70);
+            parameters.Birthdate = Retire.AddYears(-70);
             parameters.InitialBrokerageBasis = 0;
             parameters.InitialBrokerageUnrealizedGain = 0;
             parameters.InitialTaxableBalance = 2_000_000;
@@ -470,19 +460,20 @@ namespace MonteCarloSimulation.Core.Tests
 
             Assert.Equal(0, output.Result.OutOfMoneyCount);
             Assert.True(year0.RothConversionAmount > 0);
-            Assert.True(year0.RothConversionAmount < 50_400 * 1.025);
+            Assert.True(year0.RothConversionAmount < 50_400);
             Assert.All(output.Result.Runs[0].Years, yd => Assert.True(yd.BrokerageBalance >= -0.01));
         }
 
-        // Year 0 (inflation 1.025, no standard deduction): 12% ceiling = 50,400 * 1.025 = 51,660 gross.
-        private const double TaxOptCeilingGross = 50_400 * 1.025;
+        // Year 0 (inflation factor 1.0, no standard deduction): 12% ceiling = 50,400 gross.
+        private const double TaxOptCeilingGross = 50_400;
 
         private static SimulationParameters TaxOptimizedParameters(int age, double withdrawal) => new()
         {
             Years = 3,
             Iterations = 1,
             Withdrawal = withdrawal,
-            Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-age),
+            Birthdate = Retire.AddYears(-age),
+            RetirementDate = Retire,
             InitialTaxableBalance = 1_000_000,
             InitialRothBasis = 100_000,
             InitialRothUnrealizedGain = 0,
@@ -492,8 +483,6 @@ namespace MonteCarloSimulation.Core.Tests
             StdDev = 0,
             NewMoney = 0,
             YearNewMoney = 0,
-            SocialSecurityYearsUntilStart = 0,
-            SocialSecurityAnnualAmount = 0,
             AnnualStandardDeduction = 0,
             WithdrawalStrategy = WithdrawalStrategy.TaxOptimized,
             ScenarioDescription = "Tax-optimized withdrawal order"
@@ -507,7 +496,7 @@ namespace MonteCarloSimulation.Core.Tests
             var year0 = MonteCarloEngine.Run(TaxOptimizedParameters(age: 70, withdrawal: 20_000)).Result.Runs[0].Years[0];
 
             Assert.Equal(0, year0.TaxableWithdrawal);
-            Assert.Equal(20_000 * 1.025, year0.BrokerageWithdrawal, 6);
+            Assert.Equal(20_000, year0.BrokerageWithdrawal, 6);
             Assert.Equal(0, year0.RothWithdrawal);
             Assert.Equal(0, year0.OrdinaryTaxAmount + year0.CapitalGainsTaxAmount, 9);
         }
@@ -521,10 +510,10 @@ namespace MonteCarloSimulation.Core.Tests
 
             var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
-            // Step 1 sells $50,686.25 (= 49,450 * 1.025) of all-gain Brokerage at 0%, which leaves no room for
-            // Tax Deferred below the 0% ceiling. The remaining $31,313.75 comes from Brokerage at 15%.
-            double zeroRateSale = 49_450 * 1.025;
-            double fifteenPercentSale = (80_000 * 1.025 - zeroRateSale) / 0.85;
+            // Step 1 sells $49,450 of all-gain Brokerage at 0%, which leaves no room for
+            // Tax Deferred below the 0% ceiling. The remaining $30,550 comes from Brokerage at 15%.
+            double zeroRateSale = 49_450;
+            double fifteenPercentSale = (80_000 - zeroRateSale) / 0.85;
             Assert.Equal(0, year0.TaxableWithdrawal);
             Assert.Equal(zeroRateSale + fifteenPercentSale, year0.BrokerageWithdrawal, 4);
             Assert.Equal(0.15 * fifteenPercentSale, year0.CapitalGainsTaxAmount, 4);
@@ -545,7 +534,7 @@ namespace MonteCarloSimulation.Core.Tests
 
             var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
-            Assert.Equal(49_450 * 1.025 - 10_000 * 1.025, year0.HarvestedGains, 4);
+            Assert.Equal(49_450 - 10_000, year0.HarvestedGains, 4);
             Assert.Equal(0, year0.CapitalGainsTaxAmount, 9);
             Assert.Equal(0, year0.CapitalGainsBracketRate);
             Assert.Equal(0, year0.AmountUntilNextCapitalGainsBracket!.Value, 4);
@@ -635,19 +624,20 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.Equal(0, year0.AmountUntilNextBracket!.Value, 3);
         }
 
-        // Social Security, year 0: benefit $30,000 (not yet inflated), 85% taxable = $25,500; standard
-        // deduction 16,000 * 1.025 = 16,400, so $9,100 is taxed at 10% = $910 and the net benefit is $29,090.
+        // Social Security, year 0 (inflation factor 1.0): 12 payments of $2,500 = $30,000, 85% taxable = $25,500;
+        // standard deduction 16,000, so $9,500 is taxed at 10% = $950 and the net benefit is $29,050.
         private const double SsTaxableYear0 = 25_500;
-        private const double SsTaxYear0 = 910;
-        private const double SsNetYear0 = 29_090;
-        private const double StdDedYear0 = 16_000 * 1.025;
+        private const double SsTaxYear0 = 950;
+        private const double SsNetYear0 = 29_050;
+        private const double StdDedYear0 = 16_000;
 
         private static SimulationParameters SocialSecurityParameters(int age, double withdrawal) => new()
         {
             Years = 3,
             Iterations = 1,
             Withdrawal = withdrawal,
-            Birthdate = DateOnly.FromDateTime(DateTime.Today).AddYears(-age),
+            Birthdate = Retire.AddYears(-age),
+            RetirementDate = Retire,
             InitialTaxableBalance = 0,
             InitialRothBasis = 0,
             InitialRothUnrealizedGain = 0,
@@ -657,8 +647,8 @@ namespace MonteCarloSimulation.Core.Tests
             StdDev = 0,
             NewMoney = 0,
             YearNewMoney = 0,
-            SocialSecurityYearsUntilStart = 0,
-            SocialSecurityAnnualAmount = 30_000,
+            SocialSecurityStartDate = Retire,
+            SocialSecurityMonthlyAmount = 2_500, // 12 payments in a full year = 30,000
             AnnualStandardDeduction = 16_000,
             WithdrawalStrategy = WithdrawalStrategy.TaxOptimized,
             ScenarioDescription = "Social Security as income"
@@ -674,7 +664,7 @@ namespace MonteCarloSimulation.Core.Tests
 
             Assert.Equal(30_000, year0.SocialSecurityIncome);
             Assert.Equal(SsTaxYear0, year0.SocialSecurityTax, 6);
-            Assert.Equal(50_000 * 1.025 - SsNetYear0, year0.BrokerageWithdrawal, 6);
+            Assert.Equal(50_000 - SsNetYear0, year0.BrokerageWithdrawal, 6);
         }
 
         [Fact]
@@ -685,12 +675,12 @@ namespace MonteCarloSimulation.Core.Tests
 
             var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
-            // Need 22,160 net. SS already sits $9,100 into the 10% bracket (top 12,710), leaving 3,610 gross
-            // (3,249 net) at 10%; the other 18,911 net is at 12% -> 21,489.77 gross. Total gross 25,099.77.
-            double expectedGross = 3_610 + 18_911 / 0.88;
+            // Need 20,950 net. SS already sits $9,500 into the 10% bracket (top 12,400), leaving 2,900 gross
+            // (2,610 net) at 10%; the other 18,340 net is at 12% -> 20,840.91 gross. Total gross 23,740.91.
+            double expectedGross = 2_900 + 18_340 / 0.88;
             Assert.Equal(expectedGross, year0.TaxableWithdrawal, 4);
-            // Ordinary tax on all income: 1,271 (10% bracket) + 21,489.77 * 12%.
-            Assert.Equal(1_271 + (18_911 / 0.88) * 0.12, year0.OrdinaryTaxAmount, 4);
+            // Ordinary tax on all income: 1,240 (10% bracket) + 20,840.91 * 12%.
+            Assert.Equal(1_240 + (18_340 / 0.88) * 0.12, year0.OrdinaryTaxAmount, 4);
             Assert.Equal(0.12, year0.OrdinaryBracketRate);
         }
 
@@ -721,7 +711,7 @@ namespace MonteCarloSimulation.Core.Tests
 
             var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
-            double zeroRateGains = StdDedYear0 + 49_450 * 1.025 - SsTaxableYear0;
+            double zeroRateGains = StdDedYear0 + 49_450 - SsTaxableYear0;
             Assert.Equal(0, year0.TaxableWithdrawal);
             Assert.Equal(0.15 * (year0.BrokerageWithdrawal - zeroRateGains), year0.CapitalGainsTaxAmount, 4);
             Assert.Equal(SsTaxYear0, year0.OrdinaryTaxAmount, 6);
@@ -750,7 +740,7 @@ namespace MonteCarloSimulation.Core.Tests
             var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
 
             Assert.Equal(0, year0.BrokerageWithdrawal);
-            Assert.Equal(100_000 + (SsNetYear0 - 10_000 * 1.025), year0.BrokerageBalance, 6);
+            Assert.Equal(100_000 + (SsNetYear0 - 10_000), year0.BrokerageBalance, 6);
         }
 
         [Fact]
