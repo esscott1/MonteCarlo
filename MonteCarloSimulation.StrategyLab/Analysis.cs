@@ -13,7 +13,7 @@ namespace MonteCarloSimulation.StrategyLab
 
         public static Summary Summarize(
             IReadOnlyList<Scenario> scenarios, IReadOnlyList<ResultRow> rows, IReadOnlyList<SingleYearCase> singleYear,
-            IReadOnlyList<(Scenario Scenario, IReadOnlyList<ResultRow> Rows)> pageDefault, RunConfig config)
+            IReadOnlyList<(Scenario Scenario, IReadOnlyList<ResultRow> Rows)> pageDefault, CaseStudy? caseStudy, RunConfig config)
         {
             var byScenario = rows.GroupBy(r => r.ScenarioId).ToDictionary(g => g.Key, g => g.ToDictionary(r => r.Combination));
             var baselineCode = Candidates.Baseline.Code;
@@ -60,7 +60,7 @@ namespace MonteCarloSimulation.StrategyLab
                 return (Scenario: s, Best: best, Regret: best.Spend825 / byScenario[s.Id][baselineCode].Spend825 - 1);
             }).ToList();
             var regretValues = regrets.Select(r => r.Regret).ToArray();
-            var bestCounts = regrets.Where(r => r.Regret > TieBand)
+            Dictionary<string, int> BestCounts(double over) => regrets.Where(r => r.Regret > over)
                 .GroupBy(r => r.Best.Combination).OrderByDescending(g => g.Count())
                 .ToDictionary(g => g.Key, g => g.Count());
 
@@ -68,32 +68,55 @@ namespace MonteCarloSimulation.StrategyLab
                 Mean(regretValues), Percentile(regretValues, 0.5), Percentile(regretValues, 0.9), Percentile(regretValues, 0.95),
                 regretValues.DefaultIfEmpty().Max(),
                 Share(regretValues, v => v > 0.01), Share(regretValues, v => v > 0.03), Share(regretValues, v => v > TieBand),
-                bestCounts);
+                BestCounts(TieBand), BestCounts(0.03));
 
             var topRegret = regrets.OrderByDescending(r => r.Regret).Take(10).Select(r =>
             {
                 var b = byScenario[r.Scenario.Id][baselineCode];
-                return new RegretCase(Describe(r.Scenario), b.Spend825, r.Best.Combination, r.Best.Spend825, r.Regret,
+                return new RegretCase(Describe(r.Scenario), r.Scenario.RetirementAge, r.Scenario.TaxDeferredShare,
+                    b.Spend825, r.Best.Combination, r.Best.Spend825, r.Regret,
                     b.MedianTaxesAtCommon, r.Best.MedianTaxesAtCommon, b.MedianAfterTaxWealthAtCommon, r.Best.MedianAfterTaxWealthAtCommon);
             }).ToList();
 
             var slices = Slices(included, byScenario);
+
+            // The gap to the best combination for the household types where the baseline does well and badly.
+            // Pro-rata column: Pro-rata + app conversions vs the baseline, the user's direct question.
+            string proRataCode = CaseStudy.AlternativeCode;
+            SubsetResult Subset(string label, Func<Scenario, bool> member)
+            {
+                var gaps = regrets.Where(r => member(r.Scenario)).Select(r => r.Regret).ToArray();
+                var proRata = included.Where(member)
+                    .Select(s => byScenario[s.Id][proRataCode].Spend825 / byScenario[s.Id][baselineCode].Spend825 - 1).ToArray();
+                return new SubsetResult(label, gaps.Length, Percentile(gaps, 0.5), Mean(gaps), Percentile(gaps, 0.9),
+                    Share(gaps, v => v > 0.01), Share(gaps, v => v > 0.03), Percentile(proRata, 0.5));
+            }
+            var subsets = new List<SubsetResult>
+            {
+                Subset("Everyone", _ => true),
+                Subset("Retire at 59\u00bd or later", s => !s.RetiresBefore59Half),
+                Subset("Retire before 59\u00bd, under 75% Tax Deferred", s => s.RetiresBefore59Half && s.TaxDeferredShare < 0.75),
+                Subset("Retire before 59\u00bd, 75%+ Tax Deferred", s => s.RetiresBefore59Half && s.TaxDeferredShare >= 0.75),
+            };
 
             var excludedCount = scenarios.Count(s => byScenario.ContainsKey(s.Id)) - included.Count;
 
             return new Summary(
                 config,
                 Candidates.All.Select(c => new CombinationInfo(c.Code, c.Order.Code, c.Order.Name, c.Policy.Code, c.Policy.Name)).ToList(),
+                Candidates.Definitions().ToList(),
                 baselineCode,
                 included.Count,
                 excludedCount,
                 vsBaseline,
                 direct,
                 regret,
+                subsets,
                 topRegret,
                 slices,
                 SummarizeSingleYear(singleYear),
-                pageDefault.Select(p => new PageDefaultResult(p.Scenario.InvestmentScenarioId, p.Scenario.Parameters.ScenarioDescription, p.Rows)).ToList());
+                pageDefault.Select(p => new PageDefaultResult(p.Scenario.InvestmentScenarioId, p.Scenario.Parameters.ScenarioDescription, p.Rows)).ToList(),
+                caseStudy);
         }
 
         private static double Ratio(double value, double against) => against > 0 ? value / against - 1 : 0;
@@ -236,10 +259,16 @@ namespace MonteCarloSimulation.StrategyLab
     internal sealed record RegretSummary(
         double Mean, double Median, double P90, double P95, double Max,
         double ShareOver1Pct, double ShareOver3Pct, double ShareOverTieBand,
-        Dictionary<string, int> BestCombinationCounts);
+        Dictionary<string, int> BestCombinationCounts, Dictionary<string, int> BestCombinationCountsOver3Pct);
+
+    // The gap to the best combination within one household type. ProRataMedianDiff: Pro-rata + app conversions
+    // vs the baseline, median.
+    internal sealed record SubsetResult(
+        string Label, int Scenarios, double MedianGap, double MeanGap, double P90Gap, double ShareOver1Pct, double ShareOver3Pct,
+        double ProRataMedianDiff);
 
     internal sealed record RegretCase(
-        string Scenario, double BaselineSpend825, string BestCombination, double BestSpend825, double Regret,
+        string Scenario, double RetirementAge, double TaxDeferredShare, double BaselineSpend825, string BestCombination, double BestSpend825, double Regret,
         double BaselineMedianTaxes, double BestMedianTaxes, double BaselineMedianWealth, double BestMedianWealth);
 
     internal sealed record Slice(string Dimension, List<SliceBin> Bins);
@@ -260,14 +289,17 @@ namespace MonteCarloSimulation.StrategyLab
     internal sealed record Summary(
         RunConfig Config,
         List<CombinationInfo> Combinations,
+        List<StrategyDefinition> Definitions,
         string Baseline,
         int ScenariosCompared,
         int ScenariosExcluded,
         List<Comparison> VsBaseline,
         List<Comparison> DirectQuestion,
         RegretSummary Regret,
+        List<SubsetResult> Subsets,
         List<RegretCase> TopRegret,
         List<Slice> Slices,
         SingleYearSummary SingleYear,
-        List<PageDefaultResult> PageDefault);
+        List<PageDefaultResult> PageDefault,
+        CaseStudy? CaseStudy);
 }

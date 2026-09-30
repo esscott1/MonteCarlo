@@ -494,3 +494,159 @@ details pre {
 .footnote.open .footnote-tip {
     display: block;
 }
+
+/* Model Info page */
+.info-section {
+    margin: 2rem 0;
+}
+
+.info-section h2 {
+    font-size: 1.25rem;
+    margin: 0 0 0.6rem;
+}
+
+.info-section h3 {
+    font-size: 1rem;
+    margin: 1.2rem 0 0.4rem;
+}
+
+.info-section p {
+    margin: 0 0 0.7rem;
+}
+
+.info-lede {
+    font-size: 1.05rem;
+}
+
+.info-meta {
+    color: #666;
+    font-size: 0.85rem;
+}
+
+.info-notes {
+    margin: 0 0 0.8rem;
+    padding-left: 1.2rem;
+}
+
+.info-notes li {
+    margin-bottom: 0.35rem;
+}
+
+.info-callout {
+    border-left: 4px solid #1a73e8;
+    padding-left: 0.8rem;
+}
+
+.info-code {
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    overflow-x: auto;
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 0.8rem;
+}
+
+.stat-tile {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.8rem;
+    display: grid;
+    gap: 0.3rem;
+    align-content: start;
+}
+
+.stat-tile b {
+    font-size: 1.4rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-tile span {
+    color: #666;
+    font-size: 0.85rem;
+}
+
+.stat-tile.key {
+    border-color: var(--ok-border);
+    background: var(--ok-bg);
+    color: #1e1e1e;
+}
+
+.stat-tile.key span {
+    color: #333;
+}
+
+.table-scroll {
+    overflow-x: auto;
+    margin-bottom: 0.8rem;
+}
+
+.table-scroll .run-table {
+    margin-bottom: 0;
+}
+
+.run-table td.num,
+.run-table th.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.strategy-code {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.gain {
+    color: #188038;
+}
+
+.loss {
+    color: #c5221f;
+}
+
+.strategy-grid td.grid-cell {
+    min-width: 8.5rem;
+}
+
+.grid-main {
+    display: block;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.grid-sub {
+    display: block;
+    color: #666;
+    font-size: 0.75rem;
+}
+
+.strategy-grid td.grid-cell.gain {
+    background: rgba(52, 168, 83, 0.12);
+}
+
+.strategy-grid td.grid-cell.loss {
+    background: rgba(217, 48, 37, 0.1);
+}
+
+.strategy-grid td.grid-cell.baseline {
+    background: rgba(26, 115, 232, 0.1);
+}
+
+.run-table tr.slice-group th {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.run-table td.household {
+    min-width: 22rem;
+}
+
+.case-study tr.year-first td {
+    border-top-width: 2px;
+}

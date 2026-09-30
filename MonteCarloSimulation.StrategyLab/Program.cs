@@ -9,14 +9,16 @@ using MonteCarloSimulation.StrategyLab;
 // market paths for many generated households and writes CSVs plus summary.json.
 //
 //   dotnet run -c Release --project MonteCarloSimulation.StrategyLab -- [--scenarios 1000] [--paths 200]
-//       [--seed 2026] [--single-year 1000] [--out MonteCarloSimulation.StrategyLab/output] [--quick]
+//       [--seed 2026] [--single-year 1000] [--out MonteCarloSimulation.StrategyLab/output] [--quick] [--publish]
 //
-// Completed scenarios are appended to results.csv as they finish; rerunning with the same settings resumes.
+// Completed scenarios are appended to results.csv as they finish; rerunning with the same settings resumes (and
+// redoes only the fast parts). --publish also writes summary.json to the web app, where the Model Info page reads it.
 
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
 int scenarioCount = 1000, paths = 200, seed = 2026, singleYearCount = 1000;
 string outDir = Path.Combine("MonteCarloSimulation.StrategyLab", "output");
+bool publish = false;
 for (int i = 0; i < args.Length; i++)
 {
     string Next() => args[++i];
@@ -28,6 +30,7 @@ for (int i = 0; i < args.Length; i++)
         case "--single-year": singleYearCount = int.Parse(Next()); break;
         case "--out": outDir = Next(); break;
         case "--quick": scenarioCount = 50; break;
+        case "--publish": publish = true; break;
         default: Console.Error.WriteLine($"Unknown argument {args[i]}"); return 1;
     }
 }
@@ -81,10 +84,19 @@ Console.WriteLine($"Single-year check: {singleYearCount} situations...");
 var singleYear = SingleYearCheck.Run(singleYearCount, seed);
 LabCsv.WriteSingleYear(Path.Combine(runDir, "single-year.csv"), singleYear);
 
+var caseStudy = CaseStudy.Build(scenarios, rows, paths);
+
 var config = new RunConfig(scenarioCount, paths, seed, singleYearCount, DateTime.UtcNow, stopwatch.Elapsed.TotalSeconds);
-var summary = Analysis.Summarize(scenarios, rows, singleYear, pageDefault, config);
-var json = JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+var summary = Analysis.Summarize(scenarios, rows, singleYear, pageDefault, caseStudy, config);
+var json = JsonSerializer.Serialize(summary, SummaryJson.Options);
 File.WriteAllText(Path.Combine(runDir, "summary.json"), json);
+if (publish)
+{
+    // The Model Info page's data, committed with the web app
+    Directory.CreateDirectory(Path.GetDirectoryName(SummaryJson.PublishedPath)!);
+    File.WriteAllText(SummaryJson.PublishedPath, json);
+    Console.WriteLine($"Published to {SummaryJson.PublishedPath}");
+}
 
 Console.WriteLine();
 Console.WriteLine($"Done in {stopwatch.Elapsed.TotalMinutes:0.0} min. {summary.ScenariosCompared} scenarios compared ({summary.ScenariosExcluded} excluded).");
