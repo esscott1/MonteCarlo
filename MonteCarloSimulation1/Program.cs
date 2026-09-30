@@ -49,7 +49,7 @@ namespace MonteCarloSimulation1
                 double variance = output.AllRates.Average(n => Math.Pow(n - totalAvgRates, 2));
                 double stdDev = Math.Sqrt(variance);
                 Console.WriteLine($"\nActual total avg return {totalAvgRates:P4} with std dev {stdDev} based on {scenarioDescription} into Randomization");
-                Console.WriteLine($"\nInheritance of  {parameters.NewMoney:C0} in  {DateTime.Now.Year + parameters.YearNewMoney} was considered");
+                Console.WriteLine($"\nInheritance of  {parameters.NewMoney:C0} in  {parameters.RetirementDate.Year + parameters.YearNewMoney} was considered");
 
                 Console.WriteLine($"\nAverage year of failures ran out of money in year {result.YearsOutOfMoney.Average():F0} with an Avg return of {result.FailedScenarioAverages.Average():P4}");
                 Console.WriteLine($"\nSee Above for failed scenarios and their rates of return, withdrawals, and balances.\n");
@@ -63,7 +63,7 @@ namespace MonteCarloSimulation1
                     foreach (var y in output.LastSuccessfulRun.Skip(1))
                     {
                         Console.WriteLine(
-                            $"Year {y.Year}\n withdrawals: {y.Withdrawal:C0}, (" +
+                            $"Year {y.CalendarYear}{(y.YearFraction < 0.9995 ? $" (partial, {y.YearFraction:P0} of year)" : "")}\n withdrawals: {y.Withdrawal:C0}, (" +
                             $"taxable: {y.TaxableWithdrawal:C0}, " +
                             $"brokerage: {y.BrokerageWithdrawal:C0}, " +
                             $"roth: {y.RothWithdrawal:C0})\n " +
@@ -74,7 +74,7 @@ namespace MonteCarloSimulation1
                                 : ", top bracket)") +
                             (y.HarvestedGains > 0 ? $", harvested {y.HarvestedGains:C0} at 0%" : "") + "\n " +
                             $"roth conversion: {y.RothConversionAmount:C0} (tax {y.RothConversionTax:C0})\n " +
-                            $"social security: {y.SocialSecurityIncome:C0} (tax {y.SocialSecurityTax:C0})\n " +
+                            $"social security: {y.SocialSecurityIncome:C0} ({y.SocialSecurityMonths} mo, tax {y.SocialSecurityTax:C0})\n " +
                             $"years return ($): {y.ReturnAmount:C0}\n " +
                             $"total balance: {y.Balance:C0} (" +
                             $"taxable balance: {y.TaxableBalance:C0}, " +
@@ -141,12 +141,19 @@ namespace MonteCarloSimulation1
             int option = PromptInvestmentOption();
             var scenario = InvestmentScenarios.ById(option) ?? InvestmentScenarios.All[3];
 
+            int years = PromptYears();
+            int iterations = PromptIterations();
+            double withdrawal = PromptWithdrawal();
+            var birthdate = PromptBirthdate();
+            var retirementDate = PromptRetirementDate(birthdate);
+
             return new SimulationParameters
             {
-                Years = PromptYears(),
-                Iterations = PromptIterations(),
-                Withdrawal = PromptWithdrawal(),
-                Birthdate = PromptBirthdate(),
+                Years = years,
+                Iterations = iterations,
+                Withdrawal = withdrawal,
+                Birthdate = birthdate,
+                RetirementDate = retirementDate,
                 InitialTaxableBalance = PromptInitialTaxableBalance(),
                 InitialRothBasis = PromptInitialRothBasis(),
                 InitialRothUnrealizedGain = PromptInitialRothUnrealizedGain(),
@@ -156,8 +163,8 @@ namespace MonteCarloSimulation1
                 StdDev = scenario.StdDev,
                 NewMoney = PromptNewMoney(),
                 YearNewMoney = PromptYearNewMoney(),
-                SocialSecurityYearsUntilStart = PromptSocialSecurityYearsUntilStart(),
-                SocialSecurityAnnualAmount = PromptSocialSecurityAnnualAmount(),
+                SocialSecurityStartDate = PromptSocialSecurityStartDate(birthdate),
+                SocialSecurityMonthlyAmount = PromptSocialSecurityMonthlyAmount(),
                 AnnualStandardDeduction = PromptAnnualStandardDeduction(),
                 EnableRothConversions = PromptEnableRothConversions(),
                 WithdrawalStrategy = PromptWithdrawalStrategy(),
@@ -363,23 +370,38 @@ namespace MonteCarloSimulation1
             }
         }
 
-        public static int PromptSocialSecurityYearsUntilStart()
+        public static DateOnly PromptRetirementDate(DateOnly birthdate)
         {
-            Console.Write("Enter the number of years until Social Security income begins: ");
+            var earliest = new DateOnly(FederalTaxBrackets.Year, 1, 1);
+            Console.Write($"Enter your retirement date - withdrawals start then, and balances are as of it (MM/DD/YYYY, {earliest.Year} or later): ");
             while (true)
             {
                 string input = Console.ReadLine();
-                if (int.TryParse(input, out int value) && value >= 0)
+                if (DateOnly.TryParse(input, out DateOnly value) && value >= earliest && value > birthdate && value <= birthdate.AddYears(100))
                 {
                     return value;
                 }
-                Console.Write("Invalid input. Please enter a non-negative integer: ");
+                Console.Write($"Invalid input. Please enter a date from {earliest.Year} on, after your birthdate and before age 100: ");
             }
         }
 
-        public static double PromptSocialSecurityAnnualAmount()
+        public static DateOnly PromptSocialSecurityStartDate(DateOnly birthdate)
         {
-            Console.Write("Enter the initial annual Social Security amount (e.g., 50000) [0 for none]: ");
+            Console.Write("Enter the date of your first Social Security payment (MM/DD/YYYY, between ages 62 and 70): ");
+            while (true)
+            {
+                string input = Console.ReadLine();
+                if (DateOnly.TryParse(input, out DateOnly value) && value >= birthdate.AddYears(62) && value <= birthdate.AddYears(70))
+                {
+                    return value;
+                }
+                Console.Write($"Invalid input. Please enter a date between {birthdate.AddYears(62):MM/dd/yyyy} and {birthdate.AddYears(70):MM/dd/yyyy}: ");
+            }
+        }
+
+        public static double PromptSocialSecurityMonthlyAmount()
+        {
+            Console.Write("Enter the monthly Social Security benefit in today's dollars (e.g., 2500) [0 for none]: ");
             while (true)
             {
                 string input = Console.ReadLine();

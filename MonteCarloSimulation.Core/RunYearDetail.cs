@@ -3,7 +3,11 @@ namespace MonteCarloSimulation.Core
     // One simulated year of one run. Built once per year by the engine and never mutated afterwards.
     public record RunYearDetail
     {
+        // Model year index (0 = the retirement year) and the calendar (tax) year it is. YearFraction is the share of
+        // the calendar year inside the retirement window - below 1 for a partial first or last year.
         public required int Year { get; init; }
+        public required int CalendarYear { get; init; }
+        public required double YearFraction { get; init; }
         public required double RateOfReturn { get; init; }
         public required double ReturnAmount { get; init; }
         public required double Withdrawal { get; init; }
@@ -34,5 +38,7 @@ namespace MonteCarloSimulation.Core
         public required double TaxableWithdrawalPercentOfBalance { get; init; }
         public required double SocialSecurityIncome { get; init; }
         public required double SocialSecurityTax { get; init; }
+        // Monthly Social Security payments received this year (fewer than 12 in the first year of benefits or a partial year)
+        public required int SocialSecurityMonths { get; init; }
     }
 }

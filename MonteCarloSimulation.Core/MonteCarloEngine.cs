@@ -10,11 +10,11 @@ namespace MonteCarloSimulation.Core
         internal static SimulationRunOutput Run(SimulationParameters parameters, Random random)
         {
             var strategy = WithdrawalStrategies.For(parameters.WithdrawalStrategy);
-            double ageAtStartYears = (DateOnly.FromDateTime(DateTime.Today).DayNumber - parameters.Birthdate.DayNumber) / 365.25;
+            var timeline = RetirementTimeline.Build(parameters);
 
             var runs = new List<RunSummary>(parameters.Iterations);
             for (int i = 0; i < parameters.Iterations; i++)
-                runs.Add(RunSimulator.Simulate(parameters, strategy, ageAtStartYears, random));
+                runs.Add(RunSimulator.Simulate(parameters, timeline, strategy, random));
 
             return new SimulationRunOutput
             {

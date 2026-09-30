@@ -1,46 +1,49 @@
 namespace MonteCarloSimulation.Core
 {
-    // Simulates one run (one Monte Carlo iteration) year by year until it ends or fails.
+    // Simulates one run (one Monte Carlo iteration) year by year over the retirement timeline until it ends or fails.
     internal static class RunSimulator
     {
-        public static RunSummary Simulate(SimulationParameters parameters, IWithdrawalStrategy strategy, double ageAtStartYears, Random random)
+        public static RunSummary Simulate(
+            SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, IWithdrawalStrategy strategy, Random random)
         {
             var accounts = Accounts.FromParameters(parameters);
-            var indexes = new InflationIndexes(parameters);
-            var years = new List<RunYearDetail>(parameters.Years);
+            var years = new List<RunYearDetail>(timeline.Count);
 
-            for (int year = 0; year < parameters.Years; year++)
+            foreach (var retirementYear in timeline)
             {
-                indexes.Advance(year);
                 double rate = DrawReturn(parameters.Mean, parameters.StdDev, random);
 
-                var (detail, failed) = SimulateYear(parameters, strategy, accounts, indexes, year, rate, ageAtStartYears + year);
+                var (detail, failed) = SimulateYear(parameters, strategy, accounts, retirementYear, rate);
                 years.Add(detail);
 
                 // A run fails the instant any bucket (or the total) goes negative, or the eligible buckets
                 // can't cover the year's need - even while age-locked money keeps the total positive.
                 if (failed)
-                    return new RunSummary { Years = years, FailureYear = year };
+                    return new RunSummary { Years = years, FailureYear = retirementYear.Index };
             }
 
             return new RunSummary { Years = years, FailureYear = null };
         }
 
         private static (RunYearDetail Detail, bool Failed) SimulateYear(
-            SimulationParameters parameters, IWithdrawalStrategy strategy, Accounts accounts,
-            InflationIndexes indexes, int year, double rate, double ageInYear)
+            SimulationParameters parameters, IWithdrawalStrategy strategy, Accounts accounts, RetirementYear year, double rate)
         {
-            var taxYear = indexes.TaxYear;
-            double spending = indexes.Withdrawal;
-            var ss = SocialSecurityYear.Compute(indexes.SocialSecurity, taxYear, spending);
+            // Today's-dollar inputs, inflated to this calendar year. Spending and returns are prorated for a partial
+            // year; the tax year's deduction and brackets are not (they're annual). Social Security counts the
+            // monthly payments that actually fall in this year.
+            var taxYear = year.TaxYear;
+            double spending = parameters.Withdrawal * year.InflationFactor * year.Fraction;
+            double socialSecurity = parameters.SocialSecurityMonthlyAmount * year.InflationFactor * year.SocialSecurityPayments;
+            var ss = SocialSecurityYear.Compute(socialSecurity, taxYear, spending);
+            double periodRate = rate * year.Fraction;
 
             // Start-of-year (prior year-end) Tax Deferred balance, for the "% of balance" figure
             double taxableStartOfYear = accounts.Taxable;
 
             // All three buckets grow by the same rate, then this year's withdrawal is taken
-            accounts.ApplyReturn(rate);
+            accounts.ApplyReturn(periodRate);
 
-            bool ageEligible = ageInYear >= 59.5;
+            bool ageEligible = year.AgeEligible;
             var plan = strategy.Plan(new WithdrawalContext(
                 ss.Need, ss.Taxable, taxYear,
                 accounts.EligibleTaxable(ageEligible), accounts.Brokerage, accounts.BrokerageGainFraction, accounts.EligibleRoth(ageEligible)));
@@ -77,17 +80,19 @@ namespace MonteCarloSimulation.Core
 
             // New money (e.g. an inheritance) arrives as after-tax cash in its year; so does any Social
             // Security beyond this year's spending
-            if (year == parameters.YearNewMoney)
+            if (year.Index == parameters.YearNewMoney)
                 accounts.DepositBrokerageCash(parameters.NewMoney);
             accounts.DepositBrokerageCash(ss.Surplus);
 
             // Reported return, backed out of the year-end balances
             double returnAmount = accounts.Total
-                - (accounts.Taxable / (1 + rate) + accounts.Brokerage / (1 + rate) + accounts.Roth / (1 + rate));
+                - (accounts.Taxable / (1 + periodRate) + accounts.Brokerage / (1 + periodRate) + accounts.Roth / (1 + periodRate));
 
             var detail = new RunYearDetail
             {
-                Year = year,
+                Year = year.Index,
+                CalendarYear = year.CalendarYear,
+                YearFraction = year.Fraction,
                 RateOfReturn = rate,
                 ReturnAmount = returnAmount,
                 Withdrawal = spending,
@@ -111,10 +116,11 @@ namespace MonteCarloSimulation.Core
                 AgeEligible = ageEligible,
                 RothConversionAmount = conversion.Amount,
                 RothConversionTax = conversion.Tax,
-                AgeInYear = ageInYear,
+                AgeInYear = year.AgeAtStart,
                 TaxableWithdrawalPercentOfBalance = taxableStartOfYear > 0 ? plan.GrossTaxable / taxableStartOfYear : 0,
                 SocialSecurityIncome = ss.Gross,
-                SocialSecurityTax = ss.Tax
+                SocialSecurityTax = ss.Tax,
+                SocialSecurityMonths = year.SocialSecurityPayments
             };
 
             return (detail, accounts.AnyNegative || plan.IsShortfall);

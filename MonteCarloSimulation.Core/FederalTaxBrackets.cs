@@ -4,6 +4,9 @@ namespace MonteCarloSimulation.Core
 
     public static class FederalTaxBrackets
     {
+        // The tax year these tables are for - also the "today's dollars" year the model inflates inputs from.
+        public const int Year = 2026;
+
         // Tax year 2026, single filer. Source: IRS IR-2025-103 / Rev. Proc. 2025-32.
         public static readonly IReadOnlyList<TaxBracket> Single2026 = new List<TaxBracket>
         {
