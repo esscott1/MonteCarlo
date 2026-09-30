@@ -31,7 +31,15 @@ dotnet test MonteCarlo.sln
 
 ## Git branch hygiene
 
-Once a remote branch has been merged into `master` and deleted on the remote (e.g. after its PR merges), its local counterpart is stale and should go too. When doing branch-related work (checking status, listing branches, wrapping up a PR), run `git fetch --prune` and delete any local branch whose remote-tracking branch is now gone (`git branch -vv` shows these as `: gone]`) with `git branch -d <branch>`. Confirm with the user before deleting anything that isn't obviously merged.
+**Standing procedure once a PR has been merged** — do this without being asked whenever the user says a PR merged (or you see that it has):
+1. Confirm it really merged: `gh pr view <number> --json state,mergedAt` shows `MERGED`.
+2. Switch to `master` and fast-forward it: `git switch master && git pull --ff-only`.
+3. Confirm the branch is contained in `master`: it appears in `git branch --merged master`.
+4. Delete the remote branch (GitHub doesn't auto-delete it in this repo): `git push origin --delete <branch>`.
+5. Delete the local branch: `git branch -d <branch>` (lowercase `-d`, which refuses unmerged work — never `-D`).
+6. `git fetch --prune`, then report what was deleted and what branches remain.
+
+Never delete a branch whose PR is still open or that isn't contained in `master` (e.g. `feature/change-request-status-spinner`, PR #22, open) — ask the user instead. The same applies to stale branches found during other branch work: `git fetch --prune`, then delete local branches whose remote-tracking branch is gone (`git branch -vv` shows `: gone]`) with `git branch -d`, confirming with the user before deleting anything that isn't obviously merged.
 
 Source files are UTF-8 with CRLF line endings in the working copy (`core.autocrlf=true`; the repo stores LF). BOM use is mixed — most `.cs` files have none, the `.csproj` files do — so preserve each file's existing BOM state and give new `.cs` files none. `git add` will warn `LF will be replaced by CRLF`; that's expected and harmless. Note that `sed -i` in Git Bash rewrites files with LF; restore CRLF afterwards.
 
