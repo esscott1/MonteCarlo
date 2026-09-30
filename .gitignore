@@ -398,3 +398,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Strategy Lab run outputs (CSV/JSON; regenerate with the lab)
+MonteCarloSimulation.StrategyLab/output/
