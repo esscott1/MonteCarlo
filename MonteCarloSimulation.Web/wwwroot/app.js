@@ -199,9 +199,6 @@ function hasNextBracket(nextRate) {
 function taxesBreakdown(yd) {
     const items = [
         `${formatCurrency(yd.capitalGainsTaxAmount)} cap gains paid (${ratePercent(yd.capitalGainsBracketRate)} LTCG bracket)`,
-        hasNextBracket(yd.nextCapitalGainsBracketRate)
-            ? `${formatCurrency(yd.amountUntilNextCapitalGainsBracket)} until ${ratePercent(yd.nextCapitalGainsBracketRate)} LTCG bracket`
-            : 'Already in top LTCG bracket',
         `${formatCurrency(yd.ordinaryTaxAmount)} ord tax paid (${ratePercent(yd.ordinaryBracketRate)} bracket)`,
         hasNextBracket(yd.nextBracketRate)
             ? `${formatCurrency(yd.amountUntilNextBracket)} until ${ratePercent(yd.nextBracketRate)} bracket`
@@ -631,7 +628,8 @@ form.addEventListener('submit', async (e) => {
         scenarioId: Number(formData.get('scenarioId')),
         years: Number(formData.get('years')),
         iterations: Number(formData.get('iterations')),
-        withdrawal: parseNumber(formData.get('withdrawal')),
+        // Entered per month; the model and API work in annual amounts.
+        withdrawal: parseNumber(formData.get('withdrawal')) * 12,
         birthdate: formData.get('birthdate'),
         retirementDate: formData.get('retirementDate'),
         initialTaxableBalance: parseNumber(formData.get('initialTaxableBalance')),
