@@ -21,7 +21,13 @@ namespace MonteCarloSimulation.Core
             {
                 double rate = DrawReturn(parameters.Mean, parameters.StdDev, random);
 
-                var (detail, failed) = SimulateYear(parameters, strategy, conversionCeiling, accounts, retirementYear, BridgeNeed(parameters, timeline, retirementYear), rate);
+                // Medicare IRMAA looks back two years; the model's first two years have no lookback inside it
+                double? lookbackMagi = retirementYear.Index >= MedicareIrmaa.LookbackYears
+                    ? years[retirementYear.Index - MedicareIrmaa.LookbackYears].Magi
+                    : null;
+
+                var (detail, failed) = SimulateYear(
+                    parameters, strategy, conversionCeiling, accounts, retirementYear, BridgeNeed(parameters, timeline, retirementYear), lookbackMagi, rate);
                 years.Add(detail);
 
                 // A run fails the instant any bucket (or the total) goes negative, or the eligible buckets
@@ -35,7 +41,7 @@ namespace MonteCarloSimulation.Core
 
         private static (RunYearDetail Detail, bool Failed) SimulateYear(
             SimulationParameters parameters, IWithdrawalStrategy strategy, ConversionCeiling conversionCeiling,
-            Accounts accounts, RetirementYear year, double bridgeNeed, double rate)
+            Accounts accounts, RetirementYear year, double bridgeNeed, double? lookbackMagi, double rate)
         {
             // Today's-dollar inputs, inflated to this calendar year. Spending and returns are prorated for a partial
             // year; the tax year's deduction and brackets are not (they're annual). Social Security counts the
@@ -43,7 +49,9 @@ namespace MonteCarloSimulation.Core
             var taxYear = year.TaxYear;
             double spending = parameters.Withdrawal * year.InflationFactor * year.Fraction;
             double socialSecurity = parameters.SocialSecurityMonthlyAmount * year.InflationFactor * year.SocialSecurityPayments;
-            var ss = SocialSecurityYear.Compute(socialSecurity, taxYear, spending);
+            // Medicare IRMAA surcharges are a cost of the year on top of spending
+            double irmaa = MedicareIrmaa.YearSurcharge(lookbackMagi, year);
+            var ss = SocialSecurityYear.Compute(socialSecurity, taxYear, spending + irmaa);
             double periodRate = rate * year.Fraction;
 
             // Start-of-year (prior year-end) Tax Deferred balance, for the "% of balance" figure
@@ -125,6 +133,8 @@ namespace MonteCarloSimulation.Core
                 HarvestedGains = harvestedGains,
                 RealizedGains = realizedGains,
                 ZeroRateGains = taxYear.ZeroRateGains(ordinaryIncome, realizedGains + harvestedGains),
+                IrmaaSurcharge = irmaa,
+                Magi = ordinaryIncome + realizedGains + harvestedGains,
                 AgeEligible = ageEligible,
                 RothConversionAmount = conversion.Amount,
                 RothConversionTax = conversion.Tax,

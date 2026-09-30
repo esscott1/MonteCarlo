@@ -36,6 +36,11 @@ namespace MonteCarloSimulation.Core
         public required double RealizedGains { get; init; }
         // Gain dollars (realized plus harvested) taxed at 0% this year. Reporting only.
         public required double ZeroRateGains { get; init; }
+        // Medicare IRMAA: this year's surcharge (from MAGI two years earlier, paid on top of spending), and this
+        // year's MAGI - gross ordinary income plus all realized gains, harvested included - which sets the surcharge
+        // two years from now.
+        public required double IrmaaSurcharge { get; init; }
+        public required double Magi { get; init; }
         public required bool AgeEligible { get; init; }
         public required double RothConversionAmount { get; init; }
         public required double RothConversionTax { get; init; }
