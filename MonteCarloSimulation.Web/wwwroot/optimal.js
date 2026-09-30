@@ -3,6 +3,13 @@ const optimalForm = document.getElementById('optimal-form');
 const optimalResults = document.getElementById('optimal-results');
 const optimalSubmit = document.getElementById('optimal-submit');
 
+// The request and results on screen, so "Run in Simulator" describes what's shown even if the form has changed since.
+let lastRequest = null;
+let lastResult = null;
+
+// sessionStorage key for handing one result to the main page (app.js reads it once and runs it).
+const SIMULATOR_HANDOFF_KEY = 'simulatorHandoff';
+
 function formatCurrency(value) {
     return Number(value).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 }
@@ -120,6 +127,10 @@ function renderScenario(scenario) {
             <p>At ${perMonth(r.spendAtMidpoint)}/month, ${formatPercent(scenario.verifiedSurvivalRate)} of the simulated markets last the full period.</p>
             <p>Accounts drawn in the ${ORDER_NAMES[r.withdrawalStrategy] ?? r.withdrawalStrategy} order, with ${TARGET_PHRASES[r.rothConversionTarget] ?? r.rothConversionTarget} &mdash; the best combination for these inputs, chosen by the app (<a href="model-info.html" class="summary-link">why</a>).</p>
             ${bandNote}
+            <p class="simulator-actions">
+                <button type="button" class="run-in-simulator" data-scenario-id="${scenario.scenarioId}">Run in Simulator</button>
+                <span class="simulator-message" role="alert"></span>
+            </p>
             <details>
                 <summary>Compare Social Security start ages</summary>
                 ${renderClaimingTable(scenario)}
@@ -138,6 +149,7 @@ function renderBenefitCurve(benefits) {
 }
 
 function renderResults(result) {
+    lastResult = result;
     optimalResults.innerHTML = `
         <p class="page-intro">Based on ${result.paths} simulated market paths per investment scenario. "Survival" means the money lasts the full "Years money lasts".</p>
         ${result.scenarios.map(renderScenario).join('')}
@@ -148,17 +160,19 @@ optimalForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     optimalSubmit.disabled = true;
     optimalResults.innerHTML = '<p class="page-intro">Calculating&hellip; this takes a few seconds.</p>';
+    const request = readRequest();
     try {
         const response = await fetch('/api/optimal', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(readRequest()),
+            body: JSON.stringify(request),
         });
         const body = await response.json();
         if (!response.ok) {
             renderErrors(body.errors ?? { request: body.title ?? 'The request failed.' });
             return;
         }
+        lastRequest = request;
         renderResults(body);
     } catch (err) {
         optimalResults.innerHTML = '<div class="error-box"><p>Something went wrong. Please try again.</p></div>';
@@ -167,4 +181,51 @@ optimalForm.addEventListener('submit', async (e) => {
     }
 });
 
+// "Run in Simulator": hand one scenario's recommendation and the inputs behind it to the main page, which fills
+// its form and runs. The main page re-picks the withdrawal order and conversion line with its own test.
+function simulatorHandoff(scenario) {
+    const r = scenario.recommended;
+    const q = lastRequest;
+    return {
+        version: 1,
+        scenarioId: scenario.scenarioId,
+        scenarioDescription: scenario.description,
+        recommendedAge: r.age,
+        iterations: 99,
+        withdrawalMonthly: Math.round(r.spendAtMidpoint / 12),
+        socialSecurityStartDate: r.startDate,
+        socialSecurityMonthlyAmount: Math.round(r.monthlyBenefit),
+        years: q.years,
+        birthdate: q.birthdate,
+        retirementDate: q.retirementDate,
+        initialTaxableBalance: q.initialTaxableBalance,
+        initialRothBasis: q.initialRothBasis,
+        initialRothUnrealizedGain: q.initialRothUnrealizedGain,
+        initialBrokerageBasis: q.initialBrokerageBasis,
+        initialBrokerageUnrealizedGain: q.initialBrokerageUnrealizedGain,
+        newMoney: q.newMoney,
+        yearNewMoney: q.yearNewMoney,
+        annualStandardDeduction: q.annualStandardDeduction,
+        enableRothConversions: q.enableRothConversions,
+    };
+}
+
+function initRunInSimulator() {
+    optimalResults.addEventListener('click', (e) => {
+        const button = e.target.closest('.run-in-simulator');
+        if (!button || !lastRequest || !lastResult) return;
+        const scenario = lastResult.scenarios.find((s) => String(s.scenarioId) === button.dataset.scenarioId);
+        if (!scenario) return;
+        try {
+            sessionStorage.setItem(SIMULATOR_HANDOFF_KEY, JSON.stringify(simulatorHandoff(scenario)));
+        } catch {
+            button.parentElement.querySelector('.simulator-message').textContent =
+                "Couldn't pass the values to the simulator in this browser.";
+            return;
+        }
+        window.location.href = 'index.html';
+    });
+}
+
+initRunInSimulator();
 initMoneyInputs();

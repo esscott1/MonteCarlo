@@ -655,3 +655,48 @@ details pre {
     color: inherit;
     text-decoration: underline;
 }
+
+/* Optimal page: "Run in Simulator" on each scenario's result, and the note it leaves on the main page */
+.simulator-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.run-in-simulator {
+    padding: 0.45rem 1rem;
+    font-size: 0.95rem;
+    border: none;
+    border-radius: 4px;
+    background: #1a73e8;
+    color: white;
+    cursor: pointer;
+}
+
+.run-in-simulator:hover {
+    background: #1558b0;
+}
+
+.run-in-simulator:focus-visible {
+    outline: 2px solid #8ab4f8;
+    outline-offset: 2px;
+}
+
+.simulator-message {
+    color: #f28b82;
+    font-size: 0.9rem;
+}
+
+.handoff-note {
+    margin-top: 2rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--border);
+    border-left: 4px solid #1a73e8;
+    border-radius: 6px;
+    font-size: 0.92rem;
+}
+
+.handoff-note + #results {
+    margin-top: 1rem;
+}
