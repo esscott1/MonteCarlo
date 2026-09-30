@@ -24,36 +24,14 @@ namespace MonteCarloSimulation.Optimizer
             var jobs = inputs.Scenarios.SelectMany(scenario => ages.Select(age => (Scenario: scenario, Age: age))).ToList();
 
             var byJob = new ConcurrentDictionary<(int ScenarioId, int Age), ClaimingAgeResult>();
-            // With the app's Automatic order, each (scenario, age) tries every candidate order and keeps the one with
-            // the highest midpoint spend (ties to the first, Tax-optimized).
-            var orders = template.WithdrawalStrategy == WithdrawalStrategy.Automatic
-                ? AutomaticWithdrawal.Candidates
-                : [template.WithdrawalStrategy];
+            // The app's Automatic choices expand to every (order, conversion target) pair, up to 8.
+            var candidates = AutomaticStrategy.Candidates(template);
 
             Parallel.ForEach(jobs, job =>
             {
                 var start = template.Birthdate.AddYears(job.Age);
                 double monthly = curve.MonthlyBenefitAtAge(job.Age);
-
-                ClaimingAgeResult? best = null;
-                foreach (var order in orders)
-                {
-                    var simulator = new PathSimulator(template, job.Scenario, start, monthly, order);
-
-                    var breakEvens = new double[inputs.Paths];
-                    for (int path = 0; path < inputs.Paths; path++)
-                        breakEvens[path] = simulator.BreakEven(path);
-                    Array.Sort(breakEvens);
-
-                    var result = new ClaimingAgeResult(
-                        job.Age, start, monthly, simulator.TotalSocialSecurity,
-                        SpendAtSurvival(breakEvens, HighSurvival),
-                        SpendAtSurvival(breakEvens, MidpointSurvival),
-                        SpendAtSurvival(breakEvens, LowSurvival),
-                        order);
-                    if (best is null || result.SpendAtMidpoint > best.SpendAtMidpoint) best = result;
-                }
-                byJob[(job.Scenario.Id, job.Age)] = best!;
+                byJob[(job.Scenario.Id, job.Age)] = BestCandidate(inputs, job.Scenario, job.Age, start, monthly, candidates);
             });
 
             var scenarios = inputs.Scenarios.Select(scenario =>
@@ -65,7 +43,8 @@ namespace MonteCarloSimulation.Optimizer
                 foreach (var candidate in claimingAges.Skip(1))
                     if (candidate.SpendAtMidpoint > recommended.SpendAtMidpoint) recommended = candidate;
 
-                var check = new PathSimulator(template, scenario, recommended.StartDate, recommended.MonthlyBenefit, recommended.WithdrawalStrategy);
+                var check = new PathSimulator(template, scenario, recommended.StartDate, recommended.MonthlyBenefit,
+                    recommended.WithdrawalStrategy, recommended.RothConversionTarget);
                 int survivors = Enumerable.Range(0, inputs.Paths).Count(path => check.Survives(recommended.SpendAtMidpoint, path));
 
                 return new ScenarioOptimum(scenario.Id, scenario.Description, recommended, (double)survivors / inputs.Paths, claimingAges);
@@ -73,6 +52,65 @@ namespace MonteCarloSimulation.Optimizer
 
             var benefitByAge = ages.Select(age => new BenefitAtAge(age, curve.MonthlyBenefitAtAge(age))).ToList();
             return new OptimizationResult(scenarios, benefitByAge, inputs.Paths);
+        }
+
+        // How many screened candidates get a full break-even search besides the first.
+        internal const int Finalists = 2;
+
+        // The candidate with the highest midpoint spend for one scenario and claiming age. A full break-even search
+        // for all 8 candidates would take ~4x today's time, so it's two-stage: the first candidate (Tax-optimized,
+        // the 12% line) is searched in full, and its midpoint spend becomes the probe; every other candidate is
+        // screened with one run per path at that spend (survivors, then after-tax money left); the top Finalists
+        // are searched in full, warm-started from the first candidate's break-evens on the same paths.
+        private static ClaimingAgeResult BestCandidate(
+            OptimizationInputs inputs, InvestmentScenario scenario, int age, DateOnly start, double monthly,
+            IReadOnlyList<(WithdrawalStrategy Order, RothConversionTarget Target)> candidates)
+        {
+            ClaimingAgeResult FullSearch((WithdrawalStrategy Order, RothConversionTarget Target) c, double[]? hints, out double[] breakEvens)
+            {
+                var simulator = new PathSimulator(inputs.Template, scenario, start, monthly, c.Order, c.Target);
+                breakEvens = new double[inputs.Paths];
+                for (int path = 0; path < inputs.Paths; path++)
+                    breakEvens[path] = simulator.BreakEven(path, hints?[path]);
+                var sorted = (double[])breakEvens.Clone();
+                Array.Sort(sorted);
+                return new ClaimingAgeResult(
+                    age, start, monthly, simulator.TotalSocialSecurity,
+                    SpendAtSurvival(sorted, HighSurvival),
+                    SpendAtSurvival(sorted, MidpointSurvival),
+                    SpendAtSurvival(sorted, LowSurvival),
+                    c.Order, c.Target);
+            }
+
+            var best = FullSearch(candidates[0], null, out var firstBreakEvens);
+            if (candidates.Count == 1) return best;
+
+            double probe = best.SpendAtMidpoint;
+            var finalists = candidates.Skip(1)
+                .Select(c =>
+                {
+                    var simulator = new PathSimulator(inputs.Template, scenario, start, monthly, c.Order, c.Target);
+                    int survivors = 0;
+                    double afterTaxLeft = 0;
+                    for (int path = 0; path < inputs.Paths; path++)
+                    {
+                        var (survived, left) = simulator.Probe(probe, path);
+                        if (!survived) continue;
+                        survivors++;
+                        afterTaxLeft += left;
+                    }
+                    return (Candidate: c, Survivors: survivors, AfterTaxLeft: afterTaxLeft);
+                })
+                .OrderByDescending(s => s.Survivors).ThenByDescending(s => s.AfterTaxLeft)
+                .Take(Finalists)
+                .ToList();
+
+            foreach (var finalist in finalists)
+            {
+                var result = FullSearch(finalist.Candidate, firstBreakEvens, out _);
+                if (result.SpendAtMidpoint > best.SpendAtMidpoint) best = result;
+            }
+            return best;
         }
 
         // The largest spend that at least `survival` of the paths survive, given their break-evens sorted ascending:

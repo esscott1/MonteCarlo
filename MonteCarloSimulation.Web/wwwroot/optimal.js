@@ -82,18 +82,26 @@ function renderClaimingTable(scenario) {
                 <td>${perMonth(c.spendAtMidpoint)}</td>
                 <td>${perMonth(c.spendAt80)}</td>
                 <td>${ORDER_NAMES[c.withdrawalStrategy] ?? c.withdrawalStrategy}</td>
+                <td>${TARGET_NAMES[c.rothConversionTarget] ?? c.rothConversionTarget}</td>
             </tr>`;
     }).join('');
     return `
         <table class="run-table">
             <thead>
-                <tr><th>Start SS at</th><th>First payment</th><th>Monthly benefit</th><th>Total SS collected</th><th>Spend/mo @ 85%</th><th>@ 82.5%</th><th>@ 80%</th><th>Order</th></tr>
+                <tr><th>Start SS at</th><th>First payment</th><th>Monthly benefit</th><th>Total SS collected</th><th>Spend/mo @ 85%</th><th>@ 82.5%</th><th>@ 80%</th><th>Order</th><th>Converts to</th></tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>`;
 }
 
 const ORDER_NAMES = { TaxOptimized: 'Tax-optimized', ProRata: 'Pro-rata' };
+const TARGET_NAMES = { None: 'No conversions', Bracket12: '12% bracket', Bracket22: 'Top of 22%', Bracket24: 'Top of 24%' };
+const TARGET_PHRASES = {
+    None: 'no Roth conversions',
+    Bracket12: 'Roth conversions filling the 12% bracket',
+    Bracket22: 'Roth conversions up to the top of the 22% bracket',
+    Bracket24: 'Roth conversions up to the top of the 24% bracket',
+};
 
 function renderScenario(scenario) {
     const r = scenario.recommended;
@@ -110,7 +118,7 @@ function renderScenario(scenario) {
                about ${formatCurrency(r.monthlyBenefit)}/month in today's dollars &mdash;
                <strong>${formatCurrency(r.totalSocialSecurity)}</strong> collected in total over your retirement.</p>
             <p>At ${perMonth(r.spendAtMidpoint)}/month, ${formatPercent(scenario.verifiedSurvivalRate)} of the simulated markets last the full period.</p>
-            <p>Accounts drawn in the ${ORDER_NAMES[r.withdrawalStrategy] ?? r.withdrawalStrategy} order &mdash; the better of the two for these inputs, chosen by the app (<a href="model-info.html" class="summary-link">why</a>).</p>
+            <p>Accounts drawn in the ${ORDER_NAMES[r.withdrawalStrategy] ?? r.withdrawalStrategy} order, with ${TARGET_PHRASES[r.rothConversionTarget] ?? r.rothConversionTarget} &mdash; the best combination for these inputs, chosen by the app (<a href="model-info.html" class="summary-link">why</a>).</p>
             ${bandNote}
             <details>
                 <summary>Compare Social Security start ages</summary>

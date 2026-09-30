@@ -10,11 +10,6 @@ namespace MonteCarloSimulation.StrategyLab
     {
         public const double Precision = 100;
 
-        // After-tax value of what's left at the end: Tax Deferred still owes income tax, Brokerage gains still owe
-        // capital gains tax - so a combination isn't credited for leaving untaxed money behind.
-        public const double TaxDeferredAfterTax = 0.78;
-        public const double GainsAfterTax = 0.85;
-
         private readonly SimulationParameters _parameters;
         private readonly IReadOnlyList<RetirementYear> _timeline;
         private readonly IWithdrawalStrategy _strategy;
@@ -50,10 +45,7 @@ namespace MonteCarloSimulation.StrategyLab
         public PathOutcome Outcome(double annualWithdrawal, int path)
         {
             var run = Run(annualWithdrawal, path, out var a);
-            double afterTax = run.Failed
-                ? 0
-                : (a.Taxable * TaxDeferredAfterTax + a.Brokerage - Math.Max(0, a.Brokerage - a.BrokerageBasis) * (1 - GainsAfterTax) + a.Roth)
-                  / _finalInflation;
+            double afterTax = run.Failed ? 0 : a.AfterTaxValue / _finalInflation;
             return new PathOutcome(!run.Failed, run.LifetimeTaxesPaid, afterTax);
         }
 

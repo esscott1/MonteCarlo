@@ -62,7 +62,7 @@ namespace MonteCarloSimulation.Core
         {
             WithdrawalStrategy.TaxOptimized => TaxOptimized,
             WithdrawalStrategy.ProRata => ProRata,
-            _ => throw new InvalidOperationException("Resolve WithdrawalStrategy.Automatic (AutomaticWithdrawal.Resolve) before running.")
+            _ => throw new InvalidOperationException("Resolve WithdrawalStrategy.Automatic (AutomaticStrategy.Resolve) before running.")
         };
     }
 }

@@ -4,8 +4,8 @@ using MonteCarloSimulation.Optimizer;
 namespace MonteCarloSimulation.StrategyLab
 {
     // The Optimal page's default inputs (optimal.html) run through the Optimal page's own optimizer twice: with the
-    // behavior the app shipped before it chose its own accounts (Tax-optimized order, conversion tax from Brokerage
-    // only) and with the app's current defaults. Shows on the Model Info page what the change did to the Optimal
+    // behavior the app shipped before it chose its own accounts (Tax-optimized order, conversions to the 12% line
+    // with their tax from Brokerage only) and with the app's current defaults. Shows on the Model Info page what the change did to the Optimal
     // page's recommendations.
     internal static class OptimalDefaults
     {
@@ -15,6 +15,7 @@ namespace MonteCarloSimulation.StrategyLab
             {
                 p.WithdrawalStrategy = WithdrawalStrategy.TaxOptimized;
                 p.ConversionTaxFunding = ConversionTaxFunding.Brokerage;
+                p.RothConversionTarget = RothConversionTarget.Bracket12;
             });
             var after = Optimize(_ => { });
             return before.Scenarios.Zip(after.Scenarios, (b, a) =>

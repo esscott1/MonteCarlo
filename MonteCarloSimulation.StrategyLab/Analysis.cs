@@ -1,3 +1,5 @@
+using MonteCarloSimulation.Core;
+
 namespace MonteCarloSimulation.StrategyLab
 {
     // Turns the per-(scenario, combination) rows into the report's numbers. Every comparison is paired: the same
@@ -124,7 +126,90 @@ namespace MonteCarloSimulation.StrategyLab
                 caseStudy,
                 null,
                 OrderChoices(included, byScenario, baselineCode, codes),
-                null);
+                null,
+                ConversionChoices(set, included, byScenario, baselineCode, codes));
+        }
+
+        // How the app picks how far to convert, together with the order: each per-household pick against the best of
+        // every combination in the set, how often each target wins, whether the lab-only C5 line (stop below the
+        // first IRMAA tier) earns a place among the app's targets, and how closely the main page's own picker
+        // (survival at one spend on 200 paths) matches the ideal pick. Null for a set without the app's candidates.
+        private static ConversionChoice? ConversionChoices(
+            CandidateSet set, List<Scenario> included, Dictionary<int, Dictionary<string, ResultRow>> byScenario, string baselineCode, HashSet<string> codes)
+        {
+            string Code(WithdrawalStrategy order, RothConversionTarget target) =>
+                $"{Candidates.AppOrders[order].Code}+{Candidates.AppTargets[target].Code}";
+            var appPairs = AutomaticStrategy.Orders.SelectMany(o => AutomaticStrategy.Targets.Select(t => (Order: o, Target: t))).ToList();
+            var appCodes = appPairs.Select(p => Code(p.Order, p.Target)).ToList();
+            var todayCodes = AutomaticStrategy.Orders.Select(o => Code(o, RothConversionTarget.Bracket12)).ToList();
+            var belowIrmaaCodes = AutomaticStrategy.Orders.Select(o => $"{Candidates.AppOrders[o].Code}+{Candidates.BelowIrmaa.Code}").ToList();
+            if (!appCodes.Concat(belowIrmaaCodes).All(codes.Contains) || included.Count == 0) return null;
+
+            double Spend(Scenario s, string code) => byScenario[s.Id][code].Spend825;
+            double Pick(Scenario s, IEnumerable<string> pickCodes) => pickCodes.Max(c => Spend(s, c));
+            var bestOfAll = included.ToDictionary(s => s.Id, s => set.All.Max(c => Spend(s, c.Code)));
+            var bins = Dimensions(baselineCode, byScenario)
+                .SelectMany(d => d.Order.Select(label => (Label: $"{d.Name}: {label}", Members: included.Where(s => d.Bin(s) == label).ToList())))
+                .Where(b => b.Members.Count > 0)
+                .ToList();
+
+            OrderChoice Measure(string code, string name, Func<Scenario, double> spend)
+            {
+                double Shortfall(Scenario s) => spend(s) / bestOfAll[s.Id] - 1;
+                var shortfalls = included.Select(Shortfall).ToArray();
+                var worst = bins.Select(b => (b.Label, Mean: b.Members.Average(Shortfall))).MinBy(b => b.Mean);
+                double within = Share(shortfalls, v => v >= -TieBand);
+                return new OrderChoice(code, name, within, Mean(shortfalls), worst.Label, worst.Mean,
+                    Qualifies: within >= 0.95 && worst.Mean >= -0.01);
+            }
+
+            var withBelowIrmaa = appCodes.Concat(belowIrmaaCodes).ToList();
+            var rows = new List<OrderChoice>
+            {
+                Measure("W1/W2+C1", "Pick of W1 or W2 at the 12% line (before this change)", s => Pick(s, todayCodes)),
+                Measure("W1/W2+C0/C1/C3/C4", "Pick of order and conversion line (app)", s => Pick(s, appCodes)),
+                Measure("W1/W2+C0/C1/C3/C4/C5", "The same, plus C5 below the first IRMAA tier", s => Pick(s, withBelowIrmaa)),
+            };
+
+            // Which target the app's pick lands on (ties to the first pair in AutomaticStrategy's order)
+            var targetShares = AutomaticStrategy.Targets.ToDictionary(t => t.ToString(), t => 0.0);
+            foreach (var s in included)
+            {
+                var winner = appPairs.MaxBy(p => Spend(s, Code(p.Order, p.Target)));
+                targetShares[winner.Target.ToString()] += 1.0 / included.Count;
+            }
+
+            var gainsFromBelowIrmaa = included.Select(s => Pick(s, withBelowIrmaa) / Pick(s, appCodes) - 1).ToArray();
+            double belowIrmaaBestShare = Share(gainsFromBelowIrmaa, v => v > 0);
+            double belowIrmaaAddedMean = Mean(gainsFromBelowIrmaa);
+
+            return new ConversionChoice(rows, targetShares, belowIrmaaBestShare, belowIrmaaAddedMean,
+                BelowIrmaaAdopted: belowIrmaaBestShare >= 0.03 && belowIrmaaAddedMean >= 0.001,
+                Picker: MainPagePicker(included, byScenario, s => Pick(s, appCodes), Code));
+        }
+
+        // The main page's picker (AutomaticStrategy.Resolve: survival at the entered spend on 200 paths) run on every
+        // household at its ideal pick's 82.5% spend, and the shortfall of the pair it chooses against that ideal.
+        private static PickerAgreement MainPagePicker(
+            List<Scenario> included, Dictionary<int, Dictionary<string, ResultRow>> byScenario, Func<Scenario, double> idealSpend,
+            Func<WithdrawalStrategy, RothConversionTarget, string> code)
+        {
+            var shortfalls = new double[included.Count];
+            var chosen = new RothConversionTarget[included.Count];
+            Parallel.For(0, included.Count, i =>
+            {
+                var s = included[i];
+                var p = Scenario.Copy(s.Parameters);
+                p.Withdrawal = idealSpend(s);
+                p.EnableRothConversions = true;
+                p.WithdrawalStrategy = WithdrawalStrategy.Automatic;
+                p.RothConversionTarget = RothConversionTarget.Automatic;
+                var (order, target) = AutomaticStrategy.Resolve(p, RetirementTimeline.Build(p));
+                chosen[i] = target;
+                shortfalls[i] = byScenario[s.Id][code(order, target)].Spend825 / idealSpend(s) - 1;
+            });
+            var targetShares = AutomaticStrategy.Targets.ToDictionary(t => t.ToString(), t => Share(chosen.Select(c => c == t ? 1.0 : 0).ToArray(), v => v > 0));
+            return new PickerAgreement(Share(shortfalls, v => v >= -TieBand), Mean(shortfalls), Percentile(shortfalls, 0.05), targetShares);
         }
 
         private static double Ratio(double value, double against) => against > 0 ? value / against - 1 : 0;
@@ -209,7 +294,7 @@ namespace MonteCarloSimulation.StrategyLab
             string taxOptimized = $"{Candidates.TaxOptimized.Code}+{Candidates.AppDefault.Code}";
             return Candidates.Orders
                 .Select(o => Measure($"{o.Code}+{Candidates.AppDefault.Code}", o.Name, s => byScenario[s.Id][$"{o.Code}+{Candidates.AppDefault.Code}"].Spend825))
-                .Append(Measure($"{Candidates.ProRata.Code}/{Candidates.TaxOptimized.Code}+{Candidates.AppDefault.Code}", "Per-household pick of W1 or W2 (app)",
+                .Append(Measure($"{Candidates.ProRata.Code}/{Candidates.TaxOptimized.Code}+{Candidates.AppDefault.Code}", "Per-household pick of W1 or W2",
                     s => Math.Max(byScenario[s.Id][proRata].Spend825, byScenario[s.Id][taxOptimized].Spend825)))
                 .ToList();
         }
@@ -358,7 +443,20 @@ namespace MonteCarloSimulation.StrategyLab
         CaseStudy? CaseStudy,
         FundingComparison? Funding,
         List<OrderChoice>? OrderChoice,
-        List<OptimalDefaultsRow>? OptimalDefaults);
+        List<OptimalDefaultsRow>? OptimalDefaults,
+        ConversionChoice? ConversionChoice);
+
+    // The app's pick of order and conversion line, against the best of every combination per household (Rows use
+    // OrderChoice's shape, with "best" meaning best of all). TargetShares: how often each target wins the ideal
+    // pick. BelowIrmaa*: whether the lab-only C5 line earns a place (best somewhere in >=3% of households and >=0.1%
+    // added on average). Picker: the main page's own picker against the ideal pick.
+    internal sealed record ConversionChoice(
+        List<OrderChoice> Rows, Dictionary<string, double> TargetShares,
+        double BelowIrmaaBestShare, double BelowIrmaaAddedMean, bool BelowIrmaaAdopted, PickerAgreement Picker);
+
+    // Share of households where the main page's picker lands within the tie band of the ideal pick, its average and
+    // 5th-percentile shortfall, and how often it chooses each target.
+    internal sealed record PickerAgreement(double ShareWithinTieBand, double MeanShortfall, double P5Shortfall, Dictionary<string, double> TargetShares);
 
     // One withdrawal order under the app's conversion policy, against the best order per household: the share of
     // households within the tie band of the best, the average shortfall, and the household type where it falls

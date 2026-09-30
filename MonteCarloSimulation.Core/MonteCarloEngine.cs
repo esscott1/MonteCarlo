@@ -10,12 +10,13 @@ namespace MonteCarloSimulation.Core
         internal static SimulationRunOutput Run(SimulationParameters parameters, Random random)
         {
             var timeline = RetirementTimeline.Build(parameters);
-            var order = AutomaticWithdrawal.Resolve(parameters, timeline);
+            var (order, target) = AutomaticStrategy.Resolve(parameters, timeline);
             var strategy = WithdrawalStrategies.For(order);
+            var ceiling = ConversionTargets.CeilingFor(target);
 
             var runs = new List<RunSummary>(parameters.Iterations);
             for (int i = 0; i < parameters.Iterations; i++)
-                runs.Add(RunSimulator.Simulate(parameters, timeline, strategy, random));
+                runs.Add(RunSimulator.Simulate(parameters, timeline, strategy, random, ceiling, out _));
 
             return new SimulationRunOutput
             {
@@ -23,7 +24,8 @@ namespace MonteCarloSimulation.Core
                 AllRates = runs.SelectMany(r => r.Years.Select(y => y.RateOfReturn)).ToList(),
                 OutOfMoneyMessage = FailureTrace.Build(runs),
                 LastSuccessfulRun = runs.LastOrDefault(r => !r.Failed)?.Years,
-                WithdrawalStrategy = order
+                WithdrawalStrategy = order,
+                RothConversionTarget = target
             };
         }
     }

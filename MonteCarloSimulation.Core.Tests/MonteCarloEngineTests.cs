@@ -390,6 +390,7 @@ namespace MonteCarloSimulation.Core.Tests
             YearNewMoney = 0,
             AnnualStandardDeduction = 0,
             EnableRothConversions = enable,
+            RothConversionTarget = RothConversionTarget.Bracket12, // written for the 12% line
             ConversionTaxFunding = ConversionTaxFunding.Brokerage, // these tests pin the Brokerage-funded conversion
             WithdrawalStrategy = WithdrawalStrategy.ProRata, // written under the old Pro-rata default
             ScenarioDescription = "Roth conversion scenario"

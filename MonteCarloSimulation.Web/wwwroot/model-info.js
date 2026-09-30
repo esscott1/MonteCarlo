@@ -55,7 +55,34 @@ function section(id, title, body) {
 
 // The app's per-household order pick, from the order-choice measurement
 function appOrderPick(s) {
-    return (s.orderChoice ?? []).find((o) => o.name.endsWith('(app)'));
+    return (s.conversionChoice?.rows ?? s.orderChoice ?? []).find((o) => o.name.endsWith('(app)'));
+}
+
+const TARGET_LABELS = { None: 'No conversions (C0)', Bracket12: '12% fill (C1)', Bracket22: 'Top of 22% (C3)', Bracket24: 'Top of 24% (C4)' };
+
+// How the app picks how far to convert, together with the order
+function conversionChoice(s) {
+    const c = s.conversionChoice;
+    const rows = c.rows.map((o) => `<tr class="${o.name.endsWith('(app)') ? 'recommended-row' : ''}">
+        <td>${escapeHtml(o.name)}</td>
+        <td class="num">${share(o.shareWithinTieBand, 1)}</td>
+        <td class="num">${pct(o.meanShortfall, 2)}</td>
+        <td>${escapeHtml(o.worstSlice)}</td>
+        <td class="num ${o.worstSliceMeanShortfall < -0.01 ? 'loss' : ''}">${pct(o.worstSliceMeanShortfall, 2)}</td></tr>`);
+    const targets = Object.entries(c.targetShares).map(([t, v]) =>
+        `<tr><td>${escapeHtml(TARGET_LABELS[t] ?? t)}</td><td class="num">${share(v, 1)}</td><td class="num">${share(c.picker.targetShares[t] ?? 0, 1)}</td></tr>`);
+    return `
+        <h3>How far to convert</h3>
+        <p>The app also picks how far each year's Roth conversion goes (the conversion policies above), together with the order: for each household
+        it tries Pro-rata and Tax-optimized with no conversions, the 12% fill, the top of the 22% bracket and the top of the 24% bracket, and keeps
+        the pair that sustains the spending best. Below, each way of picking against the best of every combination the lab ran for the same household.</p>
+        ${table(['Pick', 'Within 0.5% of the best of all', 'Average shortfall', 'Household type where it falls shortest', 'Shortfall there'], rows)}
+        ${table(['Conversion line', 'Best for (ideal pick)', "Chosen by the main page's picker"], targets)}
+        <p>The main page picks with a quicker test &mdash; survival at the entered spend on 200 market paths &mdash; so it was run on every household at its
+        ideal spend: it lands within 0.5% of the ideal pick for ${share(c.picker.shareWithinTieBand, 1)} of households
+        (average shortfall ${pct(c.picker.meanShortfall, 2)}). The Optimal page uses the fuller search.</p>
+        <p>${code('C5')}, stopping below the first Medicare IRMAA tier, would be best for ${share(c.belowIrmaaBestShare, 1)} of households and add
+        ${pct(c.belowIrmaaAddedMean, 2)} on average; ${c.belowIrmaaAdopted ? 'that clears the bar, so it is one of the app&rsquo;s choices.' : 'that doesn&rsquo;t clear the bar (best for at least 3% and at least +0.1% on average), so the app doesn&rsquo;t use it.'}</p>`;
 }
 
 function headline(s, byCode) {
@@ -120,6 +147,7 @@ function definitions(s) {
         ${table(['Code', 'Converts until gross ordinary income reaches', '2026 line (single filer, $16,000 deduction)'], policyRows)}
         <ul class="info-notes">
             <li>Gross ordinary income includes taxable Social Security and the year's Tax Deferred withdrawals. The lines are inflated each year like the tax brackets, and a year already past its line converts nothing.</li>
+            <li>The app picks the line for each household among ${code('C0')}, ${code('C1')}, ${code('C3')} and ${code('C4')} (see How the app chooses); ${code('C2')} and ${code('C5')} are lab-only.</li>
             <li>Conversions ignore the 59&frac12; gate, and converted dollars count as Roth basis, which can be spent at any age.</li>
             <li>Big conversions raise Medicare premiums later. From 65, the model charges the Medicare IRMAA surcharge set by income two
             years earlier (2026 single-filer tiers, starting above $109,000 of MAGI, inflated each year) on top of spending. The first two
@@ -161,7 +189,7 @@ function funding(s) {
     return `
         <p>The Strategy Lab found that paying a conversion's tax only by selling Brokerage stalls conversions once Brokerage runs low, which hurts
         early retirees most. Every funding rule was run on the same ${f.scenariosCompared.toLocaleString('en-US')} households and markets,
-        with the app's conversion policy (${code('C1')}), compared with Tax-optimized paying only from Brokerage (${code(f.baseline)}, the app before this change).
+        with the 12% fill (${code('C1')}), compared with Tax-optimized paying only from Brokerage (${code(f.baseline)}, the app before this change).
         The rule for adopting one: the highest average gain with its 95% interval above zero, a median of at least zero, and losses (worse than &minus;0.5%)
         in at most 5% of households.</p>
         ${table(['Combination', 'Order and funding', 'Average', '95% interval', 'Median', 'Wins', 'Loses'], rows)}
@@ -170,7 +198,7 @@ function funding(s) {
         ${app ? `<p>The app now uses ${code(app.code)}: ${escapeHtml(app.definition)}</p>` : ''}`;
 }
 
-// How the app picks the withdrawal order: each order under the app's conversion policy against the best order
+// How the app picks the withdrawal order: each order under the 12% fill against the best order
 // for the same household.
 function orderChoice(s) {
     const rows = s.orderChoice.map((o) => `<tr class="${o.qualifies ? 'recommended-row' : ''}">
@@ -246,7 +274,7 @@ function directQuestion(s) {
         <p>For most households the two orders are close once Roth conversions are on; the median household sees a difference of a few hundredths of a percent.</p>
         ${table(['Comparison (first vs second)', 'Average', '95% interval', 'Median', 'Wins', 'Loses', '5th / 95th pct'], rows)}
         <p>Without conversions, Pro-rata beats Tax-optimized in about half of households by a small margin: spreading Tax Deferred draws
-        evenly over the whole retirement keeps more of them in low brackets than a strict order. With the app's conversions on, that
+        evenly over the whole retirement keeps more of them in low brackets than a strict order. With the 12% fill on, that
         advantage mostly disappears, because conversions fill the cheap brackets every year under either order.</p>`;
 }
 
@@ -260,7 +288,7 @@ function whoLoses(s) {
     const over3Total = over3.reduce((sum, [, n]) => sum + n, 0);
     const winners = over3.map(([c, n]) => `${code(c)} ${n}`).join(', ');
     return `
-        <p>The gap between the Tax-optimized baseline and the best of all combinations, by household type. The last column is Pro-rata + app conversions versus the Tax-optimized baseline.</p>
+        <p>The gap between the Tax-optimized baseline and the best of all combinations, by household type. The last column is Pro-rata with the 12% fill versus the Tax-optimized baseline.</p>
         ${table(['Households', 'Count', 'Median gap', 'Average gap', '90th pct gap', 'Gap over 1%', 'Gap over 3%', 'Pro-rata + conv. (median)'], rows)}
         <p class="info-meta">In the ${over3Total} households where some combination beat the Tax-optimized baseline by more than 3%, the winners were: ${winners}.</p>`;
 }
@@ -271,7 +299,7 @@ function caseStudy(s) {
         <p>Before 59&frac12; the model locks Tax Deferred money and Roth gains; only Brokerage and Roth basis can be spent. Roth conversions
         are the way through: converted dollars count as Roth basis, so they can be spent right away.</p>
         <p class="info-callout">Tax-optimized is gains-first: it sells Brokerage while the gains are taxed at 0%. Those gains fill the 0% band,
-        and the app's conversion policy (${code('C1')}) stops conversions short rather than push them to 15%. Converting less means less new
+        and the 12% fill (${code('C1')}) stops conversions short rather than push them to 15%. Converting less means less new
         Roth basis, so when Brokerage runs out before 59&frac12; there isn't enough accessible money &mdash; even with Tax Deferred still full.
         Pro-rata spends some Roth basis alongside Brokerage, realizes fewer gains and keeps converting. This is why the app picks the order
         for each household rather than always using one.</p>`;
@@ -292,7 +320,7 @@ function caseStudy(s) {
     }));
 
     return `${intro}
-        <p>The household where Pro-rata + app conversions gains the most (${escapeHtml(cs.scenario)}): its 82.5% spend is
+        <p>The household where Pro-rata with the 12% fill gains the most (${escapeHtml(cs.scenario)}): its 82.5% spend is
         ${perMonth(cs.baselineSpend825)}/month under the Tax-optimized baseline and ${perMonth(cs.alternativeSpend825)}/month under Pro-rata.
         Below is market path ${cs.path} at the baseline's spend (${perMonth(cs.spend)}/month), the first path where the baseline fails and Pro-rata doesn't:</p>
         ${table(['Year', 'Order', 'Brokerage sold', 'Roth spent', 'Tax Deferred', 'Converted', 'Taxes', 'Roth at year end', ''], rows, 'case-study')}
@@ -306,7 +334,7 @@ function caseStudy(s) {
 }
 
 function slices(s) {
-    const shown = [['W1+C1', 'Pro-rata + app conversions'], ['W1+C0', 'Pro-rata, no conversions'], ['W2+C0', 'Tax-optimized, no conversions'], ['W2+C3', 'Tax-optimized, top of 22%']];
+    const shown = [['W1+C1', 'Pro-rata, 12% fill'], ['W1+C0', 'Pro-rata, no conversions'], ['W2+C0', 'Tax-optimized, no conversions'], ['W2+C3', 'Tax-optimized, top of 22%']];
     const body = s.slices.map((sl) => `
         <tr class="slice-group"><th colspan="${2 + shown.length}">${escapeHtml(sl.dimension)}</th></tr>
         ${sl.bins.map((b) => `<tr><td>${escapeHtml(b.label)}</td><td class="num">${b.scenarios}</td>
@@ -374,9 +402,14 @@ function conclusions(s, byCode) {
         the better of the two is within 0.5% of the best of all six orders for ${share(pick.shareWithinTieBand, 1)} of households.</li>` : ''}
         <li><strong>Roth conversions matter.</strong> Without them, Tax-optimized's 82.5% spend is ${share(-noConversions.meanSpendDiff, 1)} lower on average
         and at least ${share(-noConversions.p5SpendDiff)} lower for the worst-hit 5% of households &mdash; early retirees who need the bridge to 59&frac12;.</li>
-        <li><strong>How much to convert is the remaining question.</strong> Converting to the top of the 22% bracket (${code('C3')}) lowers the typical
-        household's spend (median ${pct(top22.medianSpendDiff, 2)}) but helps some a great deal${heavy ? ` (an average of ${pct(heavy.meanDiff['W2+C3'], 1)} for households with 75%+ in Tax Deferred)` : ''}.
-        Letting the app choose the conversion amount per household, as it now does the order, is the natural next step.</li>
+        ${s.conversionChoice ? (() => {
+            const app = s.conversionChoice.rows.find((o) => o.name.endsWith('(app)'));
+            const before = s.conversionChoice.rows[0];
+            return `<li><strong>The app picks how far to convert.</strong> Converting to the top of the 22% bracket (${code('C3')}) lowers the typical
+        household's spend (median ${pct(top22.medianSpendDiff, 2)}) but helps some a great deal${heavy ? ` (an average of ${pct(heavy.meanDiff['W2+C3'], 1)} for households with 75%+ in Tax Deferred)` : ''},
+        so the app chooses the line with the order. Picking both is within 0.5% of the best of everything tried for ${share(app.shareWithinTieBand, 1)}
+        of households, against ${share(before.shareWithinTieBand, 1)} when only the order was picked.</li>`;
+        })() : ''}
         ${harvesting ? `<li><strong>0% gain harvesting makes no measurable difference</strong> (${pct(harvesting.meanSpendDiff, 2)} on average).</li>` : ''}
     </ul>`;
 }
@@ -397,7 +430,7 @@ function render(s) {
         section('definitions', 'Strategy definitions', definitions(s)),
         s.funding ? section('funding', 'Where conversion tax comes from', funding(s)) : '',
         section('choosing', 'How the app chooses which accounts to draw from',
-            (s.orderChoice ? orderChoice(s) : '') + '<h3>Pro-rata vs Tax-optimized</h3>' + directQuestion(s)),
+            (s.orderChoice ? orderChoice(s) : '') + (s.conversionChoice ? conversionChoice(s) : '') + '<h3>Pro-rata vs Tax-optimized</h3>' + directQuestion(s)),
         s.optimalDefaults ? section('optimal', 'What changed on the Optimal page', optimalDefaults(s)) : '',
         section('grid', "Every combination against the Tax-optimized baseline", grid(s, byCode)),
         section('who-loses', "Who loses with the Tax-optimized baseline", whoLoses(s)),

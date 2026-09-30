@@ -22,6 +22,14 @@ namespace MonteCarloSimulation.Core
 
         public double Total => Taxable + Brokerage + Roth;
 
+        // What the balances are worth after the tax still owed on them: Tax Deferred at 78% (income tax to come),
+        // Brokerage less 15% of its embedded gain, Roth in full. Used to compare what strategies leave behind, so
+        // one isn't credited for leaving untaxed Tax Deferred money.
+        public const double TaxDeferredAfterTax = 0.78;
+        public const double GainsAfterTax = 0.85;
+        public double AfterTaxValue =>
+            Taxable * TaxDeferredAfterTax + Brokerage - Math.Max(0, Brokerage - BrokerageBasis) * (1 - GainsAfterTax) + Roth;
+
         public bool AnyNegative => Total < 0 || Taxable < 0 || Brokerage < 0 || Roth < 0;
 
         // Fraction of a Brokerage sale that is taxable embedded gain; the rest is a tax-free return of

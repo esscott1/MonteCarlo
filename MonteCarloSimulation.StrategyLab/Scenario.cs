@@ -39,6 +39,7 @@ namespace MonteCarloSimulation.StrategyLab
             AnnualStandardDeduction = p.AnnualStandardDeduction,
             EnableRothConversions = p.EnableRothConversions,
             ConversionTaxFunding = p.ConversionTaxFunding,
+            RothConversionTarget = p.RothConversionTarget,
             WithdrawalStrategy = p.WithdrawalStrategy,
             ScenarioDescription = p.ScenarioDescription
         };
