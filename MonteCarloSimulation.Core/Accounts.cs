@@ -65,6 +65,9 @@ namespace MonteCarloSimulation.Core
             BrokerageBasis += amount;
         }
 
+        // Gain harvesting: gains realized by selling and immediately rebuying become basis. The balance is unchanged.
+        public void StepUpBrokerageBasis(double gains) => BrokerageBasis += gains;
+
         // Converted dollars count as Roth basis, so they're accessible anytime under the 59.5 gate
         // (the IRS 5-year seasoning rule isn't modeled).
         public void ConvertToRoth(double amount)

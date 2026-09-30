@@ -22,7 +22,7 @@ namespace MonteCarloSimulation.Core
         // Starts at the entered amount (not inflated for the years before it begins), then compounds.
         public double SocialSecurity { get; private set; }
 
-        public TaxYear TaxYear => new(StandardDeduction, BracketFactor, FederalTaxBrackets.Single2026);
+        public TaxYear TaxYear => new(StandardDeduction, BracketFactor, FederalTaxBrackets.Single2026, FederalTaxBrackets.CapitalGainsSingle2026);
 
         public void Advance(int year)
         {

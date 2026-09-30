@@ -20,6 +20,13 @@ namespace MonteCarloSimulation.Core
         public required double OrdinaryBracketRate { get; init; }
         public required double? AmountUntilNextBracket { get; init; }
         public required double? NextBracketRate { get; init; }
+        // Marginal long-term capital gains bracket (0, 0.15, 0.20) at the top of the year's income stack - the
+        // rate the next dollar of gain would face - and the gain dollars left before the next LTCG bracket.
+        public required double CapitalGainsBracketRate { get; init; }
+        public required double? AmountUntilNextCapitalGainsBracket { get; init; }
+        public required double? NextCapitalGainsBracketRate { get; init; }
+        // Gains realized at 0% by selling and immediately rebuying Brokerage holdings (a basis step-up; no cash moves)
+        public required double HarvestedGains { get; init; }
         public required bool AgeEligible { get; init; }
         public required double RothConversionAmount { get; init; }
         public required double RothConversionTax { get; init; }

@@ -5,7 +5,7 @@ namespace MonteCarloSimulation.Core.Tests
     public class ComponentTests
     {
         private static TaxYear TaxYear(double standardDeduction, double inflationFactor = 1.0) =>
-            new(standardDeduction, inflationFactor, FederalTaxBrackets.Single2026);
+            new(standardDeduction, inflationFactor, FederalTaxBrackets.Single2026, FederalTaxBrackets.CapitalGainsSingle2026);
 
         private static Accounts Accounts(
             double taxable = 0, double rothBasis = 0, double rothGain = 0, double brokerageBasis = 0, double brokerageGain = 0) =>
@@ -144,16 +144,56 @@ namespace MonteCarloSimulation.Core.Tests
         }
 
         [Fact]
-        public void TaxOptimized_FillsTaxDeferredTo22PercentLine_BeforeBrokerage()
+        public void TaxOptimized_SmallNeed_ComesFromGainHeavyBrokerageAtZeroTax()
         {
-            // No deduction: the 22% line is 50,400 gross, which nets 50,400 - (1,240 + 4,560) = 44,600.
-            var plan = new TaxOptimizedWithdrawalStrategy().Plan(Context(need: 80_000, eligibleTaxable: 1_000_000, brokerage: 300_000, eligibleRoth: 100_000));
+            var plan = new TaxOptimizedWithdrawalStrategy().Plan(Context(need: 30_000, eligibleTaxable: 1_000_000, brokerage: 300_000, eligibleRoth: 100_000, gainFraction: 1));
 
-            Assert.Equal(50_400, plan.GrossTaxable, 6);
-            Assert.Equal(44_600, plan.NetTaxable, 6);
-            Assert.Equal(80_000 - 44_600, plan.NetBrokerage, 6);
+            Assert.Equal(30_000, plan.GrossBrokerage, 6);
+            Assert.Equal(0, plan.CapitalGainsTax, 9);
+            Assert.Equal(0, plan.GrossTaxable);
+            Assert.Equal(30_000, plan.RealizedGains, 6);
+        }
+
+        [Fact]
+        public void TaxOptimized_TaxDeferredFill_StopsBeforePushingZeroRateGainsUp()
+        {
+            // Step 1 sells all $20k of all-gain Brokerage at 0%. Tax Deferred may then only fill to
+            // 49,450 - 20,000 = 29,450 gross (nets 29,450 - 1,240 - 2,046 = 26,164) so the gains stay at 0%.
+            var plan = new TaxOptimizedWithdrawalStrategy().Plan(Context(need: 45_000, eligibleTaxable: 1_000_000, brokerage: 20_000, eligibleRoth: 100_000, gainFraction: 1));
+
+            Assert.Equal(20_000, plan.GrossBrokerage, 6);
+            Assert.Equal(25_000, plan.NetTaxable, 6);
+            Assert.True(plan.GrossTaxable + 20_000 <= 49_450 + 1e-6);
+            Assert.Equal(0, plan.CapitalGainsTax, 9);
+            Assert.Equal(0, plan.Roth);
+        }
+
+        [Fact]
+        public void TaxOptimized_MoreTaxDeferred_PushesGainsUp_AndStillNetsTheNeed()
+        {
+            // $49,450 of gain at 0%, $10,550 more at 15%, then Tax Deferred - which stacks beneath the gains,
+            // pushing more of them into 15%. The bisection accounts for that and nets exactly the need.
+            var context = Context(need: 80_000, eligibleTaxable: 1_000_000, brokerage: 60_000, eligibleRoth: 100_000, gainFraction: 1);
+            var plan = new TaxOptimizedWithdrawalStrategy().Plan(context);
+
+            Assert.Equal(60_000, plan.GrossBrokerage, 6);
+            Assert.Equal(80_000, plan.NetTaxable + plan.NetBrokerage, 4);
+            Assert.Equal(context.TaxYear.CapitalGainsTax(plan.GrossTaxable, 60_000), plan.CapitalGainsTax, 6);
+            Assert.True(plan.CapitalGainsTax > 0.15 * 10_550 + 1);
             Assert.Equal(0, plan.Roth);
             Assert.False(plan.IsShortfall);
+        }
+
+        [Fact]
+        public void TaxOptimized_AllBasisBrokerage_IsDrawnFirst_ThenTaxDeferredFillsTo22PercentLine()
+        {
+            // All-basis Brokerage realizes no gain, so step 1 isn't capped by the 0% band. With $10k of it, Tax
+            // Deferred fills the 22% line (50,400 gross nets 50,400 - 1,240 - 4,560 = 44,600), then more.
+            var plan = new TaxOptimizedWithdrawalStrategy().Plan(Context(need: 50_000, eligibleTaxable: 1_000_000, brokerage: 10_000, eligibleRoth: 100_000));
+
+            Assert.Equal(10_000, plan.GrossBrokerage, 6);
+            Assert.Equal(40_000, plan.NetTaxable, 6);
+            Assert.True(plan.GrossTaxable < 50_400);
         }
 
         [Fact]
@@ -162,7 +202,7 @@ namespace MonteCarloSimulation.Core.Tests
             var plan = new TaxOptimizedWithdrawalStrategy().Plan(Context(need: 80_000, eligibleTaxable: 1_000_000, brokerage: 10_000, eligibleRoth: 100_000));
 
             Assert.Equal(10_000, plan.GrossBrokerage, 6);
-            Assert.Equal(70_000, plan.NetTaxable, 6);
+            Assert.Equal(70_000, plan.NetTaxable, 4);
             Assert.True(plan.GrossTaxable > 50_400);
             Assert.Equal(0, plan.Roth);
         }
@@ -179,14 +219,154 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.False(plan.IsShortfall);
         }
 
+        // --- Capital gains (TaxYear) ---
+
+        [Theory]
+        [InlineData(0, 1.0, 0, 40_000, 0)]                  // entirely in the 0% band
+        [InlineData(0, 1.0, 30_000, 30_000, 1_582.5)]       // 19,450 at 0%, 10,550 at 15%
+        [InlineData(16_000, 1.0, 10_000, 60_000, 682.5)]    // 6,000 sheltered by unused deduction, 49,450 at 0%, 4,550 at 15%
+        [InlineData(0, 1.0, 540_000, 10_000, 1_725)]        // 5,500 at 15%, 4,500 at 20%
+        [InlineData(0, 1.0, 600_000, 10_000, 2_000)]        // all at 20%
+        [InlineData(0, 1.1, 0, 60_000, 840.75)]             // 0% band inflated to 54,395
+        public void CapitalGainsTax_StacksOnOrdinaryIncome(double deduction, double factor, double ordinary, double gains, double expected)
+        {
+            Assert.Equal(expected, TaxYear(deduction, factor).CapitalGainsTax(ordinary, gains), 6);
+        }
+
+        [Theory]
+        [InlineData(0, 1.0, 0, 0, 1.0, 30_000)]
+        [InlineData(0, 1.0, 0, 0, 1.0, 80_000)]             // crosses 0% -> 15%
+        [InlineData(16_000, 1.025, 25_500, 10_000, 0.4, 60_000)]
+        [InlineData(0, 1.0, 45_000, 0, 0.7, 700_000)]       // crosses 15% -> 20%
+        [InlineData(0, 1.0, 0, 0, 0.0, 12_345)]             // all basis: gross == net
+        public void GrossUpBrokerageSale_RoundTripsAgainstForwardTax(
+            double deduction, double factor, double ordinary, double gainsSoFar, double gainFraction, double desiredNet)
+        {
+            var taxYear = TaxYear(deduction, factor);
+
+            double sale = taxYear.GrossUpBrokerageSale(desiredNet, gainFraction, ordinary, gainsSoFar);
+            double tax = taxYear.CapitalGainsTax(ordinary, gainsSoFar + sale * gainFraction) - taxYear.CapitalGainsTax(ordinary, gainsSoFar);
+
+            Assert.Equal(desiredNet, sale - tax, 6);
+        }
+
+        [Fact]
+        public void BrokerageNetCapacity_NetsTheWholeBalanceAfterStackedGainsTax()
+        {
+            // 100k of all-gain Brokerage, no other income: 49,450 at 0%, 50,550 at 15%.
+            Assert.Equal(100_000 - 0.15 * 50_550, TaxYear(0).BrokerageNetCapacity(100_000, 1, 0, 0), 6);
+        }
+
+        [Fact]
+        public void CapitalGainsBracketRoom_ReportsMarginalRateAndRoom()
+        {
+            var taxYear = TaxYear(0);
+
+            Assert.Equal((0.0, (double?)0, (double?)0.15), Rounded(taxYear.CapitalGainsBracketRoom(0, 49_450)));
+            Assert.Equal((0.15, (double?)(545_500 - 49_451), (double?)0.20), Rounded(taxYear.CapitalGainsBracketRoom(0, 49_451)));
+            Assert.Equal((0.20, (double?)null, (double?)null), taxYear.CapitalGainsBracketRoom(600_000, 1));
+
+            // Unused deduction is a 0% segment ahead of the 0% bracket; they read as one band.
+            var withDeduction = TaxYear(16_000).CapitalGainsBracketRoom(10_000, 0);
+            Assert.Equal(0, withDeduction.CurrentRate);
+            Assert.Equal(6_000 + 49_450, withDeduction.AmountUntilNextBracket!.Value, 6);
+            Assert.Equal(0.15, withDeduction.NextRate);
+        }
+
+        private static (double, double?, double?) Rounded((double Rate, double? Until, double? Next) room) =>
+            (room.Rate, room.Until.HasValue ? Math.Round(room.Until.Value, 6) : null, room.Next);
+
+        [Fact]
+        public void OrdinaryFillCeiling_ProtectsOnlyZeroRateGains()
+        {
+            var taxYear = TaxYear(0);
+
+            Assert.Equal(50_400, taxYear.OrdinaryFillCeiling(0, 0), 6);               // no gains: the 22% line
+            Assert.Equal(29_450, taxYear.OrdinaryFillCeiling(0, 20_000), 6);          // keep $20k of gains at 0%
+            Assert.Equal(50_400, taxYear.OrdinaryFillCeiling(49_450, 20_000), 6);     // gains already at 15%: nothing to protect
+        }
+
+        // --- Gain harvesting ---
+
+        [Fact]
+        public void GainHarvest_StepsUpBasisByLeftoverZeroRateRoom()
+        {
+            var accounts = Accounts(brokerageBasis: 10_000, brokerageGain: 90_000);
+
+            double harvested = GainHarvest.Apply(accounts, TaxYear(0), ordinaryIncome: 20_000, realizedGains: 5_000);
+
+            Assert.Equal(49_450 - 20_000 - 5_000, harvested, 6);
+            Assert.Equal(10_000 + harvested, accounts.BrokerageBasis, 6);
+            Assert.Equal(100_000, accounts.Brokerage, 6); // no cash moves
+        }
+
+        [Fact]
+        public void GainHarvest_CappedByEmbeddedGain_AndZeroWithoutRoom()
+        {
+            var smallGain = Accounts(brokerageBasis: 90_000, brokerageGain: 10_000);
+            Assert.Equal(10_000, GainHarvest.Apply(smallGain, TaxYear(0), 0, 0), 6);
+
+            var noRoom = Accounts(brokerageBasis: 10_000, brokerageGain: 90_000);
+            Assert.Equal(0, GainHarvest.Apply(noRoom, TaxYear(0), ordinaryIncome: 60_000, realizedGains: 0));
+            Assert.Equal(10_000, noRoom.BrokerageBasis, 6);
+        }
+
         // --- Roth conversion ---
+
+        [Fact]
+        public void RothConversion_StopsWhereItWouldPushZeroRateGainsUp()
+        {
+            var accounts = Accounts(taxable: 500_000, brokerageBasis: 100_000);
+            var taxYear = TaxYear(0);
+
+            var conversion = RothConversion.Apply(accounts, taxYear, ordinaryIncomeSoFar: 0, gainsSoFar: 20_000);
+
+            Assert.Equal(29_450, conversion.Amount, 6);
+            Assert.Equal(0, taxYear.CapitalGainsTax(conversion.Amount, 20_000), 9);
+        }
+
+        [Fact]
+        public void RothConversion_CostIncludesPushingExistingGainsIntoHigherBracket()
+        {
+            // Ordinary 49,500 with $500k of gains stacked above: 4,000 of them already at 20%. Converting the
+            // last 900 to the 22% line (50,400) pushes 900 more gains from 15% to 20% - a $45 bump - on top of
+            // the conversion's $108 ordinary tax. All-basis Brokerage funds it, so the sale is exactly the cost.
+            var accounts = Accounts(taxable: 500_000, brokerageBasis: 100_000);
+
+            var conversion = RothConversion.Apply(accounts, TaxYear(0), ordinaryIncomeSoFar: 49_500, gainsSoFar: 500_000);
+
+            Assert.Equal(900, conversion.Amount, 6);
+            Assert.Equal(108, conversion.Tax, 6);
+            Assert.Equal(108 + 45, conversion.TaxSale, 6);
+            Assert.Equal(45, conversion.CapitalGainsTax, 6);
+        }
+
+        [Fact]
+        public void YearTaxAttribution_SumsToTotalTax()
+        {
+            // The per-step attribution (strategy plan + conversion) must equal the tax on the year's final totals.
+            var accounts = Accounts(taxable: 800_000, brokerageBasis: 30_000, brokerageGain: 70_000);
+            var taxYear = TaxYear(16_000, 1.025);
+            double ssTaxable = 20_000;
+            var context = new WithdrawalContext(90_000, ssTaxable, taxYear, accounts.Taxable, accounts.Brokerage, accounts.BrokerageGainFraction, 0);
+
+            var plan = new TaxOptimizedWithdrawalStrategy().Plan(context);
+            accounts.WithdrawTaxable(plan.GrossTaxable);
+            accounts.SellBrokerage(plan.GrossBrokerage);
+            var conversion = RothConversion.Apply(accounts, taxYear, ssTaxable + plan.GrossTaxable, plan.RealizedGains);
+
+            double ordinary = ssTaxable + plan.GrossTaxable + conversion.Amount;
+            double gains = plan.RealizedGains + conversion.RealizedGains;
+            Assert.Equal(taxYear.OrdinaryTax(ssTaxable) + plan.TaxableTax + conversion.Tax, taxYear.OrdinaryTax(ordinary), 6);
+            Assert.Equal(plan.CapitalGainsTax + conversion.CapitalGainsTax, taxYear.CapitalGainsTax(ordinary, gains), 6);
+        }
 
         [Fact]
         public void RothConversion_FillsTo22PercentLine_PayingTaxFromBrokerage()
         {
             var accounts = Accounts(taxable: 500_000, brokerageBasis: 100_000);
 
-            var conversion = RothConversion.Apply(accounts, TaxYear(0), ordinaryIncomeSoFar: 0);
+            var conversion = RothConversion.Apply(accounts, TaxYear(0), ordinaryIncomeSoFar: 0, gainsSoFar: 0);
 
             Assert.Equal(50_400, conversion.Amount, 6);
             Assert.Equal(5_800, conversion.Tax, 6);
@@ -200,7 +380,7 @@ namespace MonteCarloSimulation.Core.Tests
         {
             var accounts = Accounts(taxable: 500_000, brokerageBasis: 1_000);
 
-            var conversion = RothConversion.Apply(accounts, TaxYear(0), ordinaryIncomeSoFar: 0);
+            var conversion = RothConversion.Apply(accounts, TaxYear(0), ordinaryIncomeSoFar: 0, gainsSoFar: 0);
 
             Assert.InRange(conversion.Amount, 1, 50_400 - 1);
             Assert.True(conversion.Tax <= 1_000 + 1e-9);
