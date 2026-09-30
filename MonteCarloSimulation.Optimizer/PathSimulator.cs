@@ -32,10 +32,16 @@ namespace MonteCarloSimulation.Optimizer
             _timeline = RetirementTimeline.Build(_parameters);
             _strategy = WithdrawalStrategies.For(_parameters.WithdrawalStrategy);
 
+            // Every Social Security payment received over the retirement window, in actual (inflated) dollars -
+            // the same per-year amount RunSimulator pays. It doesn't depend on markets, so it's the same on every path.
+            TotalSocialSecurity = _timeline.Sum(year => monthlyBenefit * year.InflationFactor * year.SocialSecurityPayments);
+
             double assets = _parameters.InitialTaxableBalance + _parameters.InitialRothBasis + _parameters.InitialRothUnrealizedGain
                 + _parameters.InitialBrokerageBasis + _parameters.InitialBrokerageUnrealizedGain + Math.Max(0, _parameters.NewMoney);
             _initialUpperBound = Math.Max(1_000, assets + 12 * monthlyBenefit * _parameters.Years);
         }
+
+        public double TotalSocialSecurity { get; }
 
         public bool Survives(double annualWithdrawal, int path)
         {

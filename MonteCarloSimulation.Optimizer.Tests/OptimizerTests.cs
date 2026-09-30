@@ -113,6 +113,43 @@ namespace MonteCarloSimulation.Optimizer.Tests
 
             Assert.Single(optimum.ClaimingAges.Select(a => a.SpendAtMidpoint).Distinct());
             Assert.Equal(62, optimum.Recommended.Age);
+            Assert.All(optimum.ClaimingAges, a => Assert.Equal(0, a.TotalSocialSecurity));
+        }
+
+        // --- Total Social Security collected ---
+
+        [Fact]
+        public void TotalSocialSecurity_SumsEveryInflatedPayment_FromTheStartDateToTheEndOfTheWindow()
+        {
+            // Retire 2026-01-01 for 30 years (window ends 2056-01-01); born 1966, so claiming at 70 starts
+            // 2036-01-01: 20 full years of 12 payments. Inflation from 2026 is 2.5% a year through the first 20
+            // retirement years (to 2046), then 1%.
+            var simulator = new PathSimulator(Template(), Flat, new DateOnly(2036, 1, 1), 4_800);
+
+            double expected = Enumerable.Range(2036, 20)
+                .Sum(year => 4_800 * 12 * Math.Pow(1.025, Math.Min(year - 2026, 20)) * Math.Pow(1.01, Math.Max(0, year - 2046)));
+
+            Assert.Equal(expected, simulator.TotalSocialSecurity, 6);
+        }
+
+        [Fact]
+        public void TotalSocialSecurity_MatchesTheSocialSecurityCoresRunPaysEachYear()
+        {
+            // Social Security doesn't depend on the market path, so Core's public (unseeded) Run pays the same
+            // amounts; with no spending the run survives all 30 years.
+            var parameters = Template();
+            parameters.Iterations = 1;
+            parameters.Withdrawal = 0;
+            parameters.Mean = Volatile.Mean;
+            parameters.StdDev = Volatile.StdDev;
+            parameters.SocialSecurityStartDate = new DateOnly(2031, 7, 15); // mid-year start: a partial first year
+            parameters.SocialSecurityMonthlyAmount = 3_133;
+
+            var coreYears = MonteCarloEngine.Run(parameters).Result.Runs[0].Years;
+            var simulator = new PathSimulator(Template(), Volatile, new DateOnly(2031, 7, 15), 3_133);
+
+            Assert.Equal(30, coreYears.Count);
+            Assert.Equal(coreYears.Sum(y => y.SocialSecurityIncome), simulator.TotalSocialSecurity, 6);
         }
 
         [Fact]
