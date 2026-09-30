@@ -24,6 +24,10 @@ namespace MonteCarloSimulation.Core
         public double ZeroRateGainRoom(double ordinaryIncome, double gains) =>
             Math.Max(0, ZeroRateCeilingGross - ordinaryIncome - gains);
 
+        // How many of `gains` are taxed at 0% on top of this ordinary income: the ones below the 0% ceiling.
+        public double ZeroRateGains(double ordinaryIncome, double gains) =>
+            Math.Min(Math.Max(0, gains), Math.Max(0, ZeroRateCeilingGross - ordinaryIncome));
+
         // Where the Tax Deferred fill and Roth conversions stop adding ordinary income. Normally the start of the
         // 22% bracket; but while this year's realized gains sit in the 0% band, extra ordinary income would push
         // them into 15% (stacking), so the fill stops where those gains would start crossing the 0% ceiling.

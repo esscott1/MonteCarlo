@@ -420,6 +420,38 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.Equal(0.25 * 0.15 * fundingSale, year0.CapitalGainsTaxAmount, 6);
             Assert.Equal(0.12, year0.OrdinaryBracketRate);
             Assert.Equal(0.15, year0.CapitalGainsBracketRate);
+
+            // Reported gains: both sales realize a quarter of their size as gain; only the spending sale's $5,000
+            // sits in the (now full) 0% band - the situation the web footnote explains.
+            Assert.Equal(0.25 * year0.BrokerageWithdrawal, year0.RealizedGains, 6);
+            Assert.Equal(0.25 * spendingSale, year0.ZeroRateGains, 6);
+        }
+
+        [Fact]
+        public void Run_ReportsBrokerageGainAndZeroRateGains_WhenTheBandIsNotFull()
+        {
+            // Pro-rata, age 40, no conversion: the $20,000 draw is all Brokerage at a 0.25 gain fraction - $5,000
+            // of gain, $15,000 of basis, all of the gain at 0% with plenty of band left.
+            var year0 = MonteCarloEngine.Run(ConversionParameters(enable: false)).Result.Runs[0].Years[0];
+
+            Assert.Equal(20_000, year0.BrokerageWithdrawal, 6);
+            Assert.Equal(5_000, year0.RealizedGains, 6);
+            Assert.Equal(5_000, year0.ZeroRateGains, 6);
+            Assert.Equal(0, year0.CapitalGainsBracketRate);
+            Assert.True(year0.AmountUntilNextCapitalGainsBracket > 40_000);
+        }
+
+        [Fact]
+        public void Run_AllGainBrokerage_RealizesItsWholeSaleAsGain()
+        {
+            var parameters = TaxOptimizedParameters(age: 70, withdrawal: 80_000);
+            parameters.InitialBrokerageBasis = 0;
+            parameters.InitialBrokerageUnrealizedGain = 300_000;
+
+            var year0 = MonteCarloEngine.Run(parameters).Result.Runs[0].Years[0];
+
+            Assert.Equal(year0.BrokerageWithdrawal, year0.RealizedGains, 6);
+            Assert.Equal(49_450, year0.ZeroRateGains, 6); // the 0% band, filled by the gains-first sale
         }
 
         [Fact]
