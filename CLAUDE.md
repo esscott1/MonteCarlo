@@ -45,7 +45,7 @@ Source files are UTF-8 with CRLF line endings in the working copy (`core.autocrl
 
 ## Architecture
 
-Five projects in `MonteCarlo.sln` (plus the two test projects described above; the four app projects are below):
+Six projects in `MonteCarlo.sln`: the four below, plus the two test projects described above.
 
 - **`MonteCarloSimulation.Core`** — the entire simulation engine, with zero I/O. `MonteCarloEngine.Run(SimulationParameters)` is the single source of truth for all financial math; both front ends call it and only format its output differently. Never duplicate simulation logic into either front end — if a calculation needs to change, it changes here once. Also holds `SimulationParameters`/`SimulationResult`/`SimulationRunOutput`/`RunSummary`/`RunYearDetail` (plain data) and `InvestmentScenarios` (the 4 built-in scenario presets, shared so neither front end re-hardcodes the same numbers).
 - **`MonteCarloSimulation1`** — the console app. A thin I/O loop: prompt for input (`SimulationPrompt`), call `MonteCarloEngine.Run`, print results (`SimulationReporter`).
