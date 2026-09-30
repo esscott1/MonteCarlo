@@ -12,6 +12,7 @@ namespace MonteCarloSimulation.Core
         double InflationFactor,
         double AgeAtStart,
         int SocialSecurityPayments,
+        int MedicareMonths,
         TaxYear TaxYear)
     {
         // The 59.5 early-withdrawal gate, judged at the start of the year: turning 59.5 mid-year unlocks
@@ -50,11 +51,12 @@ namespace MonteCarloSimulation.Core
                 double inflationFactor = InflationFactor(calendarYear, retirement.Year);
                 double ageAtStart = (start.DayNumber - parameters.Birthdate.DayNumber) / 365.25;
                 int payments = SocialSecurityPayments(parameters.SocialSecurityStartDate, start, stop);
+                int medicareMonths = MedicareMonths(parameters.Birthdate, start, stop);
                 var taxYear = new TaxYear(
                     parameters.AnnualStandardDeduction * inflationFactor, inflationFactor,
                     FederalTaxBrackets.Single2026, FederalTaxBrackets.CapitalGainsSingle2026);
 
-                years.Add(new RetirementYear(years.Count, calendarYear, start, stop, fraction, inflationFactor, ageAtStart, payments, taxYear));
+                years.Add(new RetirementYear(years.Count, calendarYear, start, stop, fraction, inflationFactor, ageAtStart, payments, medicareMonths, taxYear));
             }
 
             return years;
@@ -67,6 +69,14 @@ namespace MonteCarloSimulation.Core
             for (int year = BaseYear; year < calendarYear; year++)
                 factor *= 1 + (year < retirementYear + EarlyInflationRetirementYears ? EarlyInflation : LateInflation);
             return factor;
+        }
+
+        // Months of Medicare coverage in [from, to): coverage starts on the first day of the 65th-birthday month.
+        // Counted like monthly payments due on the 1st.
+        public static int MedicareMonths(DateOnly birthdate, DateOnly from, DateOnly to)
+        {
+            var sixtyFive = birthdate.AddYears(65);
+            return SocialSecurityPayments(new DateOnly(sixtyFive.Year, sixtyFive.Month, 1), from, to);
         }
 
         // Social Security pays monthly on the start date's day of the month (clamped to shorter months), beginning

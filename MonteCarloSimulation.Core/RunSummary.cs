@@ -12,6 +12,7 @@ namespace MonteCarloSimulation.Core
         public double AverageAnnualReturn => Years.Average(y => y.RateOfReturn);
         public double AverageTaxRate => Years.Average(y => y.TaxRate);
         public double LifetimeTaxesPaid => Years.Sum(y => y.OrdinaryTaxAmount) + Years.Sum(y => y.CapitalGainsTaxAmount);
+        public double LifetimeIrmaaSurcharges => Years.Sum(y => y.IrmaaSurcharge);
 
         // Ties resolve to the earliest year.
         public int HighestReturnYear => FirstYearOf(y => y.RateOfReturn, Years.Max(y => y.RateOfReturn));

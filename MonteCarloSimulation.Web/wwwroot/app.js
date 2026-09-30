@@ -273,6 +273,10 @@ function taxesBreakdown(yd, conversionsEnabled) {
     if (yd.rothConversionAmount > 0) {
         items.push(`${formatCurrency(yd.rothConversionAmount)} converted to Roth (${formatCurrency(yd.rothConversionTax)} tax)${zeroRateOnConversionLine}`);
     }
+    if (yd.irmaaSurcharge > 0.5) {
+        // Medicare premiums surcharge, set by income two years earlier and paid on top of spending
+        items.push(`${formatCurrency(yd.irmaaSurcharge)} Medicare IRMAA surcharge (from ${yd.calendarYear - 2} income)`);
+    }
     return bulletList(items);
 }
 
@@ -366,7 +370,11 @@ function renderSummary(parameters, output) {
     const variance = output.allRates.reduce((a, b) => a + Math.pow(b - totalAvgRate, 2), 0) / output.allRates.length;
     const stdDev = Math.sqrt(variance);
     const avgLifetimeTax = result.runs.reduce((a, run) => a + run.lifetimeTaxesPaid, 0) / result.runs.length;
-    const lifetimeTaxLine = `<p>Average lifetime tax paid: ${formatCurrency(avgLifetimeTax)} per run (ordinary + capital gains, incl. Roth conversions${result.outOfMoneyCount > 0 ? ', through the year a run ran out' : ''})</p>`;
+    const avgLifetimeIrmaa = result.runs.reduce((a, run) => a + run.lifetimeIrmaaSurcharges, 0) / result.runs.length;
+    const irmaaLine = avgLifetimeIrmaa > 0.5
+        ? `<p>Average lifetime Medicare IRMAA surcharges: ${formatCurrency(avgLifetimeIrmaa)} per run (paid on top of spending, not counted as tax)</p>`
+        : '';
+    const lifetimeTaxLine = `<p>Average lifetime tax paid: ${formatCurrency(avgLifetimeTax)} per run (ordinary + capital gains, incl. Roth conversions${result.outOfMoneyCount > 0 ? ', through the year a run ran out' : ''})</p>${irmaaLine}`;
 
     if (result.outOfMoneyCount > 0) {
         const survival = 1 - (result.outOfMoneyCount / parameters.iterations);

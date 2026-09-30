@@ -121,6 +121,9 @@ function definitions(s) {
         <ul class="info-notes">
             <li>Gross ordinary income includes taxable Social Security and the year's Tax Deferred withdrawals. The lines are inflated each year like the tax brackets, and a year already past its line converts nothing.</li>
             <li>Conversions ignore the 59&frac12; gate, and converted dollars count as Roth basis, which can be spent at any age.</li>
+            <li>Big conversions raise Medicare premiums later. From 65, the model charges the Medicare IRMAA surcharge set by income two
+            years earlier (2026 single-filer tiers, starting above $109,000 of MAGI, inflated each year) on top of spending. The first two
+            years of retirement pay none, as after a work-stoppage appeal.</li>
             <li>Where the conversion's tax comes from is set by the funding rule below${app ? ` &mdash; the app uses ${code(app.code)}` : ''}.</li>
         </ul>
         ${fundings.length === 0 ? '' : `
