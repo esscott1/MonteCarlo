@@ -53,6 +53,12 @@ Never delete a branch whose PR is still open or that isn't contained in `master`
 
 Source files are UTF-8 with CRLF line endings in the working copy (`core.autocrlf=true`; the repo stores LF). BOM use is mixed — most `.cs` files have none, the `.csproj` files do — so preserve each file's existing BOM state and give new `.cs` files none. `git add` will warn `LF will be replaced by CRLF`; that's expected and harmless. Note that `sed -i` in Git Bash rewrites files with LF; restore CRLF afterwards.
 
+## Deployment
+
+Every push to `master` that touches `MonteCarloSimulation.Web/**`, `MonteCarloSimulation.Core/**` or the workflow deploys via `.github/workflows/deploy-azure.yml` to the Azure Web App `montecarlo-otsconsulting` (Linux, .NET 10 stack, framework-dependent publish). The live site is **https://montecarlo-otsconsulting.azurewebsites.net** — use only that URL.
+
+**Do not use `montecarlo.otsconsulting.ai`** (in requests, links, docs, checks or code) until the user explicitly says it exists. It hasn't been created: there is no DNS record for it, despite what `README.md` and `docs/azure-custom-domain.md` (a setup guide for later) say.
+
 ## Architecture
 
 Nine projects in `MonteCarlo.sln`: the five below, plus the four test projects described above.
