@@ -18,7 +18,12 @@ namespace MonteCarloSimulation.Core
         };
 
         // Gross ordinary income where the first bracket at `rate` or higher starts.
-        public static double BracketStart(TaxYear taxYear, double rate) =>
-            taxYear.StandardDeduction + taxYear.Brackets.First(b => b.Rate >= rate).LowerBound * taxYear.InflationFactor;
+        public static double BracketStart(TaxYear taxYear, double rate)
+        {
+            var brackets = taxYear.Brackets;
+            for (int i = 0; i < brackets.Count; i++)
+                if (brackets[i].Rate >= rate) return taxYear.StandardDeduction + brackets[i].LowerBound * taxYear.InflationFactor;
+            throw new InvalidOperationException($"No bracket at {rate:P0} or higher.");
+        }
     }
 }

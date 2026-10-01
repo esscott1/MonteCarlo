@@ -15,8 +15,10 @@ namespace MonteCarloSimulation.Core
         public static double MonthlySurcharge(double magi, double inflationFactor)
         {
             double surcharge = 0;
-            foreach (var tier in FederalTaxBrackets.MedicareIrmaaSingle2026)
+            var tiers = FederalTaxBrackets.MedicareIrmaaSingle2026;
+            for (int i = 0; i < tiers.Count; i++)
             {
+                var tier = tiers[i];
                 if (magi <= tier.MagiAbove * inflationFactor) break;
                 surcharge = tier.MonthlySurcharge * inflationFactor;
             }
