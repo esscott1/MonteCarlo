@@ -13,6 +13,12 @@ namespace MonteCarloSimulation.Optimizer
     public static class SpendingOptimizer
     {
         public const int DefaultPaths = 500;
+
+        // The market path counts the Optimal page offers: all of DefaultPaths (the most precise), two-thirds and
+        // one-third of it (faster; run time scales with the count). Path i is the same market in each, so a smaller
+        // count runs the first paths of the larger one.
+        public static IReadOnlyList<int> PathChoices { get; } =
+            [DefaultPaths, (int)Math.Round(DefaultPaths * 2 / 3.0), (int)Math.Round(DefaultPaths / 3.0)];
         public const double HighSurvival = 0.85;
         public const double MidpointSurvival = 0.825;
         public const double LowSurvival = 0.80;

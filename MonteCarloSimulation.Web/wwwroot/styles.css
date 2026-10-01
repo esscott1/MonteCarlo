@@ -188,6 +188,12 @@ fieldset {
     margin: 0;
 }
 
+.subgroup-hint {
+    font-size: 0.8rem;
+    color: #888;
+    margin: 0;
+}
+
 input[type="number"] {
     padding: 0.4rem;
     border: 1px solid var(--border);

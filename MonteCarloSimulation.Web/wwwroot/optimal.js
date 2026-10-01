@@ -66,6 +66,7 @@ function readRequest() {
         socialSecurityAt70: parseNumber(data.get('socialSecurityAt70')),
         annualStandardDeduction: parseNumber(data.get('annualStandardDeduction')),
         enableRothConversions: data.get('enableRothConversions') === 'on',
+        paths: Number(data.get('paths')),
     };
 }
 
