@@ -39,6 +39,15 @@ namespace MonteCarloSimulation.Optimizer
 
     public sealed record BenefitAtAge(int Age, double MonthlyBenefit);
 
+    // What SpendingOptimizer.Optimize reports while it runs. Both are called from worker threads, possibly at the same
+    // time, so they must be thread-safe. ClaimingAgeDone gets the claiming ages finished so far (across all scenarios)
+    // and the total; ScenarioDone gets each scenario's result as soon as its last claiming age finishes.
+    public sealed class OptimizationListener
+    {
+        public Action<int, int>? ClaimingAgeDone { get; init; }
+        public Action<ScenarioOptimum>? ScenarioDone { get; init; }
+    }
+
     public sealed record OptimizationResult(
         IReadOnlyList<ScenarioOptimum> Scenarios,
         IReadOnlyList<BenefitAtAge> BenefitByAge,

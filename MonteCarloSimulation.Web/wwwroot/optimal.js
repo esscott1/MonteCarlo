@@ -148,34 +148,113 @@ function renderBenefitCurve(benefits) {
         </details>`;
 }
 
-function renderResults(result) {
-    lastResult = result;
+// Results stream in (newline-delimited JSON from /api/optimal): `start` lays out the page with a slot per scenario,
+// `progress` counts claiming ages, each `scenario` fills its slot as soon as it's computed, then `done` - or `error`.
+function progressText(completed, total) {
+    return `Calculating&hellip; ${completed} of ${total} Social Security start ages checked.`;
+}
+
+function renderStart(start) {
+    lastResult = { paths: start.paths, scenarios: [], benefitByAge: start.benefitByAge };
+    const slots = start.scenarios.map((s) => `
+        <div class="summary-box" id="scenario-slot-${s.scenarioId}">
+            <p><strong>${escapeHtml(s.description)}</strong></p>
+            <p class="scenario-pending">Calculating&hellip;</p>
+        </div>`).join('');
     optimalResults.innerHTML = `
-        <p class="page-intro">Based on ${result.paths} simulated market paths per investment scenario. "Survival" means the money lasts the full "Years money lasts".</p>
-        ${result.scenarios.map(renderScenario).join('')}
-        ${renderBenefitCurve(result.benefitByAge)}`;
+        <p class="page-intro">Based on ${start.paths} simulated market paths per investment scenario. "Survival" means the money lasts the full "Years money lasts".</p>
+        <p class="page-intro" id="optimal-progress">${progressText(0, start.totalClaimingAges)}</p>
+        ${slots}
+        ${renderBenefitCurve(start.benefitByAge)}`;
+}
+
+function renderProgress(progress) {
+    const line = document.getElementById('optimal-progress');
+    if (line) line.innerHTML = progressText(progress.completed, progress.total);
+}
+
+function renderScenarioResult(scenario) {
+    lastResult.scenarios.push(scenario);
+    const slot = document.getElementById(`scenario-slot-${scenario.scenarioId}`);
+    if (slot) slot.outerHTML = renderScenario(scenario);
+}
+
+function renderDone() {
+    document.getElementById('optimal-progress')?.remove();
+}
+
+// The run stopped early: say so above whatever finished, and mark the scenarios that never arrived.
+function renderStreamError() {
+    renderDone();
+    optimalResults.querySelectorAll('.scenario-pending').forEach((p) => { p.textContent = 'Not calculated.'; });
+    optimalResults.insertAdjacentHTML('afterbegin',
+        '<div class="error-box"><p>The calculation stopped before it finished. Please try again.</p></div>');
+}
+
+// Calls onEvent with each JSON line of a streamed response as it arrives.
+async function readEvents(response, onEvent) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = '';
+    for (;;) {
+        const { value, done } = await reader.read();
+        buffered += decoder.decode(value, { stream: !done });
+        let newline;
+        while ((newline = buffered.indexOf('\n')) >= 0) {
+            const line = buffered.slice(0, newline).trim();
+            buffered = buffered.slice(newline + 1);
+            if (line) onEvent(JSON.parse(line));
+        }
+        if (done) break;
+    }
+    if (buffered.trim()) onEvent(JSON.parse(buffered));
 }
 
 optimalForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     optimalSubmit.disabled = true;
-    optimalResults.innerHTML = '<p class="page-intro">Calculating&hellip; this takes a few seconds.</p>';
+    lastResult = null;
+    optimalResults.innerHTML = '<p class="page-intro">Calculating&hellip;</p>';
     const request = readRequest();
+    let started = false;
+    let finished = false;
     try {
         const response = await fetch('/api/optimal', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(request),
         });
-        const body = await response.json();
         if (!response.ok) {
+            const body = await response.json();
             renderErrors(body.errors ?? { request: body.title ?? 'The request failed.' });
             return;
         }
-        lastRequest = request;
-        renderResults(body);
+        await readEvents(response, (event) => {
+            switch (event.type) {
+                case 'start':
+                    started = true;
+                    lastRequest = request;
+                    renderStart(event);
+                    break;
+                case 'progress':
+                    renderProgress(event);
+                    break;
+                case 'scenario':
+                    renderScenarioResult(event.scenario);
+                    break;
+                case 'done':
+                    finished = true;
+                    renderDone();
+                    break;
+            }
+        });
+        if (!finished) {
+            if (started) renderStreamError();
+            else optimalResults.innerHTML = '<div class="error-box"><p>Something went wrong. Please try again.</p></div>';
+        }
     } catch (err) {
-        optimalResults.innerHTML = '<div class="error-box"><p>Something went wrong. Please try again.</p></div>';
+        if (started) renderStreamError();
+        else optimalResults.innerHTML = '<div class="error-box"><p>Something went wrong. Please try again.</p></div>';
     } finally {
         optimalSubmit.disabled = false;
     }
