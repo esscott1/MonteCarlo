@@ -4,8 +4,8 @@ using MonteCarloSimulation.Optimizer;
 namespace MonteCarloSimulation.Web
 {
     // Input for the Optimal page: the main page's inputs minus the withdrawal (which is solved for), the run count
-    // (fixed at SpendingOptimizer.DefaultPaths) and the single Social Security amount/date - replaced by the
-    // monthly benefit estimates at 62, 67 and 70.
+    // (replaced by Paths, the number of market paths: one of SpendingOptimizer.PathChoices, DefaultPaths when
+    // omitted) and the single Social Security amount/date - replaced by the monthly benefit estimates at 62, 67 and 70.
     public class OptimalRequest
     {
         public int Years { get; set; }
@@ -23,6 +23,7 @@ namespace MonteCarloSimulation.Web
         public double SocialSecurityAt70 { get; set; }
         public double AnnualStandardDeduction { get; set; }
         public bool EnableRothConversions { get; set; }
+        public int? Paths { get; set; }
 
         public Dictionary<string, string> Validate()
         {
@@ -45,6 +46,8 @@ namespace MonteCarloSimulation.Web
             else if (SocialSecurityAt62 > SocialSecurityAt67 || SocialSecurityAt67 > SocialSecurityAt70)
                 errors["socialSecurity"] = "Social Security amounts should increase with age: 62 <= 67 <= 70.";
             if (AnnualStandardDeduction < 0) errors["annualStandardDeduction"] = "Must be non-negative.";
+            if (Paths is int paths && !SpendingOptimizer.PathChoices.Contains(paths))
+                errors["paths"] = $"Simulated markets must be one of {string.Join(", ", SpendingOptimizer.PathChoices)}.";
             return errors;
         }
 
@@ -67,7 +70,8 @@ namespace MonteCarloSimulation.Web
                 EnableRothConversions = EnableRothConversions,
                 ScenarioDescription = "Optimal"
             },
-            SocialSecurity = new SocialSecurityCurve(SocialSecurityAt62, SocialSecurityAt67, SocialSecurityAt70)
+            SocialSecurity = new SocialSecurityCurve(SocialSecurityAt62, SocialSecurityAt67, SocialSecurityAt70),
+            Paths = Paths ?? SpendingOptimizer.DefaultPaths
         };
     }
 }

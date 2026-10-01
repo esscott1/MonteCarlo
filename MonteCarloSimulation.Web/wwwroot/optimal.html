@@ -89,6 +89,22 @@
                         <input type="number" name="yearNewMoney" min="0" step="1" value="10" style="width: calc(16ch + 1.6rem)" required>
                     </label>
                 </fieldset>
+                <fieldset class="subgroup">
+                    <legend>Simulated markets</legend>
+                    <label class="checkbox-label">
+                        <input type="radio" name="paths" value="500" checked>
+                        500 &mdash; most precise
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="radio" name="paths" value="333">
+                        333
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="radio" name="paths" value="167">
+                        167 &mdash; fastest
+                    </label>
+                    <p class="subgroup-hint">Fewer markets finish sooner but pin the 80&ndash;85% band less precisely.</p>
+                </fieldset>
             </div>
         </div>
 

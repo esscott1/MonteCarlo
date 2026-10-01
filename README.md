@@ -19,11 +19,11 @@ It's worth being explicit: the tool-calling/AI round trip in the change-request 
 
 The web app deploys to Azure via [.github/workflows/deploy-azure.yml](.github/workflows/deploy-azure.yml), triggered on every push to `master` that touches `MonteCarloSimulation.Web/**`, `MonteCarloSimulation.Core/**`, or the workflow file itself:
 
-1. Checks out the code and sets up .NET 9.
+1. Checks out the code and sets up .NET 10.
 2. Runs `dotnet test MonteCarlo.sln --configuration Release` — tests must pass before anything is published.
 3. Publishes `MonteCarloSimulation.Web` in Release configuration.
 4. Deploys the published output via `azure/webapps-deploy@v3` to the Azure Web App `montecarlo-otsconsulting`, authenticating with a publish profile stored in the `AZURE_WEBAPP_PUBLISH_PROFILE` GitHub secret.
 
-Provisioned resources (see [docs/azure-custom-domain.md](docs/azure-custom-domain.md) for the full one-time setup): resource group `rg-montecarlo`, region `westus2`, Web App `montecarlo-otsconsulting`, live at `https://montecarlo-otsconsulting.azurewebsites.net/` and also reachable at the custom domain `https://montecarlo.otsconsulting.ai` via a GoDaddy CNAME/TXT record and a free Azure-managed SSL certificate.
+Provisioned resources: resource group `rg-montecarlo`, region `westus2`, Web App `montecarlo-otsconsulting` (Linux, .NET 10), live at `https://montecarlo-otsconsulting.azurewebsites.net/`. A custom domain hasn't been set up yet; [docs/azure-custom-domain.md](docs/azure-custom-domain.md) describes the steps for when it is.
 
 Only `MonteCarloSimulation.Web` (which references `MonteCarloSimulation.Core` directly) ships to Azure — the console app, `MonteCarloSimulation1`, is a local dev tool only and is never deployed.

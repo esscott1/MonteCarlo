@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,10 +58,14 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.True(errors.TryGetProperty("socialSecurity", out _));
         }
 
-        [Fact]
-        public async Task ValidRequest_StreamsStartProgressEachScenarioAndDone_MatchingTheOptimizer()
+        // Null: the request leaves Paths out, which runs the default 500
+        [Theory]
+        [InlineData(null)]
+        [InlineData(167)]
+        public async Task ValidRequest_StreamsStartProgressEachScenarioAndDone_MatchingTheOptimizer(int? paths)
         {
             var request = DefaultRequest();
+            request.Paths = paths;
 
             using var response = await PostAsync(request);
 
@@ -76,6 +81,7 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.All(events.Skip(1).SkipLast(1), e => Assert.Contains(TypeOf(e), new[] { "progress", "scenario" }));
 
             var inputs = request.ToInputs();
+            Assert.Equal(paths ?? SpendingOptimizer.DefaultPaths, inputs.Paths);
             int total = inputs.Scenarios.Count * SpendingOptimizer.ClaimingAges.Count;
             var start = events[0];
             Assert.Equal(inputs.Paths, start.GetProperty("paths").GetInt32());
@@ -100,6 +106,66 @@ namespace MonteCarloSimulation.Web.Tests
 
             // Enums travel as names, which optimal.js looks up
             Assert.Equal(JsonValueKind.String, streamed[0].GetProperty("recommended").GetProperty("withdrawalStrategy").ValueKind);
+        }
+
+        // --- Choosing how many market paths to simulate ---
+
+        [Fact]
+        public void PathChoices_AreAllTwoThirdsAndOneThirdOfTheDefault()
+        {
+            Assert.Equal(new[] { 500, 333, 167 }, SpendingOptimizer.PathChoices);
+            Assert.Equal(SpendingOptimizer.DefaultPaths, SpendingOptimizer.PathChoices[0]);
+        }
+
+        [Theory]
+        [InlineData(null, 500)]
+        [InlineData(500, 500)]
+        [InlineData(333, 333)]
+        [InlineData(167, 167)]
+        public void Paths_EachChoiceIsAccepted_AndOmittedMeansTheDefault(int? paths, int expected)
+        {
+            var request = DefaultRequest();
+            request.Paths = paths;
+
+            Assert.Empty(request.Validate());
+            Assert.Equal(expected, request.ToInputs().Paths);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(250)]
+        [InlineData(1_000)]
+        [InlineData(-167)]
+        public void Paths_AnythingElseIsAFieldError(int paths)
+        {
+            var request = DefaultRequest();
+            request.Paths = paths;
+
+            Assert.True(request.Validate().ContainsKey("paths"));
+        }
+
+        [Fact]
+        public async Task InvalidPaths_Returns400WithAPathsError()
+        {
+            var request = DefaultRequest();
+            request.Paths = 250;
+
+            using var response = await PostAsync(request);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.True(body.RootElement.GetProperty("errors").TryGetProperty("paths", out _));
+        }
+
+        [Fact]
+        public async Task OptimalPage_OffersExactlyThePathChoices_WithTheDefaultChecked()
+        {
+            string html = await factory.CreateClient().GetStringAsync("/optimal.html");
+
+            var radios = Regex.Matches(html, @"<input type=""radio"" name=""paths"" value=""(\d+)""( checked)?>");
+            Assert.Equal(SpendingOptimizer.PathChoices, radios.Select(m => int.Parse(m.Groups[1].Value)));
+            var checkedValue = Assert.Single(radios, m => m.Groups[2].Success);
+            Assert.Equal(SpendingOptimizer.DefaultPaths, int.Parse(checkedValue.Groups[1].Value));
         }
     }
 }
