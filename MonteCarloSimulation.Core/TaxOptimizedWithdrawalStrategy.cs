@@ -57,16 +57,10 @@ namespace MonteCarloSimulation.Core
             // (at least 1 - 37% - 20%), so the search is monotone.
             if (remaining > 0 && c.EligibleTaxable > grossTaxable)
             {
-                double ssTaxable = c.SsTaxable;
-                double brokerageGains = gains;
-                double saleTotal = grossBrokerage;
-                double ssTax = taxYear.OrdinaryTax(ssTaxable);
-                double CashAfterTax(double taxableGross) =>
-                    taxableGross + saleTotal - (taxYear.TotalTax(ssTaxable + taxableGross, brokerageGains) - ssTax);
-
-                double target = CashAfterTax(grossTaxable) + remaining;
+                var cash = new CashAfterTax(taxYear, c.SsTaxable, gains, grossBrokerage, taxYear.OrdinaryTax(c.SsTaxable), 0);
+                double target = cash.Of(grossTaxable) + remaining;
                 double maxGross = c.EligibleTaxable;
-                double cashAtMax = CashAfterTax(maxGross);
+                double cashAtMax = cash.Of(maxGross);
                 if (cashAtMax <= target)
                 {
                     remaining = target - cashAtMax;
@@ -74,7 +68,7 @@ namespace MonteCarloSimulation.Core
                 }
                 else
                 {
-                    grossTaxable = Bisection.Smallest(grossTaxable, maxGross, g => CashAfterTax(g) >= target);
+                    grossTaxable = Bisection.Smallest(grossTaxable, maxGross, cash with { Target = target });
                     remaining = 0;
                 }
             }
@@ -84,6 +78,18 @@ namespace MonteCarloSimulation.Core
             remaining -= roth;
 
             return WithdrawalPlan.FromGross(c, grossTaxable, grossBrokerage, roth, isShortfall: remaining > 0.01);
+        }
+
+        // Step 4's after-tax cash for a gross Tax Deferred draw: the draw plus the Brokerage sales, less the tax the
+        // draw adds on top of Social Security's own (ordinary tax, plus the gains it pushes into higher brackets).
+        // As a Bisection predicate it holds once that cash reaches Target.
+        private readonly record struct CashAfterTax(
+            TaxYear TaxYear, double SsTaxable, double BrokerageGains, double SaleTotal, double SsTax, double Target) : Bisection.IPredicate
+        {
+            public double Of(double taxableGross) =>
+                taxableGross + SaleTotal - (TaxYear.TotalTax(SsTaxable + taxableGross, BrokerageGains) - SsTax);
+
+            public bool Holds(double taxableGross) => Of(taxableGross) >= Target;
         }
     }
 }

@@ -26,12 +26,14 @@ namespace MonteCarloSimulation.Optimizer
             var byJob = new ConcurrentDictionary<(int ScenarioId, int Age), ClaimingAgeResult>();
             // The app's Automatic choices expand to every (order, conversion target) pair, up to 8.
             var candidates = AutomaticStrategy.Candidates(template);
+            // Each scenario's market paths, drawn once for every spend, claiming age and candidate
+            var pathsByScenario = inputs.Scenarios.ToDictionary(s => s.Id, s => PathSimulator.SeededPaths(template, s, inputs.Paths));
 
             Parallel.ForEach(jobs, job =>
             {
                 var start = template.Birthdate.AddYears(job.Age);
                 double monthly = curve.MonthlyBenefitAtAge(job.Age);
-                byJob[(job.Scenario.Id, job.Age)] = BestCandidate(inputs, job.Scenario, job.Age, start, monthly, candidates);
+                byJob[(job.Scenario.Id, job.Age)] = BestCandidate(inputs, job.Scenario, job.Age, start, monthly, candidates, pathsByScenario[job.Scenario.Id]);
             });
 
             var scenarios = inputs.Scenarios.Select(scenario =>
@@ -44,7 +46,7 @@ namespace MonteCarloSimulation.Optimizer
                     if (candidate.SpendAtMidpoint > recommended.SpendAtMidpoint) recommended = candidate;
 
                 var check = new PathSimulator(template, scenario, recommended.StartDate, recommended.MonthlyBenefit,
-                    recommended.WithdrawalStrategy, recommended.RothConversionTarget);
+                    recommended.WithdrawalStrategy, recommended.RothConversionTarget, pathsByScenario[scenario.Id]);
                 int survivors = Enumerable.Range(0, inputs.Paths).Count(path => check.Survives(recommended.SpendAtMidpoint, path));
 
                 return new ScenarioOptimum(scenario.Id, scenario.Description, recommended, (double)survivors / inputs.Paths, claimingAges);
@@ -64,11 +66,11 @@ namespace MonteCarloSimulation.Optimizer
         // are searched in full, warm-started from the first candidate's break-evens on the same paths.
         private static ClaimingAgeResult BestCandidate(
             OptimizationInputs inputs, InvestmentScenario scenario, int age, DateOnly start, double monthly,
-            IReadOnlyList<(WithdrawalStrategy Order, RothConversionTarget Target)> candidates)
+            IReadOnlyList<(WithdrawalStrategy Order, RothConversionTarget Target)> candidates, double[][] paths)
         {
             ClaimingAgeResult FullSearch((WithdrawalStrategy Order, RothConversionTarget Target) c, double[]? hints, out double[] breakEvens)
             {
-                var simulator = new PathSimulator(inputs.Template, scenario, start, monthly, c.Order, c.Target);
+                var simulator = new PathSimulator(inputs.Template, scenario, start, monthly, c.Order, c.Target, paths);
                 breakEvens = new double[inputs.Paths];
                 for (int path = 0; path < inputs.Paths; path++)
                     breakEvens[path] = simulator.BreakEven(path, hints?[path]);
@@ -89,7 +91,7 @@ namespace MonteCarloSimulation.Optimizer
             var finalists = candidates.Skip(1)
                 .Select(c =>
                 {
-                    var simulator = new PathSimulator(inputs.Template, scenario, start, monthly, c.Order, c.Target);
+                    var simulator = new PathSimulator(inputs.Template, scenario, start, monthly, c.Order, c.Target, paths);
                     int survivors = 0;
                     double afterTaxLeft = 0;
                     for (int path = 0; path < inputs.Paths; path++)

@@ -15,10 +15,18 @@ namespace MonteCarloSimulation.Core
     {
         // Gross ordinary income at which the first bracket at 22% or higher starts - the ceiling that both the
         // tax-optimized Tax Deferred fill and Roth conversions fill up to. Read from the table, not hard-coded.
-        public double Bracket22CeilingGross => StandardDeduction + Brackets.First(b => b.Rate >= 0.22).LowerBound * InflationFactor;
+        // Computed once per tax year: the tax functions run thousands of times per simulated run.
+        public double Bracket22CeilingGross { get; } = StandardDeduction + FirstLowerBound(Brackets, rate => rate >= 0.22) * InflationFactor;
 
         // Gross ordinary-plus-gains income up to which long-term gains are taxed at 0%.
-        public double ZeroRateCeilingGross => StandardDeduction + GainsBrackets.First(b => b.Rate > 0).LowerBound * InflationFactor;
+        public double ZeroRateCeilingGross { get; } = StandardDeduction + FirstLowerBound(GainsBrackets, rate => rate > 0) * InflationFactor;
+
+        private static double FirstLowerBound(IReadOnlyList<TaxBracket> brackets, Func<double, bool> rateMatches)
+        {
+            for (int i = 0; i < brackets.Count; i++)
+                if (rateMatches(brackets[i].Rate)) return brackets[i].LowerBound;
+            throw new InvalidOperationException("No bracket matches.");
+        }
 
         // How many more gain dollars would still be taxed at 0%, on top of this ordinary income and these gains.
         public double ZeroRateGainRoom(double ordinaryIncome, double gains) =>
@@ -96,8 +104,12 @@ namespace MonteCarloSimulation.Core
         // null once already in the top bracket.
         public (double CurrentRate, double? AmountUntilNextBracket, double? NextRate) CapitalGainsBracketRoom(double ordinaryIncome, double gains)
         {
-            var segments = GainSegments(ordinaryIncome).ToList();
-            for (int i = 0; i < segments.Count; i++)
+            // At most the deduction shelter plus every LTCG bracket
+            Span<(double Lower, double Upper, double Rate)> buffer = stackalloc (double, double, double)[GainsBrackets.Count + 1];
+            int count = 0;
+            foreach (var segment in GainSegments(ordinaryIncome)) buffer[count++] = segment;
+            var segments = buffer[..count];
+            for (int i = 0; i < segments.Length; i++)
             {
                 var (_, upper, rate) = segments[i];
                 if (double.IsPositiveInfinity(upper)) return (rate, null, null);
@@ -107,13 +119,13 @@ namespace MonteCarloSimulation.Core
                     // Skip segments at the same rate (the deduction shelter is a 0% segment ahead of the 0% bracket)
                     int next = i + 1;
                     double until = upper - gains;
-                    while (next < segments.Count && segments[next].Rate == rate)
+                    while (next < segments.Length && segments[next].Rate == rate)
                     {
                         if (double.IsPositiveInfinity(segments[next].Upper)) return (rate, null, null);
                         until = segments[next].Upper - gains;
                         next++;
                     }
-                    return (rate, Math.Max(0, until), next < segments.Count ? segments[next].Rate : (double?)null);
+                    return (rate, Math.Max(0, until), next < segments.Length ? segments[next].Rate : (double?)null);
                 }
             }
             return (segments[^1].Rate, null, null);
@@ -121,19 +133,45 @@ namespace MonteCarloSimulation.Core
 
         // The year's gains schedule for this ordinary income, as (lower, upper, rate) segments measured in gain
         // dollars from zero: first any unused standard deduction at 0%, then the LTCG brackets from where
-        // ordinary taxable income ends.
-        private IEnumerable<(double Lower, double Upper, double Rate)> GainSegments(double ordinaryIncome)
-        {
-            double shelter = Math.Max(0, StandardDeduction - ordinaryIncome);
-            double start = Math.Max(0, ordinaryIncome - StandardDeduction);
-            if (shelter > 0) yield return (0, shelter, 0);
+        // ordinary taxable income ends. A struct enumerator rather than an iterator, so walking it allocates nothing.
+        private GainSegmentList GainSegments(double ordinaryIncome) => new(GainsBrackets, StandardDeduction, InflationFactor, ordinaryIncome);
 
-            foreach (var bracket in GainsBrackets)
+        private readonly struct GainSegmentList(IReadOnlyList<TaxBracket> brackets, double standardDeduction, double inflationFactor, double ordinaryIncome)
+        {
+            public GainSegmentEnumerator GetEnumerator() => new(brackets, standardDeduction, inflationFactor, ordinaryIncome);
+        }
+
+        private struct GainSegmentEnumerator(IReadOnlyList<TaxBracket> brackets, double standardDeduction, double inflationFactor, double ordinaryIncome)
+        {
+            private readonly double _shelter = Math.Max(0, standardDeduction - ordinaryIncome);
+            private readonly double _start = Math.Max(0, ordinaryIncome - standardDeduction);
+            private int _next = -1;
+
+            public (double Lower, double Upper, double Rate) Current { get; private set; }
+
+            public bool MoveNext()
             {
-                double upper = bracket.UpperBound * InflationFactor;
-                if (start >= upper) continue;
-                double lower = Math.Max(bracket.LowerBound * InflationFactor, start);
-                yield return (shelter + lower - start, shelter + upper - start, bracket.Rate);
+                // The deduction shelter comes first, then the brackets above where ordinary taxable income ends
+                if (_next < 0)
+                {
+                    _next = 0;
+                    if (_shelter > 0)
+                    {
+                        Current = (0, _shelter, 0);
+                        return true;
+                    }
+                }
+
+                while (_next < brackets.Count)
+                {
+                    var bracket = brackets[_next++];
+                    double upper = bracket.UpperBound * inflationFactor;
+                    if (_start >= upper) continue;
+                    double lower = Math.Max(bracket.LowerBound * inflationFactor, _start);
+                    Current = (_shelter + lower - _start, _shelter + upper - _start, bracket.Rate);
+                    return true;
+                }
+                return false;
             }
         }
 
@@ -144,8 +182,9 @@ namespace MonteCarloSimulation.Core
             double taxableIncome = Math.Max(0, grossIncome - StandardDeduction);
             double tax = 0;
 
-            foreach (var bracket in Brackets)
+            for (int i = 0; i < Brackets.Count; i++)
             {
+                var bracket = Brackets[i];
                 double lower = bracket.LowerBound * InflationFactor;
                 double upper = bracket.UpperBound * InflationFactor;
                 if (taxableIncome <= lower) break;
@@ -176,8 +215,9 @@ namespace MonteCarloSimulation.Core
             double position = Math.Max(0, baseIncome - StandardDeduction);
             double grossAboveDeduction = 0;
 
-            foreach (var bracket in Brackets)
+            for (int i = 0; i < Brackets.Count; i++)
             {
+                var bracket = Brackets[i];
                 double lower = bracket.LowerBound * InflationFactor;
                 double upper = bracket.UpperBound * InflationFactor;
                 if (position >= upper) continue;

@@ -31,11 +31,13 @@ namespace MonteCarloSimulation.Core
             var candidates = Candidates(parameters);
             if (candidates.Count == 1) return candidates[0];
 
+            // Every candidate runs on the same paths, so draw them once
+            var paths = RunSimulator.SeededReturns(parameters.Mean, parameters.StdDev, timeline.Count, Paths);
             var best = candidates[0];
             (int Survivors, double AfterTaxLeft) bestScore = (-1, 0);
             foreach (var candidate in candidates)
             {
-                var score = Score(parameters, timeline, candidate.Order, candidate.Target);
+                var score = Score(parameters, timeline, candidate.Order, candidate.Target, paths);
                 if (score.Survivors > bestScore.Survivors
                     || (score.Survivors == bestScore.Survivors && score.AfterTaxLeft > bestScore.AfterTaxLeft))
                 {
@@ -48,16 +50,20 @@ namespace MonteCarloSimulation.Core
 
         // Paths survived at the requested spending, and the after-tax money left at the end across the surviving paths.
         internal static (int Survivors, double AfterTaxLeft) Score(
-            SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, WithdrawalStrategy order, RothConversionTarget target)
+            SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, WithdrawalStrategy order, RothConversionTarget target) =>
+            Score(parameters, timeline, order, target, RunSimulator.SeededReturns(parameters.Mean, parameters.StdDev, timeline.Count, Paths));
+
+        private static (int Survivors, double AfterTaxLeft) Score(
+            SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, WithdrawalStrategy order, RothConversionTarget target,
+            double[][] paths)
         {
             var strategy = WithdrawalStrategies.For(order);
             var ceiling = ConversionTargets.CeilingFor(target);
             int survivors = 0;
             double afterTaxLeft = 0;
-            for (int path = 0; path < Paths; path++)
+            foreach (var returns in paths)
             {
-                var run = RunSimulator.Simulate(parameters, timeline, strategy, new Random(path), ceiling, out var accounts);
-                if (run.Failed) continue;
+                if (!RunSimulator.Survives(parameters, timeline, strategy, returns, ceiling, out var accounts)) continue;
                 survivors++;
                 afterTaxLeft += accounts.AfterTaxValue;
             }
