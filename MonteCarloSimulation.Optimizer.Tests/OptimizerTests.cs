@@ -227,6 +227,73 @@ namespace MonteCarloSimulation.Optimizer.Tests
             }
         }
 
+        // --- Reporting progress and cancelling ---
+
+        [Fact]
+        public void Listener_HearsEveryClaimingAgeAndScenario_AndTheResultIsUnchanged()
+        {
+            var inputs = new OptimizationInputs { Template = Template(), SocialSecurity = Defaults, Scenarios = new[] { Volatile, Flat }, Paths = 40 };
+            var progress = new List<(int Completed, int Total)>();
+            var scenarios = new List<ScenarioOptimum>();
+            var listener = new OptimizationListener
+            {
+                ClaimingAgeDone = (completed, total) => { lock (progress) progress.Add((completed, total)); },
+                ScenarioDone = scenario => { lock (scenarios) scenarios.Add(scenario); }
+            };
+
+            var reported = SpendingOptimizer.Optimize(inputs, listener, CancellationToken.None);
+            var plain = SpendingOptimizer.Optimize(inputs);
+
+            // Every claiming age of every scenario, each count exactly once, against the right total
+            int total = inputs.Scenarios.Count * SpendingOptimizer.ClaimingAges.Count;
+            Assert.Equal(Enumerable.Range(1, total), progress.Select(p => p.Completed).Order());
+            Assert.All(progress, p => Assert.Equal(total, p.Total));
+
+            // Each scenario once, and it's the very result returned
+            Assert.Equal(inputs.Scenarios.Select(s => s.Id).Order(), scenarios.Select(s => s.ScenarioId).Order());
+            foreach (var scenario in reported.Scenarios)
+                Assert.Same(scenario, Assert.Single(scenarios, s => s.ScenarioId == scenario.ScenarioId));
+
+            // Reporting doesn't change the answer
+            Assert.Equal(plain.Scenarios.Count, reported.Scenarios.Count);
+            for (int i = 0; i < plain.Scenarios.Count; i++)
+            {
+                Assert.Equal(plain.Scenarios[i].Recommended, reported.Scenarios[i].Recommended);
+                Assert.Equal(plain.Scenarios[i].VerifiedSurvivalRate, reported.Scenarios[i].VerifiedSurvivalRate);
+                Assert.Equal(plain.Scenarios[i].ClaimingAges, reported.Scenarios[i].ClaimingAges);
+            }
+            Assert.Equal(plain.BenefitByAge, reported.BenefitByAge);
+        }
+
+        [Fact]
+        public void Optimize_WithACancelledToken_Throws()
+        {
+            var inputs = new OptimizationInputs { Template = Template(), SocialSecurity = Defaults, Scenarios = new[] { Volatile }, Paths = 40 };
+
+            Assert.ThrowsAny<OperationCanceledException>(() => SpendingOptimizer.Optimize(inputs, null, new CancellationToken(canceled: true)));
+        }
+
+        [Fact]
+        public void Optimize_CancelledMidRun_StopsTheClaimingAgesStillRunning()
+        {
+            // Every scenario at full size: far more work than finishes between the cancel and the next path check
+            var inputs = new OptimizationInputs { Template = Template(), SocialSecurity = Defaults };
+            using var cancel = new CancellationTokenSource();
+            int completed = 0;
+            var listener = new OptimizationListener
+            {
+                ClaimingAgeDone = (done, _) =>
+                {
+                    Interlocked.Increment(ref completed);
+                    cancel.Cancel();
+                }
+            };
+
+            Assert.ThrowsAny<OperationCanceledException>(() => SpendingOptimizer.Optimize(inputs, listener, cancel.Token));
+            // Only claiming ages that were already finishing when the first one did can still report
+            Assert.InRange(completed, 1, Environment.ProcessorCount);
+        }
+
         [Fact]
         public void ParametersCopy_CopiesEverySettableProperty()
         {

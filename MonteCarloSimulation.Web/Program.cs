@@ -1,5 +1,7 @@
 ﻿using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Http.Json;
+using Microsoft.Extensions.Options;
 using MonteCarloSimulation.Core;
 using MonteCarloSimulation.Optimizer;
 using MonteCarloSimulation.Web;
@@ -69,14 +71,15 @@ app.MapPost("/api/run", (RunRequest request) =>
 });
 
 // The Optimal page: the annual spending that survives 80-85% of market paths per investment scenario, and the
-// Social Security claiming age that allows the most. CPU-heavy (a few seconds), fully separate from /api/run.
-app.MapPost("/api/optimal", (OptimalRequest request) =>
+// Social Security claiming age that allows the most. CPU-heavy (seconds), fully separate from /api/run, so results
+// stream back as they're computed (OptimalStream); invalid input still gets a 400 before anything streams.
+app.MapPost("/api/optimal", (OptimalRequest request, IOptions<JsonOptions> jsonOptions) =>
 {
     var validationErrors = request.Validate();
     if (validationErrors.Count > 0)
         return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
 
-    return Results.Ok(SpendingOptimizer.Optimize(request.ToInputs()));
+    return new OptimalStream(request.ToInputs(), jsonOptions.Value.SerializerOptions);
 });
 
 // Checks run cheapest-first: shape, then passphrase, and only then the paid agent call.

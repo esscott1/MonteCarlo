@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using MonteCarloSimulation.Core;
 
 namespace MonteCarloSimulation.Optimizer
@@ -16,44 +17,84 @@ namespace MonteCarloSimulation.Optimizer
         public const double MidpointSurvival = 0.825;
         public const double LowSurvival = 0.80;
 
-        public static OptimizationResult Optimize(OptimizationInputs inputs)
+        // The Social Security claiming ages compared: each birthday from 62 to 70.
+        public static IReadOnlyList<int> ClaimingAges { get; } =
+            Enumerable.Range(SocialSecurityCurve.EarliestAge, SocialSecurityCurve.LatestAge - SocialSecurityCurve.EarliestAge + 1).ToList();
+
+        // The monthly benefit at each claiming age, from the user's 62/67/70 amounts.
+        public static IReadOnlyList<BenefitAtAge> BenefitByAge(SocialSecurityCurve curve) =>
+            ClaimingAges.Select(age => new BenefitAtAge(age, curve.MonthlyBenefitAtAge(age))).ToList();
+
+        public static OptimizationResult Optimize(OptimizationInputs inputs) => Optimize(inputs, null, CancellationToken.None);
+
+        // The same result, reporting as it goes: `listener` hears each finished claiming age and each finished
+        // scenario (from worker threads), and cancelling the token stops the work, throwing OperationCanceledException.
+        // Jobs start in scenario-major order, so scenarios finish roughly one after another while every core stays busy.
+        public static OptimizationResult Optimize(OptimizationInputs inputs, OptimizationListener? listener, CancellationToken cancellationToken)
         {
             var template = inputs.Template;
             var curve = inputs.SocialSecurity;
-            var ages = Enumerable.Range(SocialSecurityCurve.EarliestAge, SocialSecurityCurve.LatestAge - SocialSecurityCurve.EarliestAge + 1).ToList();
+            var ages = ClaimingAges;
             var jobs = inputs.Scenarios.SelectMany(scenario => ages.Select(age => (Scenario: scenario, Age: age))).ToList();
 
             var byJob = new ConcurrentDictionary<(int ScenarioId, int Age), ClaimingAgeResult>();
+            var optima = new ConcurrentDictionary<int, ScenarioOptimum>();
+            var agesLeft = inputs.Scenarios.ToDictionary(s => s.Id, _ => new StrongBox<int>(ages.Count));
+            int completed = 0;
             // The app's Automatic choices expand to every (order, conversion target) pair, up to 8.
             var candidates = AutomaticStrategy.Candidates(template);
             // Each scenario's market paths, drawn once for every spend, claiming age and candidate
             var pathsByScenario = inputs.Scenarios.ToDictionary(s => s.Id, s => PathSimulator.SeededPaths(template, s, inputs.Paths));
 
-            Parallel.ForEach(jobs, job =>
+            try
             {
-                var start = template.Birthdate.AddYears(job.Age);
-                double monthly = curve.MonthlyBenefitAtAge(job.Age);
-                byJob[(job.Scenario.Id, job.Age)] = BestCandidate(inputs, job.Scenario, job.Age, start, monthly, candidates, pathsByScenario[job.Scenario.Id]);
-            });
+                // NoBuffering hands out jobs one at a time, in order. Capped at one worker per core: uncapped, the loop
+                // takes every thread-pool thread it can get, starving the web server's own work (including streaming
+                // these results) until it finishes.
+                Parallel.ForEach(
+                    Partitioner.Create(jobs, EnumerablePartitionerOptions.NoBuffering),
+                    new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount },
+                    job =>
+                    {
+                        var start = template.Birthdate.AddYears(job.Age);
+                        double monthly = curve.MonthlyBenefitAtAge(job.Age);
+                        var paths = pathsByScenario[job.Scenario.Id];
+                        byJob[(job.Scenario.Id, job.Age)] = BestCandidate(inputs, job.Scenario, job.Age, start, monthly, candidates, paths, cancellationToken);
+                        listener?.ClaimingAgeDone?.Invoke(Interlocked.Increment(ref completed), jobs.Count);
 
-            var scenarios = inputs.Scenarios.Select(scenario =>
+                        // The scenario's last claiming age to finish completes the scenario
+                        if (Interlocked.Decrement(ref agesLeft[job.Scenario.Id].Value) == 0)
+                        {
+                            var optimum = ScenarioOptimumFor(inputs, job.Scenario, ages.Select(age => byJob[(job.Scenario.Id, age)]).ToList(), paths);
+                            optima[job.Scenario.Id] = optimum;
+                            listener?.ScenarioDone?.Invoke(optimum);
+                        }
+                    });
+            }
+            catch (AggregateException e) when (cancellationToken.IsCancellationRequested
+                && e.Flatten().InnerExceptions.All(inner => inner is OperationCanceledException))
             {
-                var claimingAges = ages.Select(age => byJob[(scenario.Id, age)]).ToList();
+                throw new OperationCanceledException(cancellationToken);
+            }
 
-                // Highest midpoint spend; ties go to the earlier age.
-                var recommended = claimingAges[0];
-                foreach (var candidate in claimingAges.Skip(1))
-                    if (candidate.SpendAtMidpoint > recommended.SpendAtMidpoint) recommended = candidate;
+            var scenarios = inputs.Scenarios.Select(scenario => optima[scenario.Id]).ToList();
+            return new OptimizationResult(scenarios, BenefitByAge(curve), inputs.Paths);
+        }
 
-                var check = new PathSimulator(template, scenario, recommended.StartDate, recommended.MonthlyBenefit,
-                    recommended.WithdrawalStrategy, recommended.RothConversionTarget, pathsByScenario[scenario.Id]);
-                int survivors = Enumerable.Range(0, inputs.Paths).Count(path => check.Survives(recommended.SpendAtMidpoint, path));
+        // One scenario's recommendation from its claiming ages: the highest midpoint spend (ties go to the earlier
+        // age), re-simulated on every path to report the share that really survives at that spend.
+        private static ScenarioOptimum ScenarioOptimumFor(
+            OptimizationInputs inputs, InvestmentScenario scenario, IReadOnlyList<ClaimingAgeResult> claimingAges, double[][] paths)
+        {
+            var recommended = claimingAges[0];
+            foreach (var candidate in claimingAges.Skip(1))
+                if (candidate.SpendAtMidpoint > recommended.SpendAtMidpoint) recommended = candidate;
 
-                return new ScenarioOptimum(scenario.Id, scenario.Description, recommended, (double)survivors / inputs.Paths, claimingAges);
-            }).ToList();
+            var check = new PathSimulator(inputs.Template, scenario, recommended.StartDate, recommended.MonthlyBenefit,
+                recommended.WithdrawalStrategy, recommended.RothConversionTarget, paths);
+            int survivors = Enumerable.Range(0, inputs.Paths).Count(path => check.Survives(recommended.SpendAtMidpoint, path));
 
-            var benefitByAge = ages.Select(age => new BenefitAtAge(age, curve.MonthlyBenefitAtAge(age))).ToList();
-            return new OptimizationResult(scenarios, benefitByAge, inputs.Paths);
+            return new ScenarioOptimum(scenario.Id, scenario.Description, recommended, (double)survivors / inputs.Paths, claimingAges);
         }
 
         // How many screened candidates get a full break-even search besides the first.
@@ -66,14 +107,18 @@ namespace MonteCarloSimulation.Optimizer
         // are searched in full, warm-started from the first candidate's break-evens on the same paths.
         private static ClaimingAgeResult BestCandidate(
             OptimizationInputs inputs, InvestmentScenario scenario, int age, DateOnly start, double monthly,
-            IReadOnlyList<(WithdrawalStrategy Order, RothConversionTarget Target)> candidates, double[][] paths)
+            IReadOnlyList<(WithdrawalStrategy Order, RothConversionTarget Target)> candidates, double[][] paths,
+            CancellationToken cancellationToken)
         {
             ClaimingAgeResult FullSearch((WithdrawalStrategy Order, RothConversionTarget Target) c, double[]? hints, out double[] breakEvens)
             {
                 var simulator = new PathSimulator(inputs.Template, scenario, start, monthly, c.Order, c.Target, paths);
                 breakEvens = new double[inputs.Paths];
                 for (int path = 0; path < inputs.Paths; path++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
                     breakEvens[path] = simulator.BreakEven(path, hints?[path]);
+                }
                 var sorted = (double[])breakEvens.Clone();
                 Array.Sort(sorted);
                 return new ClaimingAgeResult(
@@ -96,6 +141,7 @@ namespace MonteCarloSimulation.Optimizer
                     double afterTaxLeft = 0;
                     for (int path = 0; path < inputs.Paths; path++)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var (survived, left) = simulator.Probe(probe, path);
                         if (!survived) continue;
                         survivors++;
