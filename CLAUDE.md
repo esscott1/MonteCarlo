@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Monte Carlo retirement-portfolio simulator: given an investment scenario, a starting balance, and an annual withdrawal, it runs many randomized simulations of portfolio performance over a number of years and reports survival rate and balance outcomes. Available as both a console app and a web GUI, both built on .NET 9 and sharing one simulation engine.
+A Monte Carlo retirement-portfolio simulator: given an investment scenario, a starting balance, and an annual withdrawal, it runs many randomized simulations of portfolio performance over a number of years and reports survival rate and balance outcomes. Available as both a console app and a web GUI, both built on .NET 10 and sharing one simulation engine.
 
 ## Goal
 
