@@ -51,39 +51,30 @@ namespace MonteCarloSimulation.Core
 
             double gainFraction = accounts.BrokerageGainFraction;
             double brokerage = Math.Max(0, accounts.Brokerage);
-
-            (double Tax, double Due) TaxOn(double amount)
-            {
-                double ordinaryTax = taxYear.IncrementalOrdinaryTax(ordinaryIncomeSoFar, amount);
-                double gainsBump = taxYear.CapitalGainsTax(ordinaryIncomeSoFar + amount, gainsSoFar)
-                    - taxYear.CapitalGainsTax(ordinaryIncomeSoFar, gainsSoFar);
-                return (ordinaryTax, ordinaryTax + gainsBump);
-            }
-            double SaleFor(double net, double amount) =>
-                taxYear.GrossUpBrokerageSale(net, gainFraction, ordinaryIncomeSoFar + amount, gainsSoFar);
+            var cost = new Cost(taxYear, ordinaryIncomeSoFar, gainsSoFar, gainFraction, brokerage);
 
             if (funding.Rule == ConversionTaxFunding.Brokerage)
             {
                 // Brokerage pays everything. If it can't fund the full conversion, convert the most it can fund. The
                 // required sale grows with the amount converted, so the search is monotone.
                 double converted = fullAmount;
-                double sale = SaleFor(TaxOn(fullAmount).Due, fullAmount);
+                double sale = cost.SaleFor(cost.TaxOn(fullAmount).Due, fullAmount);
                 if (sale > brokerage)
                 {
-                    converted = Bisection.Largest(0, fullAmount, amount => SaleFor(TaxOn(amount).Due, amount) <= brokerage);
-                    sale = SaleFor(TaxOn(converted).Due, converted);
+                    converted = Bisection.Largest(0, fullAmount, cost);
+                    sale = cost.SaleFor(cost.TaxOn(converted).Due, converted);
                 }
 
                 // Clamp: the sale is at most the balance, so float rounding can't leave Brokerage at -1e-10
                 double taxSale = Math.Min(sale, brokerage);
                 accounts.SellBrokerage(taxSale);
                 accounts.ConvertToRoth(converted, withheld: 0);
-                return new RothConversion(converted, TaxOn(converted).Tax, taxSale, taxSale * gainFraction, 0, 0);
+                return new RothConversion(converted, cost.TaxOn(converted).Tax, taxSale, taxSale * gainFraction, 0, 0);
             }
 
             // The other rules never shrink the conversion: whatever Brokerage may pay, it pays first, and the rest
             // comes out of the conversion.
-            var (tax, due) = TaxOn(fullAmount);
+            var (tax, due) = cost.TaxOn(fullAmount);
             double brokerageForTax = funding.Rule switch
             {
                 ConversionTaxFunding.FromConversion => 0,
@@ -92,13 +83,34 @@ namespace MonteCarloSimulation.Core
                 _ => brokerage
             };
             double netFromBrokerage = Math.Min(due, taxYear.BrokerageNetCapacity(brokerageForTax, gainFraction, ordinaryIncomeSoFar + fullAmount, gainsSoFar));
-            double brokerageSale = netFromBrokerage > 0 ? Math.Min(brokerageForTax, SaleFor(netFromBrokerage, fullAmount)) : 0;
+            double brokerageSale = netFromBrokerage > 0 ? Math.Min(brokerageForTax, cost.SaleFor(netFromBrokerage, fullAmount)) : 0;
             double withheld = Math.Max(0, due - netFromBrokerage);
 
             accounts.SellBrokerage(brokerageSale);
             accounts.ConvertToRoth(fullAmount, withheld);
             double ordinaryFromConversion = due > 0 ? tax * withheld / due : 0;
             return new RothConversion(fullAmount, tax, brokerageSale, brokerageSale * gainFraction, withheld, ordinaryFromConversion);
+        }
+
+        // What converting `amount` costs this year, on top of the ordinary income and gains already counted: its
+        // ordinary Tax, and the Due including the extra gains tax it causes by stacking beneath those gains. SaleFor
+        // is the Brokerage sale netting a given amount at that income. As a Bisection predicate it holds while
+        // Brokerage can fund the whole Due.
+        private readonly record struct Cost(
+            TaxYear TaxYear, double OrdinaryIncomeSoFar, double GainsSoFar, double GainFraction, double Brokerage) : Bisection.IPredicate
+        {
+            public (double Tax, double Due) TaxOn(double amount)
+            {
+                double ordinaryTax = TaxYear.IncrementalOrdinaryTax(OrdinaryIncomeSoFar, amount);
+                double gainsBump = TaxYear.CapitalGainsTax(OrdinaryIncomeSoFar + amount, GainsSoFar)
+                    - TaxYear.CapitalGainsTax(OrdinaryIncomeSoFar, GainsSoFar);
+                return (ordinaryTax, ordinaryTax + gainsBump);
+            }
+
+            public double SaleFor(double net, double amount) =>
+                TaxYear.GrossUpBrokerageSale(net, GainFraction, OrdinaryIncomeSoFar + amount, GainsSoFar);
+
+            public bool Holds(double amount) => SaleFor(TaxOn(amount).Due, amount) <= Brokerage;
         }
     }
 }
