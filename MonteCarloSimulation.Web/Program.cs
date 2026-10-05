@@ -30,7 +30,12 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-app.UseDefaultFiles();
+// The Optimal page is the landing page: "/" serves optimal.html. index.html is the Scenario runner, reached from
+// the landing page's menu; both keep their file names, so existing links still work.
+var defaultFiles = new DefaultFilesOptions();
+defaultFiles.DefaultFileNames.Clear();
+defaultFiles.DefaultFileNames.Add("optimal.html");
+app.UseDefaultFiles(defaultFiles);
 app.UseStaticFiles();
 app.UseRateLimiter();
 

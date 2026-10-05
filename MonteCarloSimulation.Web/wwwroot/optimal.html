@@ -3,18 +3,41 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Optimal</title>
+    <title>Monte Carlo Portfolio Optimizer</title>
     <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
     <div class="page-header">
-        <a href="index.html" class="icon-button" aria-label="Back to main page">
+        <h1>Monte Carlo Portfolio Optimizer</h1>
+
+        <button type="button" id="hamburger-toggle" class="icon-button hamburger-toggle" aria-label="Menu" aria-haspopup="true" aria-expanded="false">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M19 12H5" />
-                <path d="M12 19l-7-7 7-7" />
+                <path d="M3 6h18" />
+                <path d="M3 12h18" />
+                <path d="M3 18h18" />
             </svg>
-        </a>
-        <h1>Optimal</h1>
+        </button>
+
+        <div id="hamburger-menu" class="dropdown-menu" role="menu" hidden>
+            <a href="index.html" id="scenario-runner-menu-item" role="menuitem">Scenario runner</a>
+            <a href="model-info.html" id="model-info-menu-item" role="menuitem">Model Info</a>
+            <button type="button" id="observe-menu-item" role="menuitem">Observe</button>
+        </div>
+
+        <form id="observe-flyout" class="flyout flyout-right" role="dialog" aria-labelledby="observe-flyout-title" hidden>
+            <div class="flyout-header">
+                <h2 id="observe-flyout-title" class="flyout-title">Enter Passphrase</h2>
+                <button type="button" id="observe-close" class="flyout-close" aria-label="Close">&times;</button>
+            </div>
+            <label>Passphrase
+                <input type="password" name="passphrase" autocomplete="off">
+            </label>
+            <div class="flyout-actions">
+                <button type="button" id="observe-cancel">Cancel</button>
+                <button type="submit">Submit</button>
+            </div>
+            <div id="observe-result" aria-live="polite"></div>
+        </form>
     </div>
 
     <p class="page-intro">How much can you spend each month and still have the money last in 80&ndash;85% of simulated markets &mdash; and when should you start Social Security? Spending is shown per month in today's dollars, inflated each year; balances are as of your retirement date.</p>
@@ -113,6 +136,7 @@
 
     <section id="optimal-results" aria-live="polite"></section>
 
+    <script src="menu.js"></script>
     <script src="optimal.js"></script>
 </body>
 </html>

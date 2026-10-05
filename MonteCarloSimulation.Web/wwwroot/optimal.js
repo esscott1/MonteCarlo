@@ -1,13 +1,14 @@
-// The Optimal page. Self-contained on purpose: it shares styles.css with the main page but none of app.js.
+// The Optimal page - the site's landing page. Self-contained on purpose: it shares styles.css with the Scenario runner
+// but none of app.js (its header menu is menu.js).
 const optimalForm = document.getElementById('optimal-form');
 const optimalResults = document.getElementById('optimal-results');
 const optimalSubmit = document.getElementById('optimal-submit');
 
-// The request and results on screen, so "Run in Simulator" describes what's shown even if the form has changed since.
+// The request and results on screen, so "Run in Scenario runner" describes what's shown even if the form has changed since.
 let lastRequest = null;
 let lastResult = null;
 
-// sessionStorage key for handing one result to the main page (app.js reads it once and runs it).
+// sessionStorage key for handing one result to the Scenario runner (app.js reads it once and runs it).
 const SIMULATOR_HANDOFF_KEY = 'simulatorHandoff';
 
 function formatCurrency(value) {
@@ -129,7 +130,7 @@ function renderScenario(scenario) {
             <p>Accounts drawn in the ${ORDER_NAMES[r.withdrawalStrategy] ?? r.withdrawalStrategy} order, with ${TARGET_PHRASES[r.rothConversionTarget] ?? r.rothConversionTarget} &mdash; the best combination for these inputs, chosen by the app (<a href="model-info.html" class="summary-link">why</a>).</p>
             ${bandNote}
             <p class="simulator-actions">
-                <button type="button" class="run-in-simulator" data-scenario-id="${scenario.scenarioId}">Run in Simulator</button>
+                <button type="button" class="run-in-simulator" data-scenario-id="${scenario.scenarioId}">Run in Scenario runner</button>
                 <span class="simulator-message" role="alert"></span>
             </p>
             <details>
@@ -261,8 +262,8 @@ optimalForm.addEventListener('submit', async (e) => {
     }
 });
 
-// "Run in Simulator": hand one scenario's recommendation and the inputs behind it to the main page, which fills
-// its form and runs. The main page re-picks the withdrawal order and conversion line with its own test.
+// "Run in Scenario runner": hand one scenario's recommendation and the inputs behind it to the Scenario runner
+// (index.html), which fills its form and runs. It re-picks the withdrawal order and conversion line with its own test.
 function simulatorHandoff(scenario) {
     const r = scenario.recommended;
     const q = lastRequest;
@@ -300,7 +301,7 @@ function initRunInSimulator() {
             sessionStorage.setItem(SIMULATOR_HANDOFF_KEY, JSON.stringify(simulatorHandoff(scenario)));
         } catch {
             button.parentElement.querySelector('.simulator-message').textContent =
-                "Couldn't pass the values to the simulator in this browser.";
+                "Couldn't pass the values to the Scenario runner in this browser.";
             return;
         }
         window.location.href = 'index.html';

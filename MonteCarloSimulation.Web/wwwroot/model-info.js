@@ -77,8 +77,8 @@ function conversionChoice(s) {
         it tries Pro-rata and Tax-optimized with no conversions, the 12% fill, the top of the 22% bracket and the top of the 24% bracket, and keeps
         the pair that sustains the spending best. Below, each way of picking against the best of every combination the lab ran for the same household.</p>
         ${table(['Pick', 'Within 0.5% of the best of all', 'Average shortfall', 'Household type where it falls shortest', 'Shortfall there'], rows)}
-        ${table(['Conversion line', 'Best for (ideal pick)', "Chosen by the main page's picker"], targets)}
-        <p>The main page picks with a quicker test &mdash; survival at the entered spend on 200 market paths &mdash; so it was run on every household at its
+        ${table(['Conversion line', 'Best for (ideal pick)', "Chosen by the Scenario runner's picker"], targets)}
+        <p>The Scenario runner picks with a quicker test &mdash; survival at the entered spend on 200 market paths &mdash; so it was run on every household at its
         ideal spend: it lands within 0.5% of the ideal pick for ${share(c.picker.shareWithinTieBand, 1)} of households
         (average shortfall ${pct(c.picker.meanShortfall, 2)}). The Optimal page uses the fuller search.</p>
         <p>${code('C5')}, stopping below the first Medicare IRMAA tier, would be best for ${share(c.belowIrmaaBestShare, 1)} of households and add
@@ -438,7 +438,7 @@ function render(s) {
         section('slices', 'Results by household type', slices(s)),
         section('largest', 'The ten largest gaps', largestGaps(s)),
         section('single-year', 'Single-year check', singleYear(s)),
-        section('page-defaults', "The main page's default inputs", pageDefaults(s)),
+        section('page-defaults', "The Scenario runner's default inputs", pageDefaults(s)),
         section('conclusions', 'What this means', conclusions(s, byCode)),
         section('reproduce', 'Reproduce', reproduce(s)),
     ].join('');
