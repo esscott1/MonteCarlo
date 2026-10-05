@@ -438,7 +438,7 @@ details pre {
     font-style: italic;
 }
 
-/* Optimal page link in the main menu - styled like the menu's buttons */
+/* Page links in the landing page's menu - styled like the menu's buttons */
 .dropdown-menu a {
     display: block;
     padding: 0.5rem 0.75rem;
