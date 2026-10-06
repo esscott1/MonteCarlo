@@ -59,6 +59,11 @@ runs:
         echo "Opened $url"
         echo "url=$url" >> "$GITHUB_OUTPUT"
 
+        # A PR opened with GITHUB_TOKEN doesn't start ci.yml by itself, so start it on the branch: its check shows on
+        # the PR. A failure here only warns - the PR is open either way.
+        gh workflow run ci.yml --ref "$BRANCH" && echo "Started CI on $BRANCH." \
+          || echo "::warning::Couldn't start CI on $BRANCH; run it from the Actions tab."
+
     - name: Report the pull request to Jira
       shell: bash
       env:

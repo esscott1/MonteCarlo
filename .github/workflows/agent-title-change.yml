@@ -29,6 +29,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # To start ci.yml on the agent's branch (agent-finish)
+      actions: write
     # Untrusted request text is lifted into environment variables once, here; no step interpolates it into a script
     env:
       ISSUE_KEY: ${{ inputs.issue_key }}
