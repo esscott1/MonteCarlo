@@ -71,10 +71,10 @@ namespace MonteCarloSimulation.Web.Tests
         {
             string html = await GetAsync("/index.html");
 
-            // Five tabs, in order, each controlling its panel; the first is selected
+            // Four tabs, in order, each controlling its panel; the first is selected
             var tabs = Regex.Matches(html, @"role=""tab"" id=""(tab-\w+)"" aria-controls=""(panel-\w+)"" aria-selected=""(\w+)""");
-            Assert.Equal(new[] { "tab-demographics", "tab-assets", "tab-money", "tab-income", "tab-investments" }, tabs.Select(m => m.Groups[1].Value));
-            Assert.Equal(new[] { "true", "false", "false", "false", "false" }, tabs.Select(m => m.Groups[3].Value));
+            Assert.Equal(new[] { "tab-demographics", "tab-assets", "tab-money", "tab-income" }, tabs.Select(m => m.Groups[1].Value));
+            Assert.Equal(new[] { "true", "false", "false", "false" }, tabs.Select(m => m.Groups[3].Value));
             foreach (Match tab in tabs)
                 Assert.True(HasId(html, tab.Groups[2].Value));
 
@@ -86,18 +86,23 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.All(new[] { "socialSecurityMonthlyAmount", "socialSecurityStartDate", "annualStandardDeduction", "newMoney", "yearNewMoney" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
 
-            // Asset Classes: each class's return and std. dev., defaulting to 8/19, 4.5/4, 3.5/1.
-            // Investments: the allocation, 60/30/10, and the stock-bond correlation, 0.1.
-            var defaults = new Dictionary<string, (string Panel, string Value)>
+            // Asset Classes: each class's allocation (60/30/10), return and std. dev. (8/19, 4.5/4, 3.5/1),
+            // and the stock-bond correlation (0.1)
+            string assets = Panel("panel-assets");
+            var defaults = new Dictionary<string, string>
             {
-                ["stockReturn"] = ("panel-assets", "8"), ["stockStdDev"] = ("panel-assets", "19"),
-                ["bondReturn"] = ("panel-assets", "4.5"), ["bondStdDev"] = ("panel-assets", "4"),
-                ["cashReturn"] = ("panel-assets", "3.5"), ["cashStdDev"] = ("panel-assets", "1"),
-                ["stockAllocation"] = ("panel-investments", "60"), ["bondAllocation"] = ("panel-investments", "30"),
-                ["cashAllocation"] = ("panel-investments", "10"), ["stockBondCorrelation"] = ("panel-investments", "0.1"),
+                ["stockAllocation"] = "60", ["stockReturn"] = "8", ["stockStdDev"] = "19",
+                ["bondAllocation"] = "30", ["bondReturn"] = "4.5", ["bondStdDev"] = "4",
+                ["cashAllocation"] = "10", ["cashReturn"] = "3.5", ["cashStdDev"] = "1",
+                ["stockBondCorrelation"] = "0.1",
             };
-            foreach (var (name, (panel, value)) in defaults)
-                Assert.Matches($@"name=""{name}""[^>]*value=""{Regex.Escape(value)}""", Panel(panel));
+            foreach (var (name, value) in defaults)
+                Assert.Matches($@"name=""{name}""[^>]*value=""{Regex.Escape(value)}""", assets);
+
+            // One table row per class: its allocation, return and std. dev. side by side
+            var rows = Regex.Matches(assets, @"<tr>(.*?)</tr>", RegexOptions.Singleline).Select(m => m.Groups[1].Value).ToList();
+            foreach (var asset in new[] { "stock", "bond", "cash" })
+                Assert.Single(rows, row => new[] { "Allocation", "Return", "StdDev" }.All(field => row.Contains($@"name=""{asset}{field}""")));
 
             // The balance chart is the inputs' neighbour (chart.js draws it, loaded before app.js), and the preset radios are gone
             var graphTile = Regex.Match(html, @"<section class=""graph-tile""(.*?)</section>", RegexOptions.Singleline).Groups[1].Value;
