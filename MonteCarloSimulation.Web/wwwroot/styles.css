@@ -194,8 +194,17 @@ fieldset {
     margin: 0;
 }
 
+/* "You've used all 5 ... You can submit another at ..." - bold blue so it stands out: a medium blue on light
+   backgrounds, light blue on dark ones (both well above 4.5:1 contrast) */
 .quota-notice.blocked {
-    color: #b3261e;
+    color: #0b57d0;
+    font-weight: 700;
+}
+
+@media (prefers-color-scheme: dark) {
+    .quota-notice.blocked {
+        color: #8ab4f8;
+    }
 }
 
 .subgroup-hint {
