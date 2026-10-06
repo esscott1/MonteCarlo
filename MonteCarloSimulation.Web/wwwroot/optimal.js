@@ -1,5 +1,5 @@
 // The Optimal page - the site's landing page. Self-contained on purpose: it shares styles.css with the Scenario runner
-// but none of app.js (its header menu is menu.js).
+// but none of app.js (its header menu is menu.js). Text comes from i18n.js (t), so the page reads in English or Spanish.
 const optimalForm = document.getElementById('optimal-form');
 const optimalResults = document.getElementById('optimal-results');
 const optimalSubmit = document.getElementById('optimal-submit');
@@ -7,6 +7,11 @@ const optimalSubmit = document.getElementById('optimal-submit');
 // The request and results on screen, so "Run in Scenario runner" describes what's shown even if the form has changed since.
 let lastRequest = null;
 let lastResult = null;
+
+// Everything the results area shows, so switching language can redraw it - mid-stream included - without re-running.
+// view: null before a run; { kind: 'errors', errors } or { kind: 'failed' } for a run that never started;
+// { kind: 'stream', start, progress, done, stopped } once results started arriving.
+let view = null;
 
 // sessionStorage key for handing one result to the Scenario runner (app.js reads it once and runs it).
 const SIMULATOR_HANDOFF_KEY = 'simulatorHandoff';
@@ -26,7 +31,7 @@ function formatPercent(value, digits = 1) {
 
 function formatMonthYear(isoDate) {
     const [y, m] = isoDate.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+    return I18n.monthYear(new Date(Date.UTC(y, m - 1, 1)));
 }
 
 function parseNumber(value) {
@@ -41,6 +46,11 @@ function formatWithCommas(value) {
 
 function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// An investment scenario's description, from the server in English; in Spanish, the translation for its id
+function scenarioDescription(id, english) {
+    return I18n.language === 'es' ? t(`scenario.${id}.description`) : english;
 }
 
 function initMoneyInputs() {
@@ -73,9 +83,9 @@ function readRequest() {
 
 function renderErrors(errors) {
     const items = Object.entries(errors)
-        .map(([field, messages]) => `<li><strong>${escapeHtml(field)}:</strong> ${escapeHtml([].concat(messages).join(' '))}</li>`)
+        .map(([field, messages]) => `<li><strong>${escapeHtml(I18n.fieldName(field))}:</strong> ${escapeHtml([].concat(messages).map(I18n.translateServerMessage).join(' '))}</li>`)
         .join('');
-    optimalResults.innerHTML = `<div class="error-box"><p>Please fix the following:</p><ul>${items}</ul></div>`;
+    return `<div class="error-box"><p>${t('common.fixErrors')}</p><ul>${items}</ul></div>`;
 }
 
 function renderClaimingTable(scenario) {
@@ -90,53 +100,47 @@ function renderClaimingTable(scenario) {
                 <td>${perMonth(c.spendAt85)}</td>
                 <td>${perMonth(c.spendAtMidpoint)}</td>
                 <td>${perMonth(c.spendAt80)}</td>
-                <td>${ORDER_NAMES[c.withdrawalStrategy] ?? c.withdrawalStrategy}</td>
-                <td>${TARGET_NAMES[c.rothConversionTarget] ?? c.rothConversionTarget}</td>
+                <td>${t(`order.${c.withdrawalStrategy}`)}</td>
+                <td>${t(`target.short.${c.rothConversionTarget}`)}</td>
             </tr>`;
     }).join('');
+    const headings = ['startAt', 'firstPayment', 'monthlyBenefit', 'totalSs', 'spend85', 'spend825', 'spend80', 'order', 'convertsTo']
+        .map((key) => `<th>${t(`optimal.table.${key}`)}</th>`).join('');
     return `
         <table class="run-table">
-            <thead>
-                <tr><th>Start SS at</th><th>First payment</th><th>Monthly benefit</th><th>Total SS collected</th><th>Spend/mo @ 85%</th><th>@ 82.5%</th><th>@ 80%</th><th>Order</th><th>Converts to</th></tr>
-            </thead>
+            <thead><tr>${headings}</tr></thead>
             <tbody>${rows}</tbody>
         </table>`;
 }
 
-const ORDER_NAMES = { TaxOptimized: 'Tax-optimized', ProRata: 'Pro-rata' };
-const TARGET_NAMES = { None: 'No conversions', Bracket12: '12% bracket', Bracket22: 'Top of 22%', Bracket24: 'Top of 24%' };
-const TARGET_PHRASES = {
-    None: 'no Roth conversions',
-    Bracket12: 'Roth conversions filling the 12% bracket',
-    Bracket22: 'Roth conversions up to the top of the 22% bracket',
-    Bracket24: 'Roth conversions up to the top of the 24% bracket',
-};
-
 function renderScenario(scenario) {
     const r = scenario.recommended;
     const inBand = scenario.verifiedSurvivalRate >= 0.8 && scenario.verifiedSurvivalRate <= 0.85;
-    const bandNote = inBand ? '' : `
-        <p><em>This scenario has so little volatility that nearly every simulated market behaves the same way &mdash;
-        survival jumps from almost all to almost none within a few hundred dollars, so it can't be tuned into the 80&ndash;85% band.</em></p>`;
+    const bandNote = inBand ? '' : `<p><em>${t('optimal.bandNote')}</em></p>`;
     return `
-        <div class="summary-box ${inBand ? 'ok' : 'warn'}">
-            <p><strong>${escapeHtml(scenario.description)}</strong></p>
-            <p>Spend about <strong>${perMonth(r.spendAtMidpoint)}/month</strong>
-               (between ${perMonth(r.spendAt85)} at 85% survival and ${perMonth(r.spendAt80)} at 80%).</p>
-            <p>Start Social Security at <strong>${r.age}</strong> (${formatMonthYear(r.startDate)}),
-               about ${formatCurrency(r.monthlyBenefit)}/month in today's dollars &mdash;
-               <strong>${formatCurrency(r.totalSocialSecurity)}</strong> collected in total over your retirement.</p>
-            <p>At ${perMonth(r.spendAtMidpoint)}/month, ${formatPercent(scenario.verifiedSurvivalRate)} of the simulated markets last the full period.</p>
-            <p>Accounts drawn in the ${ORDER_NAMES[r.withdrawalStrategy] ?? r.withdrawalStrategy} order, with ${TARGET_PHRASES[r.rothConversionTarget] ?? r.rothConversionTarget} &mdash; the best combination for these inputs, chosen by the app (<a href="model-info.html" class="summary-link">why</a>).</p>
+        <div class="summary-box ${inBand ? 'ok' : 'warn'}" id="scenario-slot-${scenario.scenarioId}">
+            <p><strong>${escapeHtml(scenarioDescription(scenario.scenarioId, scenario.description))}</strong></p>
+            <p>${t('optimal.spendAbout', { amount: perMonth(r.spendAtMidpoint), at85: perMonth(r.spendAt85), at80: perMonth(r.spendAt80) })}</p>
+            <p>${t('optimal.startSs', { age: r.age, date: formatMonthYear(r.startDate), benefit: formatCurrency(r.monthlyBenefit), total: formatCurrency(r.totalSocialSecurity) })}</p>
+            <p>${t('optimal.survival', { amount: perMonth(r.spendAtMidpoint), rate: formatPercent(scenario.verifiedSurvivalRate) })}</p>
+            <p>${t('optimal.accounts', { order: t(`order.${r.withdrawalStrategy}`), conversions: t(`target.phrase.${r.rothConversionTarget}`) })} (<a href="model-info.html" class="summary-link">${t('common.why')}</a>)</p>
             ${bandNote}
             <p class="simulator-actions">
-                <button type="button" class="run-in-simulator" data-scenario-id="${scenario.scenarioId}">Run in Scenario runner</button>
+                <button type="button" class="run-in-simulator" data-scenario-id="${scenario.scenarioId}">${t('optimal.runInScenarioRunner')}</button>
                 <span class="simulator-message" role="alert"></span>
             </p>
             <details>
-                <summary>Compare Social Security start ages</summary>
+                <summary>${t('optimal.compareAges')}</summary>
                 ${renderClaimingTable(scenario)}
             </details>
+        </div>`;
+}
+
+function renderPendingScenario(info, stopped) {
+    return `
+        <div class="summary-box" id="scenario-slot-${info.scenarioId}">
+            <p><strong>${escapeHtml(scenarioDescription(info.scenarioId, info.description))}</strong></p>
+            <p class="scenario-pending">${stopped ? t('optimal.notCalculated') : t('optimal.calculating')}</p>
         </div>`;
 }
 
@@ -145,7 +149,7 @@ function renderBenefitCurve(benefits) {
     const ages = benefits.map((b) => `<th>${b.age}</th>`).join('');
     return `
         <details>
-            <summary>Monthly Social Security benefit by start age (estimated from your three amounts)</summary>
+            <summary>${t('optimal.benefitCurve')}</summary>
             <table class="run-table"><thead><tr>${ages}</tr></thead><tbody><tr>${cells}</tr></tbody></table>
         </details>`;
 }
@@ -153,24 +157,42 @@ function renderBenefitCurve(benefits) {
 // Results stream in (newline-delimited JSON from /api/optimal): `start` lays out the page with a slot per scenario,
 // `progress` counts claiming ages, each `scenario` fills its slot as soon as it's computed, then `done` - or `error`.
 function progressText(completed, total) {
-    return `Calculating&hellip; ${completed} of ${total} Social Security start ages checked.`;
+    return t('optimal.progress', { completed, total });
+}
+
+// The whole results area from `view` - after `start`, and whenever the language changes
+function render() {
+    if (!view) {
+        optimalResults.innerHTML = '';
+    } else if (view.kind === 'calculating') {
+        optimalResults.innerHTML = `<p class="page-intro">${t('optimal.calculating')}</p>`;
+    } else if (view.kind === 'errors') {
+        optimalResults.innerHTML = renderErrors(view.errors);
+    } else if (view.kind === 'failed') {
+        optimalResults.innerHTML = `<div class="error-box"><p>${t('common.somethingWrong')}</p></div>`;
+    } else {
+        const { start, progress, done, stopped } = view;
+        const finished = new Map(lastResult.scenarios.map((s) => [s.scenarioId, s]));
+        const slots = start.scenarios
+            .map((info) => (finished.has(info.scenarioId) ? renderScenario(finished.get(info.scenarioId)) : renderPendingScenario(info, stopped)))
+            .join('');
+        optimalResults.innerHTML = `
+            ${stopped ? `<div class="error-box"><p>${t('optimal.streamStopped')}</p></div>` : ''}
+            <p class="page-intro">${t('optimal.basedOn', { paths: start.paths })}</p>
+            ${done || stopped ? '' : `<p class="page-intro" id="optimal-progress">${progressText(progress.completed, progress.total)}</p>`}
+            ${slots}
+            ${renderBenefitCurve(start.benefitByAge)}`;
+    }
 }
 
 function renderStart(start) {
     lastResult = { paths: start.paths, scenarios: [], benefitByAge: start.benefitByAge };
-    const slots = start.scenarios.map((s) => `
-        <div class="summary-box" id="scenario-slot-${s.scenarioId}">
-            <p><strong>${escapeHtml(s.description)}</strong></p>
-            <p class="scenario-pending">Calculating&hellip;</p>
-        </div>`).join('');
-    optimalResults.innerHTML = `
-        <p class="page-intro">Based on ${start.paths} simulated market paths per investment scenario. "Survival" means the money lasts the full "Years money lasts".</p>
-        <p class="page-intro" id="optimal-progress">${progressText(0, start.totalClaimingAges)}</p>
-        ${slots}
-        ${renderBenefitCurve(start.benefitByAge)}`;
+    view = { kind: 'stream', start, progress: { completed: 0, total: start.totalClaimingAges }, done: false, stopped: false };
+    render();
 }
 
 function renderProgress(progress) {
+    view.progress = progress;
     const line = document.getElementById('optimal-progress');
     if (line) line.innerHTML = progressText(progress.completed, progress.total);
 }
@@ -182,15 +204,14 @@ function renderScenarioResult(scenario) {
 }
 
 function renderDone() {
+    view.done = true;
     document.getElementById('optimal-progress')?.remove();
 }
 
 // The run stopped early: say so above whatever finished, and mark the scenarios that never arrived.
 function renderStreamError() {
-    renderDone();
-    optimalResults.querySelectorAll('.scenario-pending').forEach((p) => { p.textContent = 'Not calculated.'; });
-    optimalResults.insertAdjacentHTML('afterbegin',
-        '<div class="error-box"><p>The calculation stopped before it finished. Please try again.</p></div>');
+    view.stopped = true;
+    render();
 }
 
 // Calls onEvent with each JSON line of a streamed response as it arrives.
@@ -216,7 +237,8 @@ optimalForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     optimalSubmit.disabled = true;
     lastResult = null;
-    optimalResults.innerHTML = '<p class="page-intro">Calculating&hellip;</p>';
+    view = { kind: 'calculating' };
+    render();
     const request = readRequest();
     let started = false;
     let finished = false;
@@ -228,7 +250,8 @@ optimalForm.addEventListener('submit', async (e) => {
         });
         if (!response.ok) {
             const body = await response.json();
-            renderErrors(body.errors ?? { request: body.title ?? 'The request failed.' });
+            view = { kind: 'errors', errors: body.errors ?? { request: body.title ?? 'The request failed.' } };
+            render();
             return;
         }
         await readEvents(response, (event) => {
@@ -252,11 +275,11 @@ optimalForm.addEventListener('submit', async (e) => {
         });
         if (!finished) {
             if (started) renderStreamError();
-            else optimalResults.innerHTML = '<div class="error-box"><p>Something went wrong. Please try again.</p></div>';
+            else { view = { kind: 'failed' }; render(); }
         }
     } catch (err) {
         if (started) renderStreamError();
-        else optimalResults.innerHTML = '<div class="error-box"><p>Something went wrong. Please try again.</p></div>';
+        else { view = { kind: 'failed' }; render(); }
     } finally {
         optimalSubmit.disabled = false;
     }
@@ -300,13 +323,15 @@ function initRunInSimulator() {
         try {
             sessionStorage.setItem(SIMULATOR_HANDOFF_KEY, JSON.stringify(simulatorHandoff(scenario)));
         } catch {
-            button.parentElement.querySelector('.simulator-message').textContent =
-                "Couldn't pass the values to the Scenario runner in this browser.";
+            button.parentElement.querySelector('.simulator-message').textContent = t('optimal.handoffFailed');
             return;
         }
         window.location.href = 'index.html';
     });
 }
+
+// Switching language redraws the results from what's on screen; nothing re-runs
+document.addEventListener('i18n:change', render);
 
 initRunInSimulator();
 initMoneyInputs();

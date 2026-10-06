@@ -1,19 +1,37 @@
-﻿const form = document.getElementById('run-form');
+﻿// The Scenario runner. Text comes from i18n.js (t), so the page reads in English or Spanish.
+const form = document.getElementById('run-form');
 const scenarioOptions = document.getElementById('scenario-options');
 const results = document.getElementById('results');
+
+// What the page shows, kept so switching language can redraw it without re-running: the scenario list, the results
+// area ({ kind: 'loading' | 'errors' | 'failed' | 'results', ... }) and the note about values loaded from the Optimal page.
+let scenarios = null;
+let view = null;
+let handoff = null;
+
+// An investment scenario's label or description, from the server in English; in Spanish, the translation for its id
+function scenarioText(id, field, english) {
+    return I18n.language === 'es' ? t(`scenario.${id}.${field}`) : english;
+}
+
+function renderScenarioOptions() {
+    if (!scenarios) return;
+    const checked = form.querySelector('input[name="scenarioId"]:checked')?.value;
+    scenarioOptions.innerHTML = scenarios.map((s, i) => `
+        <label class="scenario-option">
+            <input type="radio" name="scenarioId" value="${s.id}" ${(checked ? String(s.id) === checked : i === 0) ? 'checked' : ''}>
+            ${scenarioText(s.id, 'menuLabel', s.menuLabel)}
+        </label>
+    `).join('');
+}
 
 async function loadScenarios() {
     try {
         const response = await fetch('/api/scenarios');
-        const scenarios = await response.json();
-        scenarioOptions.innerHTML = scenarios.map((s, i) => `
-            <label class="scenario-option">
-                <input type="radio" name="scenarioId" value="${s.id}" ${i === 0 ? 'checked' : ''}>
-                ${s.menuLabel}
-            </label>
-        `).join('');
+        scenarios = await response.json();
+        renderScenarioOptions();
     } catch (err) {
-        scenarioOptions.textContent = 'Failed to load scenarios.';
+        scenarioOptions.textContent = t('runner.scenariosFailed');
     }
 }
 
@@ -105,12 +123,10 @@ function updateBalanceTotals() {
     const basis = parseNumber(form.elements['initialBrokerageBasis'].value) || 0;
     const gain = parseNumber(form.elements['initialBrokerageUnrealizedGain'].value) || 0;
 
-    document.getElementById('roth-total').textContent =
-        `Total Roth = ${formatCurrency(rothBasis + rothGain)}`;
-    document.getElementById('brokerage-total').textContent =
-        `Total Brokerage = ${formatCurrency(basis + gain)}`;
+    document.getElementById('roth-total').textContent = t('runner.totalRoth', { amount: formatCurrency(rothBasis + rothGain) });
+    document.getElementById('brokerage-total').textContent = t('runner.totalBrokerage', { amount: formatCurrency(basis + gain) });
     document.getElementById('grand-total').textContent =
-        `Total money = ${formatCurrency(taxDeferred + rothBasis + rothGain + basis + gain)}`;
+        t('runner.totalMoney', { amount: formatCurrency(taxDeferred + rothBasis + rothGain + basis + gain) });
 }
 
 // A required input hidden inside the collapsed section can't show its validation message,
@@ -146,7 +162,8 @@ function initCollapsibleInputs() {
 function initBalanceTotals() {
     ['initialTaxableBalance', 'initialRothBasis', 'initialRothUnrealizedGain', 'initialBrokerageBasis', 'initialBrokerageUnrealizedGain']
         .forEach((name) => form.elements[name].addEventListener('input', updateBalanceTotals));
-    updateBalanceTotals();
+    // Once the page's text has loaded, so the totals never show untranslated keys
+    I18n.ready.then(updateBalanceTotals);
 }
 
 // User-supplied text is echoed back into the change-request result panel, so it has to be
@@ -155,11 +172,14 @@ function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function renderErrors(errors) {
+// Validation errors from the server, which writes them in English: field names and messages are shown in the
+// page's language
+function errorList(errors) {
     const list = Object.entries(errors)
-        .map(([field, messages]) => `<li><strong>${field}:</strong> ${messages.join(' ')}</li>`)
+        .map(([field, messages]) =>
+            `<li><strong>${escapeHtml(I18n.fieldName(field))}:</strong> ${escapeHtml([].concat(messages).map(I18n.translateServerMessage).join(' '))}</li>`)
         .join('');
-    results.innerHTML = `<div class="error-box"><p>Please fix the following:</p><ul>${list}</ul></div>`;
+    return `<div class="error-box"><p>${t('common.fixErrors')}</p><ul>${list}</ul></div>`;
 }
 
 function bulletList(items) {
@@ -169,25 +189,27 @@ function bulletList(items) {
 // The engine's day-count/365.25 age can land a hair under a whole number on a birthday
 // (e.g. 64.9993), so allow ~2 days of slack before flooring to completed years.
 function yearWithAge(yd) {
-    const partial = yd.yearFraction < 0.9995 ? `<br><small>partial: ${Math.round(yd.yearFraction * 12)} mo</small>` : '';
-    return `${yd.calendarYear} (${Math.floor(yd.ageInYear + 0.005)}yrs)${partial}`;
+    const partial = yd.yearFraction < 0.9995 ? `<br><small>${t('runner.partial', { months: Math.round(yd.yearFraction * 12) })}</small>` : '';
+    return `${t('runner.yearAge', { year: yd.calendarYear, age: Math.floor(yd.ageInYear + 0.005) })}${partial}`;
 }
 
 function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax, socialSecurityMonths, brokerageGains) {
-    const taxablePct = taxablePercentOfBalance === undefined ? '' : ` (${formatPercent(taxablePercentOfBalance)} of balance)`;
+    const taxablePct = taxablePercentOfBalance === undefined ? '' : ` ${t('runner.money.ofBalance', { pct: formatPercent(taxablePercentOfBalance) })}`;
     // A Brokerage sale is part embedded gain, part tax-free return of basis (average cost)
     const brokerageSplit = brokerageGains > 0.5 && brokerageAmt > 0
-        ? ` (${formatCurrency(brokerageGains)} gains, ${formatCurrency(brokerageAmt - brokerageGains)} basis)`
+        ? ` ${t('runner.money.gainsBasis', { gains: formatCurrency(brokerageGains), basis: formatCurrency(brokerageAmt - brokerageGains) })}`
         : '';
     const items = [
-        `Total: ${formatCurrency(total)}`,
-        `Taxable: ${formatCurrency(taxableAmt)}${taxablePct}`,
-        `Brokerage: ${formatCurrency(brokerageAmt)}${brokerageSplit}`,
-        `Roth: ${formatCurrency(rothAmt)}`,
+        t('runner.money.total', { amount: formatCurrency(total) }),
+        t('runner.money.taxable', { amount: formatCurrency(taxableAmt) }) + taxablePct,
+        t('runner.money.brokerage', { amount: formatCurrency(brokerageAmt) }) + brokerageSplit,
+        t('runner.money.roth', { amount: formatCurrency(rothAmt) }),
     ];
     if (socialSecurity > 0) {
-        const months = socialSecurityMonths < 12 ? `${socialSecurityMonths} mo, ` : '';
-        items.push(`Social Security: ${formatCurrency(socialSecurity)} (${months}${formatCurrency(socialSecurityTax)} tax)`);
+        const detail = socialSecurityMonths < 12
+            ? t('runner.money.ssMonthsTax', { months: socialSecurityMonths, tax: formatCurrency(socialSecurityTax) })
+            : t('runner.money.ssTax', { tax: formatCurrency(socialSecurityTax) });
+        items.push(t('runner.money.socialSecurity', { amount: formatCurrency(socialSecurity), detail }));
     }
     return bulletList(items);
 }
@@ -211,18 +233,17 @@ function zeroRateBandFilledBySales(yd) {
 // A superscript marker with a hover/focus/tap tooltip. Each note in a cell gets its own number, in the order the
 // notes appear.
 function footnote(text, number) {
-    return `<sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note ${number}">${number}</a><span class="footnote-tip" role="tooltip">${text}</span></sup>`;
+    return `<sup class="footnote"><a href="#" class="footnote-ref" aria-label="${t('runner.note.aria', { number })}">${number}</a><span class="footnote-tip" role="tooltip">${text}</span></sup>`;
 }
 
 function zeroRateBandNote(yd, conversionsEnabled) {
     let ending = '';
     if (yd.rothConversionAmount > 0) {
-        ending = `, so the Roth conversion stopped at <strong>${formatCurrency(yd.rothConversionAmount)}</strong>`;
+        ending = t('runner.note.zeroRate.conversionStopped', { amount: formatCurrency(yd.rothConversionAmount) });
     } else if (conversionsEnabled) {
-        ending = ', so no Roth conversion was made this year';
+        ending = t('runner.note.zeroRate.noConversion');
     }
-    return `Brokerage sales this year realized <strong>${formatCurrency(yd.realizedGains)}</strong> of gains, filling the 0% capital gains band. `
-        + `Each additional dollar of taxable income (a Tax Deferred withdrawal or Roth conversion) would move a dollar of these gains to the 15% rate${ending}.`;
+    return t('runner.note.zeroRate', { gains: formatCurrency(yd.realizedGains), ending });
 }
 
 // Which account paid the year's ordinary income tax. The parts add up to the "ord tax paid" line; the conversion's
@@ -230,22 +251,22 @@ function zeroRateBandNote(yd, conversionsEnabled) {
 function ordinaryTaxSourcesNote(yd) {
     const parts = [];
     if (yd.taxDeferredWithdrawalTax > 0.5) {
-        parts.push(`<strong>${formatCurrency(yd.taxDeferredWithdrawalTax)}</strong> on the Tax Deferred withdrawal, withheld from it`);
+        parts.push(t('runner.note.taxDeferred', { amount: formatCurrency(yd.taxDeferredWithdrawalTax) }));
     }
     if (yd.socialSecurityTax > 0.5) {
-        parts.push(`<strong>${formatCurrency(yd.socialSecurityTax)}</strong> on Social Security, paid out of the benefit`);
+        parts.push(t('runner.note.socialSecurity', { amount: formatCurrency(yd.socialSecurityTax) }));
     }
     const fromBrokerage = yd.rothConversionOrdinaryTaxFromBrokerage;
     const fromConversion = yd.rothConversionOrdinaryTaxFromConversion;
     if (fromBrokerage + fromConversion > 0.5) {
-        const total = `<strong>${formatCurrency(fromBrokerage + fromConversion)}</strong> on the Roth conversion`;
+        const total = formatCurrency(fromBrokerage + fromConversion);
         if (fromBrokerage > 0.5 && fromConversion > 0.5) {
-            parts.push(`${total}: <strong>${formatCurrency(fromBrokerage)}</strong> by selling Brokerage, <strong>${formatCurrency(fromConversion)}</strong> out of the converted amount`);
+            parts.push(t('runner.note.conversionSplit', { total, brokerage: formatCurrency(fromBrokerage), conversion: formatCurrency(fromConversion) }));
         } else {
-            parts.push(`${total}, paid ${fromBrokerage > 0.5 ? 'by selling Brokerage' : 'out of the converted amount'}`);
+            parts.push(t(fromBrokerage > 0.5 ? 'runner.note.conversionFromBrokerage' : 'runner.note.conversionFromConversion', { total }));
         }
     }
-    return `Who paid this year's <strong>${formatCurrency(yd.ordinaryTaxAmount)}</strong> of ordinary income tax:<br>`
+    return `${t('runner.note.whoPaid', { amount: formatCurrency(yd.ordinaryTaxAmount) })}<br>`
         + parts.map((p) => `&bull; ${p}`).join('<br>');
 }
 
@@ -261,21 +282,21 @@ function taxesBreakdown(yd, conversionsEnabled) {
     const zeroRateOnConversionLine = zeroRateOnConversion ? footnote(zeroRateNote, next++) : '';
 
     const items = [
-        `${formatCurrency(yd.capitalGainsTaxAmount)} cap gains paid (${ratePercent(yd.capitalGainsBracketRate)} LTCG bracket)${zeroRateOnGainsLine}`,
-        `${formatCurrency(yd.ordinaryTaxAmount)} ord tax paid (${ratePercent(yd.ordinaryBracketRate)} bracket)${sourcesMarker}`,
+        t('runner.tax.capGains', { amount: formatCurrency(yd.capitalGainsTaxAmount), rate: ratePercent(yd.capitalGainsBracketRate) }) + zeroRateOnGainsLine,
+        t('runner.tax.ordinary', { amount: formatCurrency(yd.ordinaryTaxAmount), rate: ratePercent(yd.ordinaryBracketRate) }) + sourcesMarker,
         hasNextBracket(yd.nextBracketRate)
-            ? `${formatCurrency(yd.amountUntilNextBracket)} until ${ratePercent(yd.nextBracketRate)} bracket`
-            : 'Already in top ordinary tax bracket',
+            ? t('runner.tax.untilNext', { amount: formatCurrency(yd.amountUntilNextBracket), rate: ratePercent(yd.nextBracketRate) })
+            : t('runner.tax.topBracket'),
     ];
     if (yd.harvestedGains > 0) {
-        items.push(`${formatCurrency(yd.harvestedGains)} gains harvested at 0%`);
+        items.push(t('runner.tax.harvested', { amount: formatCurrency(yd.harvestedGains) }));
     }
     if (yd.rothConversionAmount > 0) {
-        items.push(`${formatCurrency(yd.rothConversionAmount)} converted to Roth (${formatCurrency(yd.rothConversionTax)} tax)${zeroRateOnConversionLine}`);
+        items.push(t('runner.tax.converted', { amount: formatCurrency(yd.rothConversionAmount), tax: formatCurrency(yd.rothConversionTax) }) + zeroRateOnConversionLine);
     }
     if (yd.irmaaSurcharge > 0.5) {
         // Medicare premiums surcharge, set by income two years earlier and paid on top of spending
-        items.push(`${formatCurrency(yd.irmaaSurcharge)} Medicare IRMAA surcharge (from ${yd.calendarYear - 2} income)`);
+        items.push(t('runner.tax.irmaa', { amount: formatCurrency(yd.irmaaSurcharge), year: yd.calendarYear - 2 }));
     }
     return bulletList(items);
 }
@@ -296,7 +317,7 @@ function renderRunDetailTable(yearDetails, conversionsEnabled) {
     return `
         <table class="run-table">
             <thead>
-                <tr><th>Year</th><th>Withdrawal</th><th>Taxes</th><th>Return</th><th>Total Balance</th></tr>
+                <tr>${['year', 'withdrawal', 'taxes', 'return', 'totalBalance'].map((key) => `<th>${t(`runner.table.${key}`)}</th>`).join('')}</tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>
@@ -306,17 +327,17 @@ function renderRunDetailTable(yearDetails, conversionsEnabled) {
 function renderPerRunTable(result, conversionsEnabled) {
     const rows = result.runs.map((run, i) => {
         const failureNote = run.failed
-            ? `<span class="failure">ran out of money in year ${run.failureYear}</span>`
+            ? `<span class="failure">${t('runner.run.failed', { year: run.failureYear })}</span>`
             : '<span class="success">&mdash;</span>';
         return `
             <tr>
                 <td><button type="button" class="run-toggle" aria-expanded="false">${i + 1} <span class="run-toggle-icon">&#9656;</span></button></td>
                 <td>${formatCurrency(run.endingBalance)}</td>
-                <td>${formatCurrency(run.lowestBalanceValue)} in year ${run.lowestBalanceYear}</td>
+                <td>${t('runner.run.lowest', { amount: formatCurrency(run.lowestBalanceValue), year: run.lowestBalanceYear })}</td>
                 <td>${formatPercent(run.averageAnnualReturn)}</td>
                 <td>${formatPercent(run.averageTaxRate)}</td>
-                <td>Year ${run.highestReturnYear} (${formatPercent(run.highestReturnValue)})</td>
-                <td>Year ${run.lowestReturnYear} (${formatPercent(run.lowestReturnValue)})</td>
+                <td>${t('runner.run.yearRate', { year: run.highestReturnYear, rate: formatPercent(run.highestReturnValue) })}</td>
+                <td>${t('runner.run.yearRate', { year: run.lowestReturnYear, rate: formatPercent(run.lowestReturnValue) })}</td>
                 <td>${failureNote}</td>
             </tr>
             <tr class="run-detail-row" hidden>
@@ -328,16 +349,8 @@ function renderPerRunTable(result, conversionsEnabled) {
     return `
         <table class="run-table">
             <thead>
-                <tr>
-                    <th>Run</th>
-                    <th>Ending Balance</th>
-                    <th>Lowest Balance</th>
-                    <th>Avg Annual Return</th>
-                    <th>Avg Tax Rate</th>
-                    <th>Highest Return</th>
-                    <th>Lowest Return</th>
-                    <th>Failure Year</th>
-                </tr>
+                <tr>${['run', 'endingBalance', 'lowestBalance', 'avgReturn', 'avgTaxRate', 'highestReturn', 'lowestReturn', 'failureYear']
+                    .map((key) => `<th>${t(`runner.table.${key}`)}</th>`).join('')}</tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>
@@ -346,34 +359,14 @@ function renderPerRunTable(result, conversionsEnabled) {
 
 // Which accounts the engine drew from: the order it ran (with Automatic, the one it picked for these inputs) and
 // the conversion-tax rule from the parameters the server ran with. The app chooses these, not the user.
-const WITHDRAWAL_ORDER_NAMES = { TaxOptimized: 'Tax-optimized', ProRata: 'Pro-rata' };
-const CONVERSION_TAX_FUNDING = {
-    Brokerage: 'paid by selling Brokerage',
-    FromConversion: 'paid out of the converted amount',
-    BrokerageThenConversion: 'paid by selling Brokerage, then out of the converted amount',
-    BridgeAware: "paid by selling Brokerage (keeping what's needed before 59½), then out of the converted amount",
-};
-
-// How far conversions filled ordinary income, by RothConversionTarget
-const CONVERSION_TARGETS = {
-    None: 'no Roth conversions',
-    Bracket12: 'Roth conversions filling the 12% bracket',
-    Bracket22: 'Roth conversions up to the top of the 22% bracket',
-    Bracket24: 'Roth conversions up to the top of the 24% bracket',
-};
-
 function accountChoiceLine(parameters, output) {
-    const used = output.withdrawalStrategy ?? parameters.withdrawalStrategy;
-    const order = WITHDRAWAL_ORDER_NAMES[used] ?? used;
+    const order = t(`order.${output.withdrawalStrategy ?? parameters.withdrawalStrategy}`);
     const target = output.rothConversionTarget ?? 'None';
-    const conversions = CONVERSION_TARGETS[target] ?? target;
-    const funding = target !== 'None'
-        ? `, their tax ${CONVERSION_TAX_FUNDING[parameters.conversionTaxFunding] ?? parameters.conversionTaxFunding}`
-        : '';
+    const funding = target !== 'None' ? t('runner.funding', { how: t(`funding.${parameters.conversionTaxFunding}`) }) : '';
     const picked = parameters.withdrawalStrategy === 'Automatic' || parameters.rothConversionTarget === 'Automatic'
-        ? ' &mdash; the best combination for your inputs, chosen by the app'
-        : ' &mdash; chosen by the app';
-    return `<p>Accounts drawn in the ${order} order, with ${conversions}${funding}${picked} (<a href="model-info.html" class="summary-link">why</a>)</p>`;
+        ? t('runner.pickedBest')
+        : t('runner.pickedApp');
+    return `<p>${t('runner.accounts', { order, conversions: t(`target.phrase.${target}`), funding, picked })} (<a href="model-info.html" class="summary-link">${t('common.why')}</a>)</p>`;
 }
 
 function renderSummary(parameters, output) {
@@ -383,10 +376,16 @@ function renderSummary(parameters, output) {
     const stdDev = Math.sqrt(variance);
     const avgLifetimeTax = result.runs.reduce((a, run) => a + run.lifetimeTaxesPaid, 0) / result.runs.length;
     const avgLifetimeIrmaa = result.runs.reduce((a, run) => a + run.lifetimeIrmaaSurcharges, 0) / result.runs.length;
-    const irmaaLine = avgLifetimeIrmaa > 0.5
-        ? `<p>Average lifetime Medicare IRMAA surcharges: ${formatCurrency(avgLifetimeIrmaa)} per run (paid on top of spending, not counted as tax)</p>`
-        : '';
-    const lifetimeTaxLine = `<p>Average lifetime tax paid: ${formatCurrency(avgLifetimeTax)} per run (ordinary + capital gains, incl. Roth conversions${result.outOfMoneyCount > 0 ? ', through the year a run ran out' : ''})</p>${irmaaLine}`;
+    const irmaaLine = avgLifetimeIrmaa > 0.5 ? `<p>${t('runner.irmaaLine', { amount: formatCurrency(avgLifetimeIrmaa) })}</p>` : '';
+    const lifetimeTaxLine = `<p>${t('runner.lifetimeTax', {
+        amount: formatCurrency(avgLifetimeTax),
+        through: result.outOfMoneyCount > 0 ? t('runner.lifetimeTax.through') : '',
+    })}</p>${irmaaLine}`;
+    const scenarioLine = `<p>${t('runner.scenarioLine', {
+        description: escapeHtml(scenarioText(parameters.scenarioId, 'description', parameters.scenarioDescription)),
+        mean: formatPercent(parameters.mean),
+        stdDev: formatPercent(parameters.stdDev),
+    })}</p>`;
 
     if (result.outOfMoneyCount > 0) {
         const survival = 1 - (result.outOfMoneyCount / parameters.iterations);
@@ -394,11 +393,11 @@ function renderSummary(parameters, output) {
         const avgFailureReturn = result.failedScenarioAverages.reduce((a, b) => a + b, 0) / result.failedScenarioAverages.length;
         return `
             <div class="summary-box ${survival > 0.8 ? 'ok' : 'warn'}">
-                <p><strong>${survival > 0.8 ? '🙂' : '🙁'} ${result.outOfMoneyCount} of ${parameters.iterations} portfolios did not survive ${parameters.years} years.</strong> Survival rate: ${formatPercent(survival)}</p>
-                <p>Scenario: ${parameters.scenarioDescription} &mdash; Initial mean: ${formatPercent(parameters.mean)}, Initial std dev: ${formatPercent(parameters.stdDev)}</p>
-                <p>Actual realized average return: ${formatPercent(totalAvgRate)} with std dev ${stdDev.toFixed(4)}</p>
-                <p>Inheritance of ${formatCurrency(parameters.newMoney)} in ${new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney} was considered</p>
-                <p>Average year of failure: ${avgFailureYear.toFixed(0)}, with an average return of ${formatPercent(avgFailureReturn)}</p>
+                <p><strong>${survival > 0.8 ? '🙂' : '🙁'} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}</p>
+                ${scenarioLine}
+                <p>${t('runner.realized', { mean: formatPercent(totalAvgRate), stdDev: stdDev.toFixed(4) })}</p>
+                <p>${t('runner.inheritance', { amount: formatCurrency(parameters.newMoney), year: new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney })}</p>
+                <p>${t('runner.avgFailure', { year: avgFailureYear.toFixed(0), rate: formatPercent(avgFailureReturn) })}</p>
                 ${lifetimeTaxLine}
                 ${accountChoiceLine(parameters, output)}
             </div>
@@ -408,21 +407,40 @@ function renderSummary(parameters, output) {
     const avgBalance = result.successMoneyRemaining.reduce((a, b) => a + b, 0) / result.successMoneyRemaining.length;
     return `
         <div class="summary-box ok">
-            <p><strong>🙂 All scenarios survived!</strong></p>
-            <p>Scenario: ${parameters.scenarioDescription} &mdash; Initial mean: ${formatPercent(parameters.mean)}, Initial std dev: ${formatPercent(parameters.stdDev)}</p>
-            <p>Average balance remaining: ${formatCurrency(avgBalance)}</p>
+            <p><strong>🙂 ${t('runner.allSurvived')}</strong></p>
+            ${scenarioLine}
+            <p>${t('runner.avgBalance', { amount: formatCurrency(avgBalance) })}</p>
             ${lifetimeTaxLine}
             ${accountChoiceLine(parameters, output)}
         </div>
     `;
 }
 
+// Every failed run's years, as plain text. Built here from the run data (rather than the server's own trace) so it reads
+// in the page's language, with US dollar and percent formatting wherever the server runs.
+function failureTrace(runs) {
+    const percent = (value) => `${(value * 100).toFixed(2)}%`;
+    return runs.filter((run) => run.failed).map((run) => run.years.map((y) => [
+        t('runner.trace.year', { year: y.year }),
+        t('runner.trace.rate', { rate: percent(y.rateOfReturn) }),
+        t('runner.trace.withdrawal', {
+            total: formatCurrency(y.withdrawal), taxable: formatCurrency(y.taxableWithdrawal),
+            brokerage: formatCurrency(y.brokerageWithdrawal), roth: formatCurrency(y.rothWithdrawal),
+        }),
+        t('runner.trace.taxRate', { rate: percent(y.taxRate) }),
+        t('runner.trace.balance', {
+            total: formatCurrency(y.balance), taxable: formatCurrency(y.taxableBalance),
+            brokerage: formatCurrency(y.brokerageBalance), roth: formatCurrency(y.rothBalance),
+        }),
+    ].join('\n')).join('\n\n')).join('\n\n\n');
+}
+
 function renderDetail(output, conversionsEnabled) {
     if (output.result.outOfMoneyCount > 0) {
         return `
             <details>
-                <summary>Show year-by-year detail for failed runs</summary>
-                <pre>${output.outOfMoneyMessage}</pre>
+                <summary>${t('runner.detail.failed')}</summary>
+                <pre>${escapeHtml(failureTrace(output.result.runs))}</pre>
             </details>
         `;
     }
@@ -431,17 +449,29 @@ function renderDetail(output, conversionsEnabled) {
 
     return `
         <details>
-            <summary>Show year-by-year detail for the last successful run</summary>
+            <summary>${t('runner.detail.lastSuccess')}</summary>
             ${renderRunDetailTable(output.lastSuccessfulRun.slice(1), conversionsEnabled)}
         </details>
     `;
 }
 
-function renderResults(parameters, output) {
-    results.innerHTML =
-        renderSummary(parameters, output) +
-        renderPerRunTable(output.result, parameters.enableRothConversions) +
-        renderDetail(output, parameters.enableRothConversions);
+// The results area from `view` - after each run, and whenever the language changes
+function renderView() {
+    if (!view) {
+        results.innerHTML = '';
+    } else if (view.kind === 'loading') {
+        results.innerHTML = `<p class="loading">${t('runner.running')}</p>`;
+    } else if (view.kind === 'errors') {
+        results.innerHTML = errorList(view.errors);
+    } else if (view.kind === 'failed') {
+        results.innerHTML = `<div class="error-box"><p>${t('common.requestFailedWith', { message: escapeHtml(view.message) })}</p></div>`;
+    } else {
+        const { parameters, output } = view;
+        results.innerHTML =
+            renderSummary(parameters, output) +
+            renderPerRunTable(output.result, parameters.enableRothConversions) +
+            renderDetail(output, parameters.enableRothConversions);
+    }
 }
 
 function initFootnotes() {
@@ -479,9 +509,10 @@ function initEditFlyout() {
         storageKey: 'quota:change-request',
         notice: document.getElementById('edit-quota'),
         submitButton,
-        blockedText: (limit, clock, relative) =>
-            `You've used all ${limit} change requests for this hour from this network. You can submit another at ${clock} (${relative}).`,
-        remainingText: (remaining, limit) => `${remaining} of ${limit} change requests left this hour.`,
+        blockedText: (limit, clock, minutes) => t('quota.changeRequests.blocked', {
+            limit, clock, relative: minutes < 1 ? t('quota.relative.soon') : t('quota.relative.minutes', { minutes }),
+        }),
+        remainingText: (remaining, limit) => t('quota.changeRequests.remaining', { remaining, limit }),
     });
 
     const AUTO_CLOSE_MS = 5000;
@@ -526,6 +557,9 @@ function initEditFlyout() {
         if (flyout.hidden) openFlyout(); else closeFlyout();
     });
 
+    // A countdown on screen re-words itself in the new language
+    document.addEventListener('i18n:change', () => quota.restore());
+
     cancel.addEventListener('click', closeFlyout);
     closeButton.addEventListener('click', closeFlyout);
 
@@ -544,17 +578,16 @@ function initEditFlyout() {
     });
 
     function renderAgentResult(data) {
-        const verdict = data.serverCorrected
-            ? "Server verification rebuilt the fields — the agent's draft did not match the required format exactly."
-            : "Server verification passed — the agent's draft matched the required format exactly.";
+        const verdict = data.serverCorrected ? t('flyout.verdict.corrected') : t('flyout.verdict.passed');
+        const link = `<a href="${escapeHtml(data.issueUrl)}" target="_blank" rel="noopener">${escapeHtml(data.issueKey)}</a>`;
 
         editResult.innerHTML = `
             <div class="summary-box ok">
-                <p>Created <a href="${escapeHtml(data.issueUrl)}" target="_blank" rel="noopener">${escapeHtml(data.issueKey)}</a> in Jira, still in To Do.</p>
+                <p>${t('flyout.created', { link })}</p>
             </div>
             <details class="agent-trace">
-                <summary>What the agent did</summary>
-                <p>The agent was forced to call one tool, <code>create_jira_story</code>, with these arguments:</p>
+                <summary>${t('flyout.whatAgentDid')}</summary>
+                <p>${t('flyout.forcedTool')}</p>
                 <p><strong>summary:</strong> ${escapeHtml(data.summary)}</p>
                 <p><strong>description:</strong> ${escapeHtml(data.description)}</p>
                 <p class="agent-note">${verdict}</p>
@@ -585,7 +618,7 @@ function initEditFlyout() {
         }
 
         submitButton.disabled = true;
-        editResult.innerHTML = '<p class="loading">Asking the agent to create the story&hellip;</p>';
+        editResult.innerHTML = `<p class="loading">${t('flyout.asking')}</p>`;
 
         try {
             const response = await fetch('/api/change-request', {
@@ -603,20 +636,15 @@ function initEditFlyout() {
             }
 
             if (!response.ok) {
-                if (data.errors) {
-                    const list = Object.entries(data.errors)
-                        .map(([field, messages]) => `<li><strong>${escapeHtml(field)}:</strong> ${escapeHtml(messages.join(' '))}</li>`)
-                        .join('');
-                    editResult.innerHTML = `<div class="error-box"><p>Please fix the following:</p><ul>${list}</ul></div>`;
-                } else {
-                    editResult.innerHTML = `<div class="error-box"><p>${escapeHtml(data.message || 'The request failed.')}</p></div>`;
-                }
+                editResult.innerHTML = data.errors
+                    ? errorList(data.errors)
+                    : `<div class="error-box"><p>${escapeHtml(I18n.translateServerMessage(data.message || 'The request failed.'))}</p></div>`;
                 return;
             }
 
             renderAgentResult(data);
         } catch (err) {
-            editResult.innerHTML = `<div class="error-box"><p>Request failed: ${escapeHtml(err.message)}</p></div>`;
+            editResult.innerHTML = `<div class="error-box"><p>${t('common.requestFailedWith', { message: escapeHtml(err.message) })}</p></div>`;
         } finally {
             submitButton.disabled = quota.isBlocked();
         }
@@ -648,7 +676,8 @@ form.addEventListener('submit', async (e) => {
         enableRothConversions: form.elements['enableRothConversions'].checked
     };
 
-    results.innerHTML = '<p class="loading">Running simulation&hellip;</p>';
+    view = { kind: 'loading' };
+    renderView();
 
     try {
         const response = await fetch('/api/run', {
@@ -659,15 +688,17 @@ form.addEventListener('submit', async (e) => {
 
         if (!response.ok) {
             const problem = await response.json();
-            renderErrors(problem.errors || {});
-            return;
+            view = { kind: 'errors', errors: problem.errors || {} };
+        } else {
+            const data = await response.json();
+            // The server echoes the scenario's description but not its id, which the Spanish text is keyed by
+            data.parameters.scenarioId = payload.scenarioId;
+            view = { kind: 'results', parameters: data.parameters, output: data.output };
         }
-
-        const data = await response.json();
-        renderResults(data.parameters, data.output);
     } catch (err) {
-        results.innerHTML = `<div class="error-box"><p>Request failed: ${err.message}</p></div>`;
+        view = { kind: 'failed', message: err.message };
     }
+    renderView();
 });
 
 // "Run in Scenario runner" on the Optimal page: it leaves one scenario's recommendation and the inputs behind it in
@@ -711,20 +742,35 @@ function applySimulatorHandoff() {
     form.elements['enableRothConversions'].checked = h.enableRothConversions;
     updateBalanceTotals();
 
-    document.getElementById('handoff-note')?.remove();
-    results.insertAdjacentHTML('beforebegin', `
-        <div id="handoff-note" class="handoff-note">
-            Loaded from the Optimal page: <strong>${escapeHtml(h.scenarioDescription)}</strong>, Social Security at ${h.recommendedAge},
-            <strong>${formatCurrency(h.withdrawalMonthly)}/month</strong> &mdash; the spend that survived 82.5% of its simulated markets.
-            This run uses ${h.iterations} new random markets, so its survival rate will be close to, not exactly, 82.5%.
-            It also re-picks the withdrawal order and conversion line for these inputs.
-        </div>`);
-
+    handoff = h;
+    renderHandoffNote();
     form.requestSubmit();
     document.getElementById('handoff-note').scrollIntoView({ block: 'start' });
 }
 
-loadScenarios().then(applySimulatorHandoff);
+function renderHandoffNote() {
+    if (!handoff) return;
+    document.getElementById('handoff-note')?.remove();
+    results.insertAdjacentHTML('beforebegin', `
+        <div id="handoff-note" class="handoff-note">
+            ${t('runner.handoff', {
+                scenario: escapeHtml(scenarioText(handoff.scenarioId, 'description', handoff.scenarioDescription)),
+                age: handoff.recommendedAge,
+                amount: formatCurrency(handoff.withdrawalMonthly),
+                iterations: handoff.iterations,
+            })}
+        </div>`);
+}
+
+// Switching language redraws everything the page shows; nothing re-runs
+document.addEventListener('i18n:change', () => {
+    renderScenarioOptions();
+    updateBalanceTotals();
+    renderHandoffNote();
+    renderView();
+});
+
+I18n.ready.then(loadScenarios).then(applySimulatorHandoff);
 initMoneyInputs();
 initBalanceTotals();
 initSocialSecurityDefault();

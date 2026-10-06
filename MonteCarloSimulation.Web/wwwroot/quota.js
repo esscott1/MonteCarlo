@@ -25,13 +25,15 @@ window.QuotaNotice = (function () {
         return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     }
 
-    function relativeTime(date) {
+    // Whole minutes left, rounded up; 0 when less than a minute remains
+    function minutesUntil(date) {
         const ms = date - Date.now();
-        return ms <= 60_000 ? 'in less than a minute' : `in ${Math.ceil(ms / 60_000)} min`;
+        return ms <= 60_000 ? 0 : Math.ceil(ms / 60_000);
     }
 
     // storageKey: where a refusal is remembered. notice: the <p> that shows the message. submitButton: disabled while
-    // refused. blockedText(limit, clock, relative) and remainingText(remaining, limit) word the two messages.
+    // refused. blockedText(limit, clock, minutes) and remainingText(remaining, limit) word the two messages (in the
+    // page's language), where minutes is 0 when less than a minute remains.
     function create({ storageKey, notice, submitButton, blockedText, remainingText }) {
         let blocked = readStored(storageKey);
         let timer = null;
@@ -48,7 +50,7 @@ window.QuotaNotice = (function () {
                 return;
             }
             if (!blocked) return;
-            notice.textContent = blockedText(blocked.limit, clockTime(blocked.retryAt), relativeTime(blocked.retryAt));
+            notice.textContent = blockedText(blocked.limit, clockTime(blocked.retryAt), minutesUntil(blocked.retryAt));
             notice.classList.add('blocked');
             notice.hidden = false;
             submitButton.disabled = true;

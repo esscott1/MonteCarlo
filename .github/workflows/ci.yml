@@ -32,10 +32,11 @@ jobs:
       - name: Test
         run: dotnet test MonteCarlo.sln --configuration Release
 
-      # The agent workflows' scripts: label routing and the checks that keep handlers off master
+      # Node tests: the agent workflows' scripts (label routing, the checks that keep handlers off master) and the
+      # English/Spanish text (complete, consistent, review sheet up to date)
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Test the agent workflow scripts
-        run: node --test ".github/scripts/*.test.mjs"
+      - name: Test the agent workflow scripts and the translations
+        run: node --test ".github/scripts/*.test.mjs" "tools/i18n/*.test.mjs"
