@@ -64,6 +64,46 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.Equal(parameters.Iterations, output.Result.OutOfMoneyCount);
         }
 
+        // Azure's Linux host runs with the invariant culture, which formats currency as "¤" and percentages as
+        // "7.00 %"; the failed-run trace must read in US format whatever the host's culture.
+        [Fact]
+        public void FailureTrace_UsesUsFormatting_WhateverTheHostCulture()
+        {
+            var parameters = new SimulationParameters
+            {
+                Years = 20,
+                Iterations = 1,
+                Withdrawal = 500_000,
+                Birthdate = Retire.AddYears(-70),
+                RetirementDate = Retire,
+                InitialTaxableBalance = 300_000,
+                InitialRothBasis = 150_000,
+                InitialBrokerageBasis = 90_000,
+                InitialBrokerageUnrealizedGain = 60_000,
+                Mean = 0.07,
+                StdDev = 0,
+                AnnualStandardDeduction = 0,
+                WithdrawalStrategy = WithdrawalStrategy.ProRata,
+                ScenarioDescription = "Deterministic 7% return, withdrawal far exceeds balance"
+            };
+
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            try
+            {
+                System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+                string trace = MonteCarloEngine.Run(parameters).OutOfMoneyMessage;
+
+                Assert.Contains("Rate of return: 7.00%", trace);
+                Assert.Contains("withdrawal: $", trace);
+                Assert.DoesNotContain("¤", trace);
+                Assert.DoesNotContain(" %", trace);
+            }
+            finally
+            {
+                System.Globalization.CultureInfo.CurrentCulture = culture;
+            }
+        }
+
         [Fact]
         public void Run_ApproximatelyEightyPercentSucceed_WithVolatileScenario()
         {
