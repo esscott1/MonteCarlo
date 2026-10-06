@@ -65,7 +65,7 @@ function formatAllocation(percent) {
     return `${Number(percent.toFixed(2))}%`;
 }
 
-// The allocation must total 100%: say so on the total line, flag the Investments tab, and block Run until it does.
+// The allocation must total 100%: say so on the total line, flag the Asset Classes tab, and block Run until it does.
 // While it does, show what the mix blends to.
 function updateAllocation() {
     const values = ALLOCATIONS.map(percentField);
@@ -77,7 +77,7 @@ function updateAllocation() {
     const totalLine = document.getElementById('allocation-total');
     totalLine.textContent = valid ? t('runner.allocation.total', { total: formatAllocation(total) }) : message;
     totalLine.classList.toggle('invalid', !valid);
-    document.getElementById('tab-investments').classList.toggle('has-error', !valid);
+    document.getElementById('tab-assets').classList.toggle('has-error', !valid);
 
     const blended = document.getElementById('blended-line');
     const [stocks, bonds, cash] = values.map((v) => v / 100);
@@ -93,7 +93,7 @@ function updateAllocation() {
 }
 
 function initAllocation() {
-    form.querySelectorAll('#panel-assets input, #panel-investments input').forEach((input) => input.addEventListener('input', updateAllocation));
+    form.querySelectorAll('#panel-assets input').forEach((input) => input.addEventListener('input', updateAllocation));
     // Once the page's text has loaded, so the lines never show untranslated keys
     I18n.ready.then(updateAllocation);
 }
@@ -833,7 +833,7 @@ function readSimulatorHandoff() {
     }
 }
 
-// The Optimal page ran one preset (a single return and std. dev. for the whole portfolio), so the Investments tab is
+// The Optimal page ran one preset (a single return and std. dev. for the whole portfolio), so the Asset Classes tab is
 // set to 100% stocks at that preset's numbers: the same market.
 async function presetScenario(id) {
     try {

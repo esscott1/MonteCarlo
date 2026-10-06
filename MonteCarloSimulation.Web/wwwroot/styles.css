@@ -211,6 +211,42 @@ body.wide {
     color: #888;
 }
 
+/* Asset Classes: narrower entry boxes, and a box around the allocation column and another around the return and
+   std. dev. columns, with a gap between them */
+#panel-assets .percent-input {
+    width: calc(4ch + 1.2rem);
+}
+
+.asset-table .alloc,
+.asset-table .ret {
+    padding: 0.2rem 0.4rem;
+}
+
+.asset-table .alloc,
+.asset-table .ret-first {
+    border-left: 1px solid var(--border);
+}
+
+.asset-table .alloc,
+.asset-table .ret-last {
+    border-right: 1px solid var(--border);
+}
+
+.asset-table thead .alloc,
+.asset-table thead .ret {
+    border-top: 1px solid var(--border);
+}
+
+.asset-table tbody tr:last-child .alloc,
+.asset-table tbody tr:last-child .ret {
+    border-bottom: 1px solid var(--border);
+}
+
+.asset-table .gap {
+    width: 0.5rem;
+    padding: 0;
+}
+
 .total-line.invalid {
     color: var(--warn-border);
 }

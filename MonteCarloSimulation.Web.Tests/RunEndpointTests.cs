@@ -15,19 +15,19 @@ namespace MonteCarloSimulation.Web.Tests
         // The Scenario runner's default inputs (withdrawal annual, mix as fractions)
         private static RunRequest DefaultRequest() => new()
         {
-            Years = 30,
+            Years = 40,
             Iterations = 5,
             Withdrawal = 96_000,
-            Birthdate = new DateOnly(1970, 1, 1),
+            Birthdate = new DateOnly(1969, 7, 7),
             RetirementDate = new DateOnly(2027, 1, 1),
-            InitialTaxableBalance = 950_000,
+            InitialTaxableBalance = 1_000_000,
             InitialRothBasis = 15_000,
             InitialRothUnrealizedGain = 5_000,
-            InitialBrokerageBasis = 200_000,
-            InitialBrokerageUnrealizedGain = 200_000,
+            InitialBrokerageBasis = 100_000,
+            InitialBrokerageUnrealizedGain = 300_000,
             NewMoney = 1_000_000,
             YearNewMoney = 10,
-            SocialSecurityStartDate = new DateOnly(2032, 1, 1),
+            SocialSecurityStartDate = new DateOnly(2031, 7, 7),
             SocialSecurityMonthlyAmount = 2_750,
             AnnualStandardDeduction = 16_000,
             EnableRothConversions = true,
@@ -80,11 +80,11 @@ namespace MonteCarloSimulation.Web.Tests
 
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var bands = body.RootElement.GetProperty("output").GetProperty("balanceBands").EnumerateArray().ToList();
-            // The retirement date, then the end of each of the 30 years (Jan 1 retirement: whole calendar years)
-            Assert.Equal(31, bands.Count);
+            // The retirement date, then the end of each of the 40 years (Jan 1 retirement: whole calendar years)
+            Assert.Equal(41, bands.Count);
             Assert.Equal("2027-01-01", bands[0].GetProperty("date").GetString());
-            Assert.Equal("2057-01-01", bands[^1].GetProperty("date").GetString());
-            Assert.All(new[] { "lower", "middle", "upper" }, key => Assert.Equal(1_370_000, bands[0].GetProperty(key).GetDouble()));
+            Assert.Equal("2067-01-01", bands[^1].GetProperty("date").GetString());
+            Assert.All(new[] { "lower", "middle", "upper" }, key => Assert.Equal(1_420_000, bands[0].GetProperty(key).GetDouble()));
             Assert.All(bands, b => Assert.True(
                 b.GetProperty("lower").GetDouble() <= b.GetProperty("middle").GetDouble()
                 && b.GetProperty("middle").GetDouble() <= b.GetProperty("upper").GetDouble()));
