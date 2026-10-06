@@ -1,4 +1,4 @@
-// English/Spanish for the landing page and the Scenario runner. Loaded first on each translated page.
+// English/Spanish for the landing page, the Scenario runner and Model Info. Loaded first on each translated page.
 //
 // - Static page text stays English in the HTML, marked with data-i18n="key" (or data-i18n-title, -placeholder,
 //   -aria-label for attributes); the HTML is the English source. Text the scripts build comes from t('key', values),
@@ -78,12 +78,13 @@ window.I18n = (function () {
         document.dispatchEvent(new CustomEvent('i18n:change', { detail: { language } }));
     }
 
-    // Server messages come back in English. Each template under "server." in en.json (with {placeholders} matching
-    // anything) is tried against the message; a match is re-worded in the current language with the captured values.
-    function translateServerMessage(message) {
+    // English text built elsewhere (server messages, the Strategy Lab's household descriptions): each en.json template
+    // whose key starts with `prefix` (with {placeholders} matching anything) is tried against the text; a match is
+    // re-worded in the current language with the captured values. No match returns the text unchanged.
+    function translateTemplate(message, prefix) {
         if (language !== 'es' || typeof message !== 'string') return message;
         for (const [key, template] of Object.entries(en)) {
-            if (!key.startsWith('server.')) continue;
+            if (!key.startsWith(prefix)) continue;
             const names = [];
             const pattern = template
                 .replace(/[.*+?^$()|[\]\\]/g, '\\$&')
@@ -92,6 +93,17 @@ window.I18n = (function () {
             if (match) return t(key, Object.fromEntries(names.map((name, i) => [name, match[i + 1]])));
         }
         return message;
+    }
+
+    // Server messages come back in English; their templates are the "server." keys
+    function translateServerMessage(message) {
+        return translateTemplate(message, 'server.');
+    }
+
+    // Text that arrives in English as data (the Strategy Lab's labels): translated under `key` only while en.json's
+    // English for it still matches, so changed wording shows in English rather than as a stale translation
+    function translateData(key, english) {
+        return en[key] === english ? t(key) : english;
     }
 
     // A field name from a server validation error, as the page labels it
@@ -121,6 +133,8 @@ window.I18n = (function () {
         ready,
         t,
         translateServerMessage,
+        translateTemplate,
+        translateData,
         fieldName,
         monthYear,
         applyStatic,

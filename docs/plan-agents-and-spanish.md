@@ -244,8 +244,8 @@ The shared steps run inside each handler's job, because GitHub runs every job on
 | 5 | **Claude** | ~~**PR A**: request countdown~~ **Done: PR #51, merged 2026-10-06; tested live.** | Done |
 | 6 | **Claude** | ~~**PR B**: auto In Progress, dispatcher, title handler, master checks, Jira report-back, PR #24 folded in, README; set `JIRA_EMAIL` and `JIRA_API_TOKEN` GitHub secrets~~ **Done: PR #52, merged 2026-10-06** (plus PR #53, the bold blue limit message). | Done |
 | 7 | **Eric** | Close PR #24 (superseded by PR B) | When PR B merges |
-| 8 | **Eric + Claude** | End-to-end test: submit a title change; it moves to In Progress, the dispatcher routes it, a PR opens with tests passing, the story moves to In Review; Eric merges | After PR B deploys |
-| 9 | **Claude** | **PR C**: Spanish part 1 | After step 8 passes |
+| 8 | **Eric + Claude** | ~~End-to-end test: submit a title change; it moves to In Progress, the dispatcher routes it, a PR opens with tests passing, the story moves to In Review; Eric merges~~ **Done: SCRUM-56 (PR #54) and SCRUM-57 (PR #56), both merged 2026-10-06.** | Done |
+| 9 | **Claude** | ~~**PR C**: Spanish part 1~~ **Done: PR #57, merged 2026-10-06** (plus PR #55 and PR #58: CI on the agent's PRs, shown as a commit status). | Done |
 | 10 | **Claude** | **PR D**: Spanish part 2 (Model Info) | After PR C merges |
 | 11 | **Claude** | **PR E**: Translations page and the `agent-translation-update` handler | After PR D merges |
 | 12 | **Eric** | Share the Translations page and passphrase with the Spanish reviewer; merge their translation PRs | After PR E deploys |

@@ -1,6 +1,6 @@
 # Spanish glossary
 
-The Spanish on the landing page and the Scenario runner uses these terms, so the same idea always reads the same way.
+The Spanish on the landing page, the Scenario runner and Model Info uses these terms, so the same idea always reads the same way.
 Correct a term here and in `MonteCarloSimulation.Web/wwwroot/i18n/es.json` together. The full side-by-side list of every
 string is [i18n-review.csv](i18n-review.csv) (regenerate it with `node tools/i18n/review-sheet.mjs`).
 
@@ -30,3 +30,14 @@ and which the money inputs expect.
 | change request | solicitud de cambio | |
 | passphrase | frase de acceso | the Observe passphrase box stays in English |
 | pull request | solicitud de incorporación de cambios (pull request) | |
+| Model Info | Información del modelo | |
+| household (lab) | hogar | |
+| baseline | referencia | "the Tax-optimized baseline" → "la referencia optimizada para impuestos" |
+| 82.5% spend | gasto al 82.5% | |
+| 12% fill | llenado del 12% | |
+| 0% gain harvesting | cosecha de ganancias al 0% | |
+| 0% band (capital gains) | franja del 0% | |
+| IRMAA tier | nivel de IRMAA | |
+| market path | trayectoria de mercado | |
+| gap / shortfall | diferencia | |
+| Strategy Lab | Strategy Lab | the tool's name isn't translated |

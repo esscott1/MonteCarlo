@@ -58,9 +58,9 @@ It's worth being explicit: the tool-calling/AI round trip in the change-request 
 
 ## English and Spanish
 
-The landing page and the Scenario runner read in English or Spanish: the **Español / English** button in the header
-switches, and the choice is remembered. The site always starts in English. The Observe page and its passphrase box
-stay in English; the Model Info page follows in a later change.
+The landing page, the Scenario runner and Model Info read in English or Spanish: the **Español / English** button in
+the header switches, and the choice is remembered. The site always starts in English. The Observe page and its
+passphrase box stay in English.
 
 - Static page text is English in the HTML, marked `data-i18n="key"` (or `data-i18n-title`, `-placeholder`,
   `-aria-label`); text the scripts build comes from `t('key', values)` with its English in
@@ -68,11 +68,15 @@ stay in English; the Model Info page follows in a later change.
   has the Spanish for every key. [i18n.js](MonteCarloSimulation.Web/wwwroot/i18n.js) applies it.
 - Server messages (validation errors, the passphrase and rate-limit messages) come back in English and are re-worded in
   the browser by matching their English templates (the `server.*` keys). Numbers and money keep the US format.
+- Model Info's figures and labels come from the Strategy Lab's published data, in English. Its labels and strategy
+  definitions have Spanish under `lab.label.*` and `lab.def.*` keys, shown only while `en.json`'s English still matches
+  the data; household descriptions are translated by template (`lab.household.*`). After republishing the lab with new
+  wording, the i18n test names each key to update.
 - **Reviewing the Spanish:** [docs/i18n-review.csv](docs/i18n-review.csv) lists every string side by side (key, where,
   English, Spanish, and a column for corrections) and opens in Excel or Google Sheets; [docs/i18n-glossary.md](docs/i18n-glossary.md)
   lists the terms. After changing `es.json`, regenerate the sheet with `node tools/i18n/review-sheet.mjs`.
 - `tools/i18n/i18n.test.mjs` (run by CI) fails if a key is missing or unused, a translation drops a `{placeholder}`, a
-  server message has no template, or the review sheet is out of date.
+  server message has no template, Model Info's lab text has no current translation, or the review sheet is out of date.
 
 ## Deployment
 
