@@ -32,6 +32,7 @@ namespace MonteCarloSimulation.StrategyLab
             InitialBrokerageUnrealizedGain = p.InitialBrokerageUnrealizedGain,
             Mean = p.Mean,
             StdDev = p.StdDev,
+            AssetMix = p.AssetMix,
             NewMoney = p.NewMoney,
             YearNewMoney = p.YearNewMoney,
             SocialSecurityStartDate = p.SocialSecurityStartDate,

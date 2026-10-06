@@ -5,7 +5,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
     public class OptimizerTests
     {
         private static readonly InvestmentScenario Volatile = InvestmentScenarios.ById(2)!; // 95 years of S&P
-        private static readonly InvestmentScenario Flat = new(99, "Flat 4%, no volatility", 0.04, 0, "flat");
+        private static readonly InvestmentScenario Flat = new(99, "Flat 4%, no volatility", 0.04, 0);
 
         private static SimulationParameters Template(int years = 30) => new()
         {
@@ -311,6 +311,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
                     var t when t == typeof(WithdrawalStrategy) => WithdrawalStrategy.TaxOptimized,
                     var t when t == typeof(ConversionTaxFunding) => ConversionTaxFunding.BridgeAware,
                     var t when t == typeof(RothConversionTarget) => RothConversionTarget.Bracket24,
+                    var t when t == typeof(AssetMix) => new AssetMix { StockWeight = 0.7, StockMean = 0.07 },
                     var t => throw new InvalidOperationException($"Add a test value for {t.Name} ({property.Name})")
                 };
                 property.SetValue(original, value);

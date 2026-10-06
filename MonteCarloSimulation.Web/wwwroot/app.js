@@ -1,38 +1,101 @@
 ﻿// The Scenario runner. Text comes from i18n.js (t), so the page reads in English or Spanish.
 const form = document.getElementById('run-form');
-const scenarioOptions = document.getElementById('scenario-options');
 const results = document.getElementById('results');
 
-// What the page shows, kept so switching language can redraw it without re-running: the scenario list, the results
-// area ({ kind: 'loading' | 'errors' | 'failed' | 'results', ... }) and the note about values loaded from the Optimal page.
-let scenarios = null;
+// What the page shows, kept so switching language can redraw it without re-running: the results area
+// ({ kind: 'loading' | 'errors' | 'failed' | 'results', ... }) and the note about values loaded from the Optimal page.
 let view = null;
 let handoff = null;
 
-// An investment scenario's label or description, from the server in English; in Spanish, the translation for its id
+// An investment scenario's description, from the server in English; in Spanish, the translation for its id
 function scenarioText(id, field, english) {
     return I18n.language === 'es' ? t(`scenario.${id}.${field}`) : english;
 }
 
-function renderScenarioOptions() {
-    if (!scenarios) return;
-    const checked = form.querySelector('input[name="scenarioId"]:checked')?.value;
-    scenarioOptions.innerHTML = scenarios.map((s, i) => `
-        <label class="scenario-option">
-            <input type="radio" name="scenarioId" value="${s.id}" ${(checked ? String(s.id) === checked : i === 0) ? 'checked' : ''}>
-            ${scenarioText(s.id, 'menuLabel', s.menuLabel)}
-        </label>
-    `).join('');
+// The inputs tile's tabs: click or arrow keys to switch, the choice remembered for the next visit
+const TAB_KEY = 'runnerTab';
+
+function selectTab(tab, focus) {
+    form.querySelectorAll('[role="tab"]').forEach((other) => {
+        const selected = other === tab;
+        other.setAttribute('aria-selected', String(selected));
+        other.tabIndex = selected ? 0 : -1;
+        document.getElementById(other.getAttribute('aria-controls')).hidden = !selected;
+    });
+    if (focus) tab.focus();
+    try { localStorage.setItem(TAB_KEY, tab.id); } catch { }
 }
 
-async function loadScenarios() {
-    try {
-        const response = await fetch('/api/scenarios');
-        scenarios = await response.json();
-        renderScenarioOptions();
-    } catch (err) {
-        scenarioOptions.textContent = t('runner.scenariosFailed');
-    }
+function initTabs() {
+    const tabs = [...form.querySelectorAll('[role="tab"]')];
+    tabs.forEach((tab, i) => {
+        tab.addEventListener('click', () => selectTab(tab, false));
+        tab.addEventListener('keydown', (e) => {
+            const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+            if (next === undefined) return;
+            e.preventDefault();
+            selectTab(tabs[(next + tabs.length) % tabs.length], true);
+        });
+    });
+
+    let saved = null;
+    try { saved = localStorage.getItem(TAB_KEY); } catch { }
+    const remembered = tabs.find((tab) => tab.id === saved);
+    if (remembered) selectTab(remembered, false);
+
+    // A field that fails validation on a hidden tab can't show its message, so open the tab of the first one
+    let opened = false;
+    form.addEventListener('invalid', (e) => {
+        if (opened) return;
+        opened = true;
+        setTimeout(() => { opened = false; });
+        const panel = e.target.closest('[role="tabpanel"]');
+        if (panel?.hidden) selectTab(document.getElementById(panel.getAttribute('aria-labelledby')), false);
+    }, true);
+}
+
+// The asset mix, as entered (percentages) and as the API takes it (fractions)
+const ALLOCATIONS = ['stockAllocation', 'bondAllocation', 'cashAllocation'];
+
+function percentField(name) {
+    return Number(form.elements[name].value);
+}
+
+function formatAllocation(percent) {
+    return `${Number(percent.toFixed(2))}%`;
+}
+
+// The allocation must total 100%: say so on the total line, flag the Investments tab, and block Run until it does.
+// While it does, show what the mix blends to.
+function updateAllocation() {
+    const values = ALLOCATIONS.map(percentField);
+    const total = values.reduce((a, b) => a + b, 0);
+    const valid = values.every(Number.isFinite) && Math.abs(total - 100) < 0.005;
+    const message = valid ? '' : t('runner.allocation.mustTotal', { total: formatAllocation(total) });
+    ALLOCATIONS.forEach((name) => form.elements[name].setCustomValidity(message));
+
+    const totalLine = document.getElementById('allocation-total');
+    totalLine.textContent = valid ? t('runner.allocation.total', { total: formatAllocation(total) }) : message;
+    totalLine.classList.toggle('invalid', !valid);
+    document.getElementById('tab-investments').classList.toggle('has-error', !valid);
+
+    const blended = document.getElementById('blended-line');
+    const [stocks, bonds, cash] = values.map((v) => v / 100);
+    const rho = percentField('stockBondCorrelation');
+    const s = stocks * percentField('stockStdDev') / 100;
+    const b = bonds * percentField('bondStdDev') / 100;
+    const c = cash * percentField('cashStdDev') / 100;
+    const mean = (stocks * percentField('stockReturn') + bonds * percentField('bondReturn') + cash * percentField('cashReturn')) / 100;
+    const stdDev = Math.sqrt(s * s + b * b + c * c + 2 * rho * s * b);
+    blended.textContent = valid && Number.isFinite(mean) && Number.isFinite(stdDev)
+        ? t('runner.allocation.blended', { mean: formatPercent(mean), stdDev: formatPercent(stdDev) })
+        : '';
+}
+
+function initAllocation() {
+    form.querySelectorAll('#panel-investments input').forEach((input) => input.addEventListener('input', updateAllocation));
+    // Once the page's text has loaded, so the lines never show untranslated keys
+    I18n.ready.then(updateAllocation);
 }
 
 function formatCurrency(value) {
@@ -381,8 +444,11 @@ function renderSummary(parameters, output) {
         amount: formatCurrency(avgLifetimeTax),
         through: result.outOfMoneyCount > 0 ? t('runner.lifetimeTax.through') : '',
     })}</p>${irmaaLine}`;
-    const scenarioLine = `<p>${t('runner.scenarioLine', {
-        description: escapeHtml(scenarioText(parameters.scenarioId, 'description', parameters.scenarioDescription)),
+    const mix = parameters.assetMix;
+    const scenarioLine = `<p>${t('runner.mixLine', {
+        stocks: formatAllocation(mix.stockWeight * 100),
+        bonds: formatAllocation(mix.bondWeight * 100),
+        cash: formatAllocation(mix.cashWeight * 100),
         mean: formatPercent(parameters.mean),
         stdDev: formatPercent(parameters.stdDev),
     })}</p>`;
@@ -656,7 +722,6 @@ form.addEventListener('submit', async (e) => {
 
     const formData = new FormData(form);
     const payload = {
-        scenarioId: Number(formData.get('scenarioId')),
         years: Number(formData.get('years')),
         iterations: Number(formData.get('iterations')),
         // Entered per month; the model and API work in annual amounts.
@@ -673,7 +738,18 @@ form.addEventListener('submit', async (e) => {
         socialSecurityStartDate: formData.get('socialSecurityStartDate'),
         socialSecurityMonthlyAmount: parseNumber(formData.get('socialSecurityMonthlyAmount')),
         annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction')),
-        enableRothConversions: form.elements['enableRothConversions'].checked
+        enableRothConversions: form.elements['enableRothConversions'].checked,
+        // Entered as percentages; the API takes fractions. The correlation is already -1 to 1.
+        stockAllocation: percentField('stockAllocation') / 100,
+        bondAllocation: percentField('bondAllocation') / 100,
+        cashAllocation: percentField('cashAllocation') / 100,
+        stockReturn: percentField('stockReturn') / 100,
+        stockStdDev: percentField('stockStdDev') / 100,
+        bondReturn: percentField('bondReturn') / 100,
+        bondStdDev: percentField('bondStdDev') / 100,
+        cashReturn: percentField('cashReturn') / 100,
+        cashStdDev: percentField('cashStdDev') / 100,
+        stockBondCorrelation: percentField('stockBondCorrelation')
     };
 
     view = { kind: 'loading' };
@@ -691,8 +767,6 @@ form.addEventListener('submit', async (e) => {
             view = { kind: 'errors', errors: problem.errors || {} };
         } else {
             const data = await response.json();
-            // The server echoes the scenario's description but not its id, which the Spanish text is keyed by
-            data.parameters.scenarioId = payload.scenarioId;
             view = { kind: 'results', parameters: data.parameters, output: data.output };
         }
     } catch (err) {
@@ -716,15 +790,25 @@ function readSimulatorHandoff() {
     }
 }
 
-function applySimulatorHandoff() {
+// The Optimal page ran one preset (a single return and std. dev. for the whole portfolio), so the Investments tab is
+// set to 100% stocks at that preset's numbers: the same market.
+async function presetScenario(id) {
+    try {
+        const response = await fetch('/api/scenarios');
+        return (await response.json()).find((s) => s.id === id) ?? null;
+    } catch {
+        return null;
+    }
+}
+
+async function applySimulatorHandoff() {
     const h = readSimulatorHandoff();
     if (!h) return;
+    const preset = await presetScenario(h.scenarioId);
 
     const set = (name, value) => { form.elements[name].value = value; };
     const setMoney = (name, value) => set(name, formatWithCommas(String(value)));
 
-    const radio = form.querySelector(`input[name="scenarioId"][value="${h.scenarioId}"]`);
-    if (radio) radio.checked = true;
     set('years', h.years);
     set('iterations', h.iterations);
     setMoney('withdrawal', h.withdrawalMonthly);
@@ -740,9 +824,15 @@ function applySimulatorHandoff() {
         .forEach((name) => setMoney(name, h[name]));
     set('yearNewMoney', h.yearNewMoney);
     form.elements['enableRothConversions'].checked = h.enableRothConversions;
+    if (preset) {
+        [['stockAllocation', 100], ['bondAllocation', 0], ['cashAllocation', 0],
+            ['stockReturn', preset.mean * 100], ['stockStdDev', preset.stdDev * 100]]
+            .forEach(([name, value]) => set(name, String(Number(value.toFixed(4)))));
+    }
     updateBalanceTotals();
+    updateAllocation();
 
-    handoff = h;
+    handoff = { ...h, investmentsFromPreset: preset !== null };
     renderHandoffNote();
     form.requestSubmit();
     document.getElementById('handoff-note').scrollIntoView({ block: 'start' });
@@ -758,19 +848,21 @@ function renderHandoffNote() {
                 age: handoff.recommendedAge,
                 amount: formatCurrency(handoff.withdrawalMonthly),
                 iterations: handoff.iterations,
-            })}
+            })}${handoff.investmentsFromPreset ? ` ${t('runner.handoff.investments')}` : ''}
         </div>`);
 }
 
 // Switching language redraws everything the page shows; nothing re-runs
 document.addEventListener('i18n:change', () => {
-    renderScenarioOptions();
     updateBalanceTotals();
+    updateAllocation();
     renderHandoffNote();
     renderView();
 });
 
-I18n.ready.then(loadScenarios).then(applySimulatorHandoff);
+I18n.ready.then(applySimulatorHandoff);
+initTabs();
+initAllocation();
 initMoneyInputs();
 initBalanceTotals();
 initSocialSecurityDefault();

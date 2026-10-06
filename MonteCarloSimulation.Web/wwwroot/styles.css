@@ -108,11 +108,6 @@ fieldset {
     margin-bottom: 1rem;
 }
 
-.scenario-option {
-    display: block;
-    margin: 0.4rem 0;
-}
-
 .inputs-section {
     margin-bottom: 1rem;
 }
@@ -121,6 +116,128 @@ fieldset {
     cursor: pointer;
     font-weight: 600;
     margin-bottom: 0.75rem;
+}
+
+/* The Scenario runner: wider, so the inputs tile and the chart sit side by side */
+body.wide {
+    max-width: 1200px;
+}
+
+/* Inputs tile (about a third, left) beside the chart tile (the rest); stacked on narrow screens */
+.inputs-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 1rem;
+    align-items: start;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+    .inputs-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.tabs-tile,
+.graph-tile {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    min-width: 0;
+}
+
+.tab-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.75rem;
+}
+
+.tab-list [role="tab"] {
+    padding: 0.4rem 0.6rem;
+    border: none;
+    border-bottom: 3px solid transparent;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.tab-list [role="tab"][aria-selected="true"] {
+    border-bottom-color: #1a73e8;
+    font-weight: 600;
+}
+
+.tab-list [role="tab"]:hover,
+.tab-list [role="tab"]:focus-visible {
+    color: #1a73e8;
+}
+
+/* The Investments tab, while its allocation doesn't total 100% */
+.tab-list [role="tab"].has-error::after {
+    content: " \26A0";
+    color: var(--warn-border);
+}
+
+.tab-panel.field-grid {
+    grid-template-columns: minmax(0, 1fr);
+    margin-bottom: 0;
+}
+
+.tab-panel[hidden] {
+    display: none;
+}
+
+.percent-input {
+    width: calc(6ch + 1.6rem);
+}
+
+.asset-table {
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.asset-table th,
+.asset-table td {
+    padding: 0.2rem 0.4rem 0.2rem 0;
+    text-align: left;
+    font-weight: normal;
+}
+
+.asset-table thead th {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.total-line.invalid {
+    color: var(--warn-border);
+}
+
+.graph-tile {
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+}
+
+.graph-title {
+    font-size: 1rem;
+    margin: 0 0 0.5rem;
+}
+
+.graph-placeholder {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: #888;
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 1rem;
 }
 
 .field-grid {

@@ -28,6 +28,19 @@ namespace MonteCarloSimulation.Core.Tests
             ScenarioDescription = "Lean run equivalence"
         };
 
+        internal static SimulationParameters WithAssetMix(SimulationParameters parameters)
+        {
+            parameters.AssetMix = new AssetMix
+            {
+                StockWeight = 0.6, BondWeight = 0.3, CashWeight = 0.1,
+                StockMean = 0.08, StockStdDev = 0.19,
+                BondMean = 0.045, BondStdDev = 0.01,
+                CashMean = 0.035, CashStdDev = 0.01,
+                StockBondCorrelation = 0.1
+            };
+            return parameters;
+        }
+
         public static TheoryData<WithdrawalStrategy, RothConversionTarget, ConversionTaxFunding> Combinations()
         {
             var data = new TheoryData<WithdrawalStrategy, RothConversionTarget, ConversionTaxFunding>();
@@ -48,7 +61,9 @@ namespace MonteCarloSimulation.Core.Tests
             var households = new[]
             {
                 Parameters(new DateOnly(1975, 9, 30), new DateOnly(2027, 1, 1), 95_000),
-                Parameters(new DateOnly(1961, 5, 2), new DateOnly(2027, 7, 1), 130_000)
+                Parameters(new DateOnly(1961, 5, 2), new DateOnly(2027, 7, 1), 130_000),
+                // The Scenario runner's stocks/bonds/cash market
+                WithAssetMix(Parameters(new DateOnly(1975, 9, 30), new DateOnly(2027, 1, 1), 90_000))
             };
             var strategy = WithdrawalStrategies.For(order);
             var ceiling = ConversionTargets.CeilingFor(target);
@@ -59,7 +74,7 @@ namespace MonteCarloSimulation.Core.Tests
             {
                 parameters.ConversionTaxFunding = funding;
                 var timeline = RetirementTimeline.Build(parameters);
-                var allReturns = RunSimulator.SeededReturns(parameters.Mean, parameters.StdDev, timeline.Count, paths);
+                var allReturns = RunSimulator.SeededReturns(parameters, timeline.Count, paths);
 
                 for (int path = 0; path < paths; path++)
                 {
