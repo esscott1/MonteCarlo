@@ -41,6 +41,20 @@ namespace MonteCarloSimulation.Core
             return returns;
         }
 
+        // The same for these parameters' market: their asset mix when they have one, else Mean/StdDev.
+        public static double[][] SeededReturns(SimulationParameters parameters, int years, int paths)
+        {
+            var returns = new double[paths][];
+            for (int path = 0; path < paths; path++)
+            {
+                var random = new Random(path);
+                returns[path] = new double[years];
+                for (int year = 0; year < years; year++)
+                    returns[path][year] = DrawReturn(parameters, random);
+            }
+            return returns;
+        }
+
         // Just paths first..first+count-1.
         public static double[][] SeededReturns(double mean, double standardDeviation, int years, int first, int count)
         {
@@ -67,7 +81,7 @@ namespace MonteCarloSimulation.Core
 
             foreach (var retirementYear in timeline)
             {
-                double rate = random is not null ? DrawReturn(parameters.Mean, parameters.StdDev, random) : returns[retirementYear.Index];
+                double rate = random is not null ? DrawReturn(parameters, random) : returns[retirementYear.Index];
                 double? lookbackMagi = retirementYear.Index >= MedicareIrmaa.LookbackYears ? magiTwoYearsAgo : null;
 
                 var step = SimulateYear(
@@ -244,13 +258,21 @@ namespace MonteCarloSimulation.Core
             return need;
         }
 
-        // Normally distributed annual return via the Box-Muller transform. One draw per simulated year.
-        private static double DrawReturn(double mean, double standardDeviation, Random random)
+        // One simulated year's return: the asset mix's blended return when the parameters have one, else a single
+        // normal draw from Mean/StdDev (the Optimal page's and the Strategy Lab's presets).
+        private static double DrawReturn(SimulationParameters parameters, Random random) =>
+            parameters.AssetMix is { } mix ? mix.DrawReturn(random) : DrawReturn(parameters.Mean, parameters.StdDev, random);
+
+        // Normally distributed annual return. One draw per simulated year.
+        private static double DrawReturn(double mean, double standardDeviation, Random random) =>
+            mean + standardDeviation * StandardNormal(random);
+
+        // A standard normal value via the Box-Muller transform, from two uniform draws.
+        internal static double StandardNormal(Random random)
         {
             double u1 = 1.0 - random.NextDouble();
             double u2 = 1.0 - random.NextDouble();
-            double randStdNormal = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
-            return mean + standardDeviation * randStdNormal;
+            return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Sin(2.0 * Math.PI * u2);
         }
     }
 }

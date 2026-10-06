@@ -32,7 +32,7 @@ namespace MonteCarloSimulation.Core
             if (candidates.Count == 1) return candidates[0];
 
             // Every candidate runs on the same paths, so draw them once
-            var paths = RunSimulator.SeededReturns(parameters.Mean, parameters.StdDev, timeline.Count, Paths);
+            var paths = RunSimulator.SeededReturns(parameters, timeline.Count, Paths);
             var best = candidates[0];
             (int Survivors, double AfterTaxLeft) bestScore = (-1, 0);
             foreach (var candidate in candidates)
@@ -51,7 +51,7 @@ namespace MonteCarloSimulation.Core
         // Paths survived at the requested spending, and the after-tax money left at the end across the surviving paths.
         internal static (int Survivors, double AfterTaxLeft) Score(
             SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, WithdrawalStrategy order, RothConversionTarget target) =>
-            Score(parameters, timeline, order, target, RunSimulator.SeededReturns(parameters.Mean, parameters.StdDev, timeline.Count, Paths));
+            Score(parameters, timeline, order, target, RunSimulator.SeededReturns(parameters, timeline.Count, Paths));
 
         private static (int Survivors, double AfterTaxLeft) Score(
             SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, WithdrawalStrategy order, RothConversionTarget target,

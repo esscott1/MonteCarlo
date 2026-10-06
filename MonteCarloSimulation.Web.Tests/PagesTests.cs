@@ -66,6 +66,41 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.False(HasId(html, "observe-flyout"));
         }
 
+        [Fact]
+        public async Task ScenarioRunner_InputsAreTabbed_BesideTheChartTile()
+        {
+            string html = await GetAsync("/index.html");
+
+            // Four tabs, in order, each controlling its panel; the first is selected
+            var tabs = Regex.Matches(html, @"role=""tab"" id=""(tab-\w+)"" aria-controls=""(panel-\w+)"" aria-selected=""(\w+)""");
+            Assert.Equal(new[] { "tab-demographics", "tab-money", "tab-income", "tab-investments" }, tabs.Select(m => m.Groups[1].Value));
+            Assert.Equal(new[] { "true", "false", "false", "false" }, tabs.Select(m => m.Groups[3].Value));
+            foreach (Match tab in tabs)
+                Assert.True(HasId(html, tab.Groups[2].Value));
+
+            // Each input sits on its tab
+            string Panel(string id) => Regex.Match(html, $@"id=""{id}""(.*?)(?=<div class=""tab-panel|<section class=""graph-tile)", RegexOptions.Singleline).Groups[1].Value;
+            Assert.All(new[] { "retirementDate", "birthdate", "years", "iterations" }, name => Assert.Contains($@"name=""{name}""", Panel("panel-demographics")));
+            Assert.All(new[] { "withdrawal", "initialTaxableBalance", "initialRothBasis", "initialRothUnrealizedGain", "initialBrokerageBasis", "initialBrokerageUnrealizedGain", "enableRothConversions" },
+                name => Assert.Contains($@"name=""{name}""", Panel("panel-money")));
+            Assert.All(new[] { "socialSecurityMonthlyAmount", "socialSecurityStartDate", "annualStandardDeduction", "newMoney", "yearNewMoney" },
+                name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
+
+            // The investments default to 60/30/10, 0.1 correlation, and 8/19, 4.5/4, 3.5/1
+            string investments = Panel("panel-investments");
+            var defaults = new Dictionary<string, string>
+            {
+                ["stockAllocation"] = "60", ["bondAllocation"] = "30", ["cashAllocation"] = "10", ["stockBondCorrelation"] = "0.1",
+                ["stockReturn"] = "8", ["stockStdDev"] = "19", ["bondReturn"] = "4.5", ["bondStdDev"] = "4", ["cashReturn"] = "3.5", ["cashStdDev"] = "1",
+            };
+            foreach (var (name, value) in defaults)
+                Assert.Matches($@"name=""{name}""[^>]*value=""{Regex.Escape(value)}""", investments);
+
+            // The chart placeholder is the inputs' neighbour, and the preset radios are gone
+            Assert.Contains(@"<section class=""graph-tile""", html);
+            Assert.False(HasId(html, "scenario-options"));
+        }
+
         [Theory]
         [InlineData("/model-info.html")]
         [InlineData("/observe.html")]

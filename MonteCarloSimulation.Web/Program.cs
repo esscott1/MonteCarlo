@@ -54,7 +54,7 @@ app.MapPost("/api/run", (RunRequest request) =>
     if (validationErrors.Count > 0)
         return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
 
-    var scenario = InvestmentScenarios.ById(request.ScenarioId)!;
+    var assetMix = request.ToAssetMix();
     var parameters = new SimulationParameters
     {
         Years = request.Years,
@@ -67,15 +67,16 @@ app.MapPost("/api/run", (RunRequest request) =>
         InitialRothUnrealizedGain = request.InitialRothUnrealizedGain,
         InitialBrokerageBasis = request.InitialBrokerageBasis,
         InitialBrokerageUnrealizedGain = request.InitialBrokerageUnrealizedGain,
-        Mean = scenario.Mean,
-        StdDev = scenario.StdDev,
+        Mean = assetMix.ExpectedReturn,
+        StdDev = assetMix.StdDev,
+        AssetMix = assetMix,
         NewMoney = request.NewMoney,
         YearNewMoney = request.YearNewMoney,
         SocialSecurityStartDate = request.SocialSecurityStartDate,
         SocialSecurityMonthlyAmount = request.SocialSecurityMonthlyAmount,
         AnnualStandardDeduction = request.AnnualStandardDeduction,
         EnableRothConversions = request.EnableRothConversions,
-        ScenarioDescription = scenario.Description
+        ScenarioDescription = request.MixDescription()
     };
 
     var output = MonteCarloEngine.Run(parameters);

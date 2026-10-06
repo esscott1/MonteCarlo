@@ -15,8 +15,11 @@ namespace MonteCarloSimulation.Core
         public double InitialRothUnrealizedGain { get; set; }
         public double InitialBrokerageBasis { get; set; }
         public double InitialBrokerageUnrealizedGain { get; set; }
+        // A single annual return distribution for the whole portfolio, used when AssetMix is null.
         public double Mean { get; set; }
         public double StdDev { get; set; }
+        // Stocks/bonds/cash, each drawn every year (the Scenario runner). Null: draw from Mean/StdDev instead.
+        public AssetMix? AssetMix { get; set; }
         public double NewMoney { get; set; }
         // Model year index (0 = the calendar year of RetirementDate) in which NewMoney arrives.
         public int YearNewMoney { get; set; }
