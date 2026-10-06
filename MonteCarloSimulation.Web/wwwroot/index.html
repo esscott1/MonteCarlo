@@ -86,6 +86,10 @@
                         <label><span data-i18n="form.balance">Balance</span>
                             <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="950,000" style="width: calc(16ch + 1rem)" required>
                         </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="enableRothConversions" checked>
+                            <span data-i18n="form.allowRoth">Allow Roth conversions</span>
+                        </label>
                     </fieldset>
                     <fieldset class="subgroup">
                         <legend data-i18n="form.roth">Roth Accts</legend>
@@ -132,10 +136,6 @@
                             <input type="number" name="yearNewMoney" min="0" step="1" value="10" style="width: calc(16ch + 1.6rem)" required>
                         </label>
                     </fieldset>
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="enableRothConversions" checked>
-                        <span data-i18n="form.allowRoth">Allow Roth conversions</span>
-                    </label>
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-investments" aria-labelledby="tab-investments" hidden>

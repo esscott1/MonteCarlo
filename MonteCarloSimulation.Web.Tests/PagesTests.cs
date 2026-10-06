@@ -81,9 +81,9 @@ namespace MonteCarloSimulation.Web.Tests
             // Each input sits on its tab
             string Panel(string id) => Regex.Match(html, $@"id=""{id}""(.*?)(?=<div class=""tab-panel|<section class=""graph-tile)", RegexOptions.Singleline).Groups[1].Value;
             Assert.All(new[] { "retirementDate", "birthdate", "years", "iterations" }, name => Assert.Contains($@"name=""{name}""", Panel("panel-demographics")));
-            Assert.All(new[] { "withdrawal", "initialTaxableBalance", "initialRothBasis", "initialRothUnrealizedGain", "initialBrokerageBasis", "initialBrokerageUnrealizedGain" },
+            Assert.All(new[] { "withdrawal", "initialTaxableBalance", "initialRothBasis", "initialRothUnrealizedGain", "initialBrokerageBasis", "initialBrokerageUnrealizedGain", "enableRothConversions" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-money")));
-            Assert.All(new[] { "socialSecurityMonthlyAmount", "socialSecurityStartDate", "annualStandardDeduction", "newMoney", "yearNewMoney", "enableRothConversions" },
+            Assert.All(new[] { "socialSecurityMonthlyAmount", "socialSecurityStartDate", "annualStandardDeduction", "newMoney", "yearNewMoney" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
 
             // The investments default to 60/30/10, 0.1 correlation, and 8/19, 4.5/4, 3.5/1
