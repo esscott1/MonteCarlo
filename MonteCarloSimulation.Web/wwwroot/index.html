@@ -57,6 +57,7 @@
             <div class="tabs-tile">
                 <div class="tab-list" role="tablist" aria-label="Your inputs" data-i18n-aria-label="runner.tabs.label">
                     <button type="button" role="tab" id="tab-demographics" aria-controls="panel-demographics" aria-selected="true" data-i18n="runner.tab.demographics">Demographics</button>
+                    <button type="button" role="tab" id="tab-assets" aria-controls="panel-assets" aria-selected="false" tabindex="-1" data-i18n="runner.tab.assets">Asset Classes</button>
                     <button type="button" role="tab" id="tab-money" aria-controls="panel-money" aria-selected="false" tabindex="-1" data-i18n="runner.tab.money">Your Money</button>
                     <button type="button" role="tab" id="tab-income" aria-controls="panel-income" aria-selected="false" tabindex="-1" data-i18n="runner.tab.income">Other Income</button>
                     <button type="button" role="tab" id="tab-investments" aria-controls="panel-investments" aria-selected="false" tabindex="-1" data-i18n="runner.tab.investments">Investments</button>
@@ -75,6 +76,38 @@
                     <label><span data-i18n="runner.iterations">Iterations / Runs (99 max)</span>
                         <input type="number" name="iterations" min="1" max="99" step="1" value="10" style="width: calc(3ch + 2rem)" required>
                     </label>
+                </div>
+
+                <div class="tab-panel field-grid" role="tabpanel" id="panel-assets" aria-labelledby="tab-assets" hidden>
+                    <fieldset class="subgroup">
+                        <legend data-i18n="runner.returnsLegend">Annual returns</legend>
+                        <table class="asset-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col" data-i18n="runner.assetClass">Asset class</th>
+                                    <th scope="col" data-i18n="runner.returnPercent">Return %</th>
+                                    <th scope="col" data-i18n="runner.stdDevPercent">Std. dev. %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <th scope="row" data-i18n="runner.stocks">Stocks</th>
+                                    <td><input type="number" class="percent-input" name="stockReturn" min="-100" max="100" step="any" value="8" aria-label="Stocks return %" data-i18n-aria-label="runner.stocksReturnLabel" required></td>
+                                    <td><input type="number" class="percent-input" name="stockStdDev" min="0" max="100" step="any" value="19" aria-label="Stocks std. dev. %" data-i18n-aria-label="runner.stocksStdDevLabel" required></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" data-i18n="runner.bonds">Bonds</th>
+                                    <td><input type="number" class="percent-input" name="bondReturn" min="-100" max="100" step="any" value="4.5" aria-label="Bonds return %" data-i18n-aria-label="runner.bondsReturnLabel" required></td>
+                                    <td><input type="number" class="percent-input" name="bondStdDev" min="0" max="100" step="any" value="4" aria-label="Bonds std. dev. %" data-i18n-aria-label="runner.bondsStdDevLabel" required></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" data-i18n="runner.cash">Cash</th>
+                                    <td><input type="number" class="percent-input" name="cashReturn" min="-100" max="100" step="any" value="3.5" aria-label="Cash return %" data-i18n-aria-label="runner.cashReturnLabel" required></td>
+                                    <td><input type="number" class="percent-input" name="cashStdDev" min="0" max="100" step="any" value="1" aria-label="Cash std. dev. %" data-i18n-aria-label="runner.cashStdDevLabel" required></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </fieldset>
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-money" aria-labelledby="tab-money" hidden>
@@ -154,35 +187,6 @@
                         <label><span data-i18n="runner.correlation">Stock&ndash;bond correlation</span>
                             <input type="number" class="percent-input" name="stockBondCorrelation" min="-1" max="1" step="any" value="0.1" data-i18n-title="runner.correlationTitle" title="How closely stock and bond returns move together, from -1 (opposite) to 1 (in step). Cash moves on its own." required>
                         </label>
-                    </fieldset>
-                    <fieldset class="subgroup">
-                        <legend data-i18n="runner.returnsLegend">Annual returns</legend>
-                        <table class="asset-table">
-                            <thead>
-                                <tr>
-                                    <th scope="col" data-i18n="runner.assetClass">Asset class</th>
-                                    <th scope="col" data-i18n="runner.returnPercent">Return %</th>
-                                    <th scope="col" data-i18n="runner.stdDevPercent">Std. dev. %</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <th scope="row" data-i18n="runner.stocks">Stocks</th>
-                                    <td><input type="number" class="percent-input" name="stockReturn" min="-100" max="100" step="any" value="8" aria-label="Stocks return %" data-i18n-aria-label="runner.stocksReturnLabel" required></td>
-                                    <td><input type="number" class="percent-input" name="stockStdDev" min="0" max="100" step="any" value="19" aria-label="Stocks std. dev. %" data-i18n-aria-label="runner.stocksStdDevLabel" required></td>
-                                </tr>
-                                <tr>
-                                    <th scope="row" data-i18n="runner.bonds">Bonds</th>
-                                    <td><input type="number" class="percent-input" name="bondReturn" min="-100" max="100" step="any" value="4.5" aria-label="Bonds return %" data-i18n-aria-label="runner.bondsReturnLabel" required></td>
-                                    <td><input type="number" class="percent-input" name="bondStdDev" min="0" max="100" step="any" value="4" aria-label="Bonds std. dev. %" data-i18n-aria-label="runner.bondsStdDevLabel" required></td>
-                                </tr>
-                                <tr>
-                                    <th scope="row" data-i18n="runner.cash">Cash</th>
-                                    <td><input type="number" class="percent-input" name="cashReturn" min="-100" max="100" step="any" value="3.5" aria-label="Cash return %" data-i18n-aria-label="runner.cashReturnLabel" required></td>
-                                    <td><input type="number" class="percent-input" name="cashStdDev" min="0" max="100" step="any" value="1" aria-label="Cash std. dev. %" data-i18n-aria-label="runner.cashStdDevLabel" required></td>
-                                </tr>
-                            </tbody>
-                        </table>
                         <p class="total-line" id="blended-line">Blended: 6.50% expected return, 11.58% std. dev.</p>
                     </fieldset>
                 </div>

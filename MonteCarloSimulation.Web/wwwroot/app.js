@@ -93,7 +93,7 @@ function updateAllocation() {
 }
 
 function initAllocation() {
-    form.querySelectorAll('#panel-investments input').forEach((input) => input.addEventListener('input', updateAllocation));
+    form.querySelectorAll('#panel-assets input, #panel-investments input').forEach((input) => input.addEventListener('input', updateAllocation));
     // Once the page's text has loaded, so the lines never show untranslated keys
     I18n.ready.then(updateAllocation);
 }
