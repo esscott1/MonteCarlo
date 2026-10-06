@@ -23,6 +23,7 @@ namespace MonteCarloSimulation.Core
                 Result = new SimulationResult { Runs = runs },
                 AllRates = runs.SelectMany(r => r.Years.Select(y => y.RateOfReturn)).ToList(),
                 LastSuccessfulRun = runs.LastOrDefault(r => !r.Failed)?.Years,
+                BalanceBands = BalanceBands.Build(parameters, timeline, runs),
                 WithdrawalStrategy = order,
                 RothConversionTarget = target
             };

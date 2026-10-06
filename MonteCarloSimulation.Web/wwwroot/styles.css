@@ -226,18 +226,158 @@ body.wide {
     margin: 0 0 0.5rem;
 }
 
-.graph-placeholder {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-    border: 1px dashed var(--border);
-    border-radius: 6px;
+/* The balance chart (chart.js): green upper, blue middle, orange lower, lighter in dark mode */
+:root {
+    --band-upper: #34a853;
+    --band-middle: #1a73e8;
+    --band-lower: #e8710a;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --band-upper: #81c995;
+        --band-middle: #8ab4f8;
+        --band-lower: #fcad70;
+    }
+}
+
+.chart-note {
+    font-size: 0.8rem;
     color: #888;
-    font-size: 0.9rem;
-    text-align: center;
-    padding: 1rem;
+    margin: 0 0 0.5rem;
+}
+
+.chart-box {
+    position: relative;
+}
+
+.balance-chart {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    touch-action: pan-y;
+}
+
+.chart-grid {
+    stroke: currentColor;
+    stroke-opacity: 0.12;
+}
+
+.chart-axis,
+.chart-tick {
+    stroke: currentColor;
+    stroke-opacity: 0.4;
+}
+
+.chart-label {
+    fill: currentColor;
+    fill-opacity: 0.7;
+    font-size: 11px;
+}
+
+.chart-band {
+    stroke: none;
+    fill-opacity: 0.2;
+}
+
+.chart-band-upper {
+    fill: var(--band-upper);
+}
+
+.chart-band-lower {
+    fill: var(--band-lower);
+}
+
+.chart-line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linejoin: round;
+}
+
+.chart-line-upper {
+    stroke: var(--band-upper);
+}
+
+.chart-line-middle {
+    stroke: var(--band-middle);
+}
+
+.chart-line-lower {
+    stroke: var(--band-lower);
+}
+
+.chart-dot {
+    fill: Canvas;
+    stroke-width: 2;
+}
+
+.chart-guide {
+    stroke: currentColor;
+    stroke-opacity: 0.35;
+    stroke-dasharray: 3 3;
+}
+
+.chart-hit {
+    fill: transparent;
+    cursor: crosshair;
+}
+
+.chart-tooltip {
+    position: absolute;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: Canvas;
+    color: CanvasText;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.chart-tooltip[hidden] {
+    display: none;
+}
+
+.chart-tip-upper::before,
+.chart-tip-middle::before,
+.chart-tip-lower::before,
+.chart-legend li::before {
+    content: "";
+    display: inline-block;
+    width: 0.8em;
+    height: 3px;
+    margin-right: 0.35em;
+    vertical-align: middle;
+}
+
+.chart-tip-upper::before,
+.chart-legend-upper::before {
+    background: var(--band-upper);
+}
+
+.chart-tip-middle::before,
+.chart-legend-middle::before {
+    background: var(--band-middle);
+}
+
+.chart-tip-lower::before,
+.chart-legend-lower::before {
+    background: var(--band-lower);
+}
+
+.chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0;
+    font-size: 0.8rem;
 }
 
 .field-grid {

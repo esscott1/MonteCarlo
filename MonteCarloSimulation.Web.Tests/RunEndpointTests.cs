@@ -74,6 +74,23 @@ namespace MonteCarloSimulation.Web.Tests
         }
 
         [Fact]
+        public async Task TheChartBands_StartAtTheStartingBalance_AndStayInOrder()
+        {
+            using var response = await PostAsync(DefaultRequest());
+
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var bands = body.RootElement.GetProperty("output").GetProperty("balanceBands").EnumerateArray().ToList();
+            // The retirement date, then the end of each of the 30 years (Jan 1 retirement: whole calendar years)
+            Assert.Equal(31, bands.Count);
+            Assert.Equal("2027-01-01", bands[0].GetProperty("date").GetString());
+            Assert.Equal("2057-01-01", bands[^1].GetProperty("date").GetString());
+            Assert.All(new[] { "lower", "middle", "upper" }, key => Assert.Equal(1_370_000, bands[0].GetProperty(key).GetDouble()));
+            Assert.All(bands, b => Assert.True(
+                b.GetProperty("lower").GetDouble() <= b.GetProperty("middle").GetDouble()
+                && b.GetProperty("middle").GetDouble() <= b.GetProperty("upper").GetDouble()));
+        }
+
+        [Fact]
         public async Task AnAllocationThatDoesNotTotal100Percent_IsA400()
         {
             var request = DefaultRequest();

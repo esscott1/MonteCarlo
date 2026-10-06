@@ -189,8 +189,14 @@
             </div>
 
             <section class="graph-tile" aria-labelledby="graph-title">
-                <h2 id="graph-title" class="graph-title" data-i18n="runner.graph.title">Chart</h2>
-                <p class="graph-placeholder" data-i18n="runner.graph.placeholder">A chart of your plan will appear here.</p>
+                <h2 id="graph-title" class="graph-title" data-i18n="runner.graph.title">Portfolio balance</h2>
+                <p class="chart-note" id="chart-note"></p>
+                <div id="balance-chart" class="chart-box"></div>
+                <ul class="chart-legend">
+                    <li class="chart-legend-upper" data-i18n="runner.chart.legendUpper">Upper: 90th percentile</li>
+                    <li class="chart-legend-middle" data-i18n="runner.chart.legendMiddle">Middle: median</li>
+                    <li class="chart-legend-lower" data-i18n="runner.chart.legendLower">Lower: 10th percentile</li>
+                </ul>
             </section>
         </div>
         </details>
@@ -202,6 +208,7 @@
 
     <script src="i18n.js"></script>
     <script src="quota.js"></script>
+    <script src="chart.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
