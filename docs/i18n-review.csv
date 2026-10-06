@@ -3,6 +3,7 @@
 "optimal.heading","optimal.html","Monte Carlo Portfolio Optimizer","Optimizador de cartera Monte Carlo",""
 "menu.scenarioRunner","optimal.html","Scenario runner","Simulador de escenarios",""
 "menu.modelInfo","optimal.html","Model Info","Información del modelo",""
+"menu.translations","optimal.html","Translations","Traducciones",""
 "optimal.intro","optimal.html","How much can you spend each month and still have the money last in 80&ndash;85% of simulated markets &mdash; and when should you start Social Security? Spending is shown per month in today's dollars, inflated each year; balances are as of your retirement date.","¿Cuánto puede gastar cada mes y que el dinero aun así alcance en el 80&ndash;85% de los mercados simulados? ¿Y cuándo debería empezar a cobrar el Seguro Social? El gasto se muestra por mes en dólares de hoy y se ajusta por la inflación cada año; los saldos son a la fecha de su jubilación.",""
 "form.scenario","optimal.html","Scenario","Escenario",""
 "form.retireOn","optimal.html","Retire On Date","Fecha de jubilación",""

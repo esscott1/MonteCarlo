@@ -1,0 +1,83 @@
+name: Agent - translation update
+
+# Handler for Jira stories labelled agent-translation-update (Spanish corrections submitted from the Translations page).
+# Called by agent-dispatcher.yml. No AI: apply-translation-update.mjs decodes the edits from the story, checks every one
+# against es.json again, and applies them exactly as the reviewer typed them. The shared steps around it create the
+# branch, check the result and open the pull request; merging it is the approval.
+on:
+  workflow_call:
+    inputs:
+      issue_key:
+        required: true
+        type: string
+      summary:
+        required: true
+        type: string
+      description:
+        required: true
+        type: string
+    secrets:
+      JIRA_EMAIL:
+        required: true
+      JIRA_API_TOKEN:
+        required: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      # To start ci.yml on the branch (agent-finish)
+      actions: write
+    # Untrusted story text is lifted into environment variables once, here; no step interpolates it into a script
+    env:
+      ISSUE_KEY: ${{ inputs.issue_key }}
+      SUMMARY: ${{ inputs.summary }}
+      DESCRIPTION: ${{ inputs.description }}
+      STORY_TYPE: agent-translation-update
+      JIRA_BASE_URL: https://ericscott411.atlassian.net
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # agent-prepare checks ISSUE_KEY is SCRUM-<number> before it becomes part of the branch name
+      - name: Prepare the branch
+        id: prepare
+        uses: ./.github/actions/agent-prepare
+        with:
+          branch: translations/${{ inputs.issue_key }}-es
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply the Spanish edits
+        id: apply
+        run: node .github/scripts/apply-translation-update.mjs
+
+      - name: Commit
+        env:
+          COUNT: ${{ steps.apply.outputs.count }}
+        run: |
+          git add MonteCarloSimulation.Web/wwwroot/i18n/es.json docs/i18n-review.csv
+          git commit -m "$ISSUE_KEY Apply $COUNT Spanish translation edit(s) from the Translations page"
+
+      # es.json changes, and the review sheet that lists every string changes with it (the i18n tests require it)
+      - name: Check, push and open the pull request
+        uses: ./.github/actions/agent-finish
+        with:
+          branch: ${{ steps.prepare.outputs.branch }}
+          master-sha: ${{ steps.prepare.outputs.master-sha }}
+          local-master-sha: ${{ steps.prepare.outputs.local-master-sha }}
+          allowed-paths: |
+            MonteCarloSimulation.Web/wwwroot/i18n/es.json
+            docs/i18n-review.csv
+          github-token: ${{ github.token }}
+
+      - name: Report a failed run to Jira
+        if: failure()
+        run: |
+          bash .github/scripts/jira-report.sh comment \
+            "The agent-translation-update run failed before opening a pull request (for example, an edit broke the translation rules): $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

@@ -23,12 +23,12 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal("Monte Carlo Portfolio Optimizer", Heading(html));
             Assert.True(HasId(html, "optimal-form"));
 
-            // The menu, in order: Scenario runner, Model Info, Observe
+            // The menu, in order: Scenario runner, Model Info, Translations, Observe
             Assert.True(HasId(html, "hamburger-toggle"));
             Assert.True(HasId(html, "observe-flyout"));
             var menu = Regex.Match(html, @"<div id=""hamburger-menu""[^>]*>(.*?)</div>", RegexOptions.Singleline).Groups[1].Value;
             var items = Regex.Matches(menu, @"role=""menuitem""[^>]*>([^<]+)<").Select(m => m.Groups[1].Value);
-            Assert.Equal(new[] { "Scenario runner", "Model Info", "Observe" }, items);
+            Assert.Equal(new[] { "Scenario runner", "Model Info", "Translations", "Observe" }, items);
             Assert.Matches(@"<a href=""index.html"" id=""scenario-runner-menu-item"" role=""menuitem""[^>]*>Scenario runner</a>", menu);
 
             // The pencil stays on the Scenario runner; this page is home, so no back arrow
@@ -69,6 +69,7 @@ namespace MonteCarloSimulation.Web.Tests
         [Theory]
         [InlineData("/model-info.html")]
         [InlineData("/observe.html")]
+        [InlineData("/translations.html")]
         public async Task SubPages_GoBackToTheLandingPage(string path)
         {
             string html = await GetAsync(path);
@@ -93,10 +94,12 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.True(i18nScript >= 0 && ownScript > i18nScript);
         }
 
-        [Fact]
-        public async Task ObservePage_StaysInEnglish()
+        [Theory]
+        [InlineData("/observe.html")]
+        [InlineData("/translations.html")]
+        public async Task ObserveAndTranslationsPages_StayInEnglish(string path)
         {
-            string html = await GetAsync("/observe.html");
+            string html = await GetAsync(path);
 
             Assert.DoesNotContain("lang-toggle", html);
             Assert.DoesNotContain("i18n.js", html);

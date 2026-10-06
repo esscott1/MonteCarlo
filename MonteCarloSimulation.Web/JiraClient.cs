@@ -33,13 +33,21 @@ namespace MonteCarloSimulation.Web
         private string BaseUrl => (_config["Jira:BaseUrl"] ?? "").TrimEnd('/');
 
         /// <summary>
-        /// Creates the story, with the given labels, in its initial status. Moving it on is a separate call
-        /// (<see cref="TransitionAsync"/>).
+        /// Creates the story, with the given labels, in its initial status: one paragraph per line of
+        /// <paramref name="description"/>, then <paramref name="codeBlock"/> (if any) as a code block. Moving it on is a
+        /// separate call (<see cref="TransitionAsync"/>).
         /// </summary>
-        public async Task<JiraIssue> CreateStoryAsync(string summary, string description, IReadOnlyList<string> labels, CancellationToken ct)
+        public async Task<JiraIssue> CreateStoryAsync(string summary, string description, IReadOnlyList<string> labels, CancellationToken ct, string? codeBlock = null)
         {
             // Jira Cloud's v3 API rejects a plain string description: it has to be an Atlassian
             // Document Format document, hence the doc/paragraph/text nesting below.
+            var content = description
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(line => (object)new { type = "paragraph", content = new[] { new { type = "text", text = line } } })
+                .ToList();
+            if (codeBlock is not null)
+                content.Add(new { type = "codeBlock", content = new[] { new { type = "text", text = codeBlock } } });
+
             var payload = new
             {
                 fields = new
@@ -48,24 +56,12 @@ namespace MonteCarloSimulation.Web
                     issuetype = new { name = _config["Jira:IssueType"] },
                     summary,
                     labels,
-                    description = new
-                    {
-                        type = "doc",
-                        version = 1,
-                        content = new[]
-                        {
-                            new
-                            {
-                                type = "paragraph",
-                                content = new[] { new { type = "text", text = description } },
-                            },
-                        },
-                    },
+                    description = new { type = "doc", version = 1, content },
                 },
             };
 
-            using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-            using var response = await _http.PostAsync("rest/api/3/issue", content, ct);
+            using var request = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            using var response = await _http.PostAsync("rest/api/3/issue", request, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
 
             if (!response.IsSuccessStatusCode)

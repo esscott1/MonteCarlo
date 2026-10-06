@@ -8,5 +8,8 @@ namespace MonteCarloSimulation.Web
     {
         // A change request from the Scenario runner's pencil: change a page's <h1> and <title>
         public const string TitleChange = "agent-title-change";
+
+        // Spanish corrections from the Translations page: apply the listed es.json strings exactly as typed
+        public const string TranslationUpdate = "agent-translation-update";
     }
 }

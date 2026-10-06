@@ -18,8 +18,15 @@ test('a supported label routes to its handler; other labels are ignored', () => 
     assert.equal(result.storyType, 'agent-title-change');
 });
 
+test('translation updates route to their own handler', () => {
+    const result = resolve({ issueKey: 'SCRUM-61', labels: ['agent-translation-update'] });
+    assert.equal(result.outcome, 'routed');
+    assert.equal(result.storyType, 'agent-translation-update');
+    assert.equal(resolve({ issueKey: 'SCRUM-61', labels: ['agent-translation-update', 'agent-title-change'] }).outcome, 'refused');
+});
+
 test('the label must match exactly - starting with agent- is not enough', () => {
-    for (const label of ['agent-title-change-now', 'agent-title', 'agent-delete-everything', 'Agent-Title-Change']) {
+    for (const label of ['agent-title-change-now', 'agent-title', 'agent-delete-everything', 'Agent-Title-Change', 'agent-translation', 'agent-translation-updates']) {
         const result = resolve({ issueKey: 'SCRUM-60', labels: [label] });
         assert.equal(result.storyType, '', label);
         assert.notEqual(result.outcome, 'routed', label);

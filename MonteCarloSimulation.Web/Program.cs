@@ -15,12 +15,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddHttpClient<JiraClient>();
 builder.Services.AddSingleton<ChangeRequestAgent>();
 
-// The two passphrase forms - change requests and Observe access - allow 5 attempts an hour per caller address, over a
+// The passphrase forms - change requests, Observe access and translation submissions - allow 5 attempts an hour per caller address, over a
 // rolling hour (RequestQuota via QuotaFilter), so a refusal can say exactly when the next attempt is allowed.
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddKeyedSingleton(Quotas.ChangeRequest, (services, _) =>
     new RequestQuota(5, TimeSpan.FromHours(1), services.GetRequiredService<TimeProvider>()));
 builder.Services.AddKeyedSingleton(Quotas.ObserveAccess, (services, _) =>
+    new RequestQuota(5, TimeSpan.FromHours(1), services.GetRequiredService<TimeProvider>()));
+builder.Services.AddKeyedSingleton(Quotas.Translations, (services, _) =>
     new RequestQuota(5, TimeSpan.FromHours(1), services.GetRequiredService<TimeProvider>()));
 
 // The Observe token check runs on every Observe page load and needs no countdown, so it keeps the built-in limiter.
@@ -154,6 +156,64 @@ app.MapPost("/api/change-request", async (
 }).AddEndpointFilter(new QuotaFilter(
     app.Services.GetRequiredKeyedService<RequestQuota>(Quotas.ChangeRequest), "Too many change requests from this address."));
 
+// The Translations page's Submit: a reviewer's Spanish corrections become a Jira story labelled agent-translation-update,
+// moved straight to In Progress like change requests, so the agent-translation-update workflow opens a pull request that
+// applies exactly these strings to es.json. Checks run cheapest-first: passphrase, then every edit against the current
+// es.json. No AI is involved, so only Jira needs credentials.
+app.MapPost("/api/translations/proposal", async (
+    TranslationProposal request,
+    JiraClient jira,
+    IConfiguration config,
+    IWebHostEnvironment environment,
+    ILogger<Program> logger,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Passphrase))
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["passphrase"] = ["Passphrase is required."] });
+    if (!ChangeRequest.PassphraseMatches(request.Passphrase, config["ChangeRequest:Passphrase"]))
+    {
+        logger.LogWarning("Translation proposal rejected: incorrect passphrase.");
+        return Results.Json(new { message = "Incorrect passphrase." }, statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    var spanish = await TranslationFiles.ReadSpanishAsync(environment, ct);
+    var validationErrors = request.Validate(spanish);
+    if (validationErrors.Count > 0)
+        return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
+
+    if (string.IsNullOrEmpty(config["Jira:ApiToken"]))
+    {
+        logger.LogError("Translation proposal cannot run: Jira credentials are not configured.");
+        return Results.Json(new { message = "Translation updates are not configured on this server." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm") + " UTC";
+    var (description, block) = TranslationRules.StoryText(request.Edits, spanish, request.Note);
+    string summary = $"Spanish translation update: {request.Edits.Count} string{(request.Edits.Count == 1 ? "" : "s")} {timestamp}";
+
+    try
+    {
+        var issue = await jira.CreateStoryAsync(summary, description, [StoryLabels.TranslationUpdate], ct, block);
+        try
+        {
+            await jira.TransitionAsync(issue.Key, JiraClient.InProgress, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Created {IssueKey} but couldn't move it to In Progress, so the workflow hasn't started.", issue.Key);
+        }
+
+        logger.LogInformation("Created Jira story {IssueKey} with {Count} translation edits.", issue.Key, request.Edits.Count);
+        return Results.Ok(new { issueKey = issue.Key, issueUrl = issue.Url, count = request.Edits.Count });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Translation proposal failed.");
+        return Results.Json(new { message = "The translation update could not be submitted. Please try again." }, statusCode: StatusCodes.Status502BadGateway);
+    }
+}).AddEndpointFilter(new QuotaFilter(
+    app.Services.GetRequiredKeyedService<RequestQuota>(Quotas.Translations), "Too many translation submissions from this address."));
+
 // Issues a short-lived, stateless signed token gating the Observe dashboard, keyed by the
 // same passphrase already used for change requests - no separate secret to provision.
 app.MapPost("/api/observe-access", (ObserveAccessRequest request, IConfiguration config, ILogger<Program> logger) =>
@@ -196,4 +256,5 @@ static class Quotas
 {
     public const string ChangeRequest = "change-request";
     public const string ObserveAccess = "observe-access";
+    public const string Translations = "translations";
 }
