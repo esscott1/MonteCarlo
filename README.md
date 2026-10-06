@@ -49,6 +49,8 @@ It's worth being explicit: the tool-calling/AI round trip in the change-request 
 
 ## Deployment
 
+Every pull request runs the full test suite through [.github/workflows/ci.yml](.github/workflows/ci.yml), so it shows a pass/fail check before it's merged. That includes the pull requests opened by the change-request agent.
+
 The web app deploys to Azure via [.github/workflows/deploy-azure.yml](.github/workflows/deploy-azure.yml), triggered on every push to `master` that touches `MonteCarloSimulation.Web/**`, `MonteCarloSimulation.Core/**`, or the workflow file itself:
 
 1. Checks out the code and sets up .NET 10.

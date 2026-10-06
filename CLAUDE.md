@@ -55,6 +55,8 @@ Source files are UTF-8 with CRLF line endings in the working copy (`core.autocrl
 
 ## Deployment
 
+`.github/workflows/ci.yml` runs `dotnet test MonteCarlo.sln -c Release` on every pull request, so check that it passes before asking the user to merge.
+
 Every push to `master` that touches `MonteCarloSimulation.Web/**`, `MonteCarloSimulation.Core/**` or the workflow deploys via `.github/workflows/deploy-azure.yml` to the Azure Web App `montecarlo-otsconsulting` (Linux, .NET 10 stack, framework-dependent publish). The live site is **https://montecarlo.otsconsulting.ai** (the custom domain, live since October 2026) and also **https://montecarlo-otsconsulting.azurewebsites.net**; check both after a deploy. Right after a deploy finishes, wait about 60 seconds before testing: requests during the app's restart can hit the old version or fail.
 
 ## Architecture
