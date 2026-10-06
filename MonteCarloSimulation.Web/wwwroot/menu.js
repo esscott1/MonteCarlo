@@ -17,6 +17,14 @@
         const observeCloseButton = document.getElementById('observe-close');
         const observeResult = document.getElementById('observe-result');
         const observeSubmitButton = observeFlyout.querySelector('button[type="submit"]');
+        const quota = window.QuotaNotice.create({
+            storageKey: 'quota:observe-access',
+            notice: document.getElementById('observe-quota'),
+            submitButton: observeSubmitButton,
+            blockedText: (limit, clock, relative) =>
+                `You've used all ${limit} passphrase attempts for this hour from this network. You can try again at ${clock} (${relative}).`,
+            remainingText: (remaining, limit) => `${remaining} of ${limit} attempts left this hour.`,
+        });
 
         let badPassphraseCloseTimer = null;
 
@@ -34,6 +42,7 @@
             closeMenu();
             observeFlyout.hidden = false;
             observeFlyout.querySelector('input').focus();
+            quota.restore();
         }
 
         function closePassphraseFlyout() {
@@ -72,6 +81,12 @@
 
             const passphrase = observeFlyout.elements.passphrase.value;
 
+            // Still refused: say until when, without spending an attempt
+            if (quota.isBlocked()) {
+                quota.restore();
+                return;
+            }
+
             observeSubmitButton.disabled = true;
             observeResult.innerHTML = '<p class="loading">Checking passphrase&hellip;</p>';
 
@@ -82,13 +97,13 @@
                     body: JSON.stringify({ passphrase })
                 });
 
-                // The rate limiter rejects before the endpoint runs, so there's no JSON body to read.
+                const data = await response.json().catch(() => ({}));
+                // Every response says how many attempts are left; a 429 says when the next one is allowed
+                quota.update(response, data);
                 if (response.status === 429) {
-                    observeResult.innerHTML = '<div class="error-box"><p>Too many attempts from this address. Try again later.</p></div>';
+                    observeResult.innerHTML = '';
                     return;
                 }
-
-                const data = await response.json().catch(() => ({}));
 
                 if (!response.ok) {
                     observeResult.innerHTML = `<div class="error-box"><p>${escapeHtml(data.message || 'Incorrect passphrase.')}</p></div>`;
@@ -103,7 +118,7 @@
             } catch (err) {
                 observeResult.innerHTML = `<div class="error-box"><p>Request failed: ${escapeHtml(err.message)}</p></div>`;
             } finally {
-                observeSubmitButton.disabled = false;
+                observeSubmitButton.disabled = quota.isBlocked();
             }
         });
 
