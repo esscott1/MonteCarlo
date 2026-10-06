@@ -45,6 +45,7 @@
 "flyout.passphrase","index.html","Passphrase","Frase de acceso",""
 "common.cancel","index.html","Cancel","Cancelar",""
 "common.submit","index.html","Submit","Enviar",""
+"runner.description","index.html","Run your plan through many simulated markets and see how long the money lasts.","Ponga a prueba su plan en muchos mercados simulados y vea cuánto dura el dinero.",""
 "runner.yourInputs","index.html","Your inputs","Sus datos",""
 "runner.tab.demographics","index.html","Demographics","Datos personales",""
 "runner.tab.assets","index.html","Asset Classes","Clases de activos",""
