@@ -6,8 +6,8 @@ using MonteCarloSimulation.Optimizer;
 namespace MonteCarloSimulation.Web
 {
     // The Optimal page's results, streamed as they're computed: newline-delimited JSON, one event per line, flushed as
-    // each is written. A run is `start`, then `progress` after each claiming age and `scenario` as each scenario
-    // finishes, then `done` - or `error` if the computation fails after the stream has started. If the client
+    // each is written. A run is `start`, then `progress` after each claiming age, then `result` (the recommendation and
+    // every claiming age) and `done` - or `error` if the computation fails after the stream has started. If the client
     // disconnects, the request's token stops the optimizer.
     public sealed class OptimalStream(OptimizationInputs inputs, JsonSerializerOptions jsonOptions) : IResult
     {
@@ -28,15 +28,15 @@ namespace MonteCarloSimulation.Web
             var events = Channel.CreateUnbounded<OptimalStreamEvent>(new UnboundedChannelOptions { SingleReader = true });
             var listener = new OptimizationListener
             {
-                ClaimingAgeDone = (completed, total) => events.Writer.TryWrite(new OptimalProgressEvent(completed, total)),
-                ScenarioDone = scenario => events.Writer.TryWrite(new OptimalScenarioEvent(scenario))
+                ClaimingAgeDone = (completed, total) => events.Writer.TryWrite(new OptimalProgressEvent(completed, total))
             };
             // A dedicated thread, not a thread-pool one: the pool must stay free to write the stream and serve requests
             _ = Task.Factory.StartNew(() =>
             {
                 try
                 {
-                    SpendingOptimizer.Optimize(inputs, listener, cancellationToken);
+                    var result = SpendingOptimizer.Optimize(inputs, listener, cancellationToken);
+                    events.Writer.TryWrite(new OptimalResultEvent(result.Optimum));
                     events.Writer.TryWrite(new OptimalDoneEvent());
                     events.Writer.TryComplete();
                 }
@@ -50,8 +50,7 @@ namespace MonteCarloSimulation.Web
             {
                 await WriteAsync(response, new OptimalStartEvent(
                     inputs.Paths,
-                    inputs.Scenarios.Count * SpendingOptimizer.ClaimingAges.Count,
-                    inputs.Scenarios.Select(s => new OptimalScenarioInfo(s.Id, s.Description)).ToList(),
+                    SpendingOptimizer.ClaimingAges.Count,
                     SpendingOptimizer.BenefitByAge(inputs.SocialSecurity)), cancellationToken);
 
                 await foreach (var optimalEvent in events.Reader.ReadAllAsync(cancellationToken))
@@ -80,17 +79,13 @@ namespace MonteCarloSimulation.Web
 
     public abstract record OptimalStreamEvent(string Type);
 
-    public sealed record OptimalScenarioInfo(int ScenarioId, string Description);
-
-    // What the page needs before any results: the scenarios to make room for, how many claiming ages will report
-    // progress, and the benefit at each age.
-    public sealed record OptimalStartEvent(
-        int Paths, int TotalClaimingAges, IReadOnlyList<OptimalScenarioInfo> Scenarios, IReadOnlyList<BenefitAtAge> BenefitByAge)
+    // What the page needs before any results: how many claiming ages will report progress, and the benefit at each age.
+    public sealed record OptimalStartEvent(int Paths, int TotalClaimingAges, IReadOnlyList<BenefitAtAge> BenefitByAge)
         : OptimalStreamEvent("start");
 
     public sealed record OptimalProgressEvent(int Completed, int Total) : OptimalStreamEvent("progress");
 
-    public sealed record OptimalScenarioEvent(ScenarioOptimum Scenario) : OptimalStreamEvent("scenario");
+    public sealed record OptimalResultEvent(SpendOptimum Optimum) : OptimalStreamEvent("result");
 
     public sealed record OptimalDoneEvent() : OptimalStreamEvent("done");
 

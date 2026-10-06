@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 export const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const wwwroot = join(repo, 'MonteCarloSimulation.Web', 'wwwroot');
 export const PAGES = ['splash.html', 'optimal.html', 'index.html', 'model-info.html'];
-export const SCRIPTS = ['optimal.js', 'app.js', 'quota.js', 'model-info.js'];
+export const SCRIPTS = ['optimal.js', 'app.js', 'inputs.js', 'quota.js', 'model-info.js'];
 
 export const readJson = (name) => JSON.parse(readFileSync(join(wwwroot, 'i18n', name), 'utf8'));
 export const readText = (name) => readFileSync(join(wwwroot, name), 'utf8');

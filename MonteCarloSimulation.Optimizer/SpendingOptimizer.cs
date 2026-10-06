@@ -1,13 +1,12 @@
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 using MonteCarloSimulation.Core;
 
 namespace MonteCarloSimulation.Optimizer
 {
-    // Finds, per investment scenario, the annual spending that survives 80-85% of simulated market paths, and the
-    // Social Security claiming age (each birthday 62-70) that allows the most of it.
+    // Finds the annual spending that survives 80-85% of simulated market paths in the template's market (its asset
+    // mix), and the Social Security claiming age (each birthday 62-70) that allows the most of it.
     //
-    // For each (scenario, claiming age), every path's break-even spend - the most it survives - is found by
+    // For each claiming age, every path's break-even spend - the most it survives - is found by
     // bisection. A spend W then survives exactly the share of paths whose break-even is at least W, so the spend
     // for any survival target is read straight off the sorted break-evens: no separate search per target.
     public static class SpendingOptimizer
@@ -33,48 +32,36 @@ namespace MonteCarloSimulation.Optimizer
 
         public static OptimizationResult Optimize(OptimizationInputs inputs) => Optimize(inputs, null, CancellationToken.None);
 
-        // The same result, reporting as it goes: `listener` hears each finished claiming age and each finished
-        // scenario (from worker threads), and cancelling the token stops the work, throwing OperationCanceledException.
-        // Jobs start in scenario-major order, so scenarios finish roughly one after another while every core stays busy.
+        // The same result, reporting as it goes: `listener` hears each finished claiming age (from worker threads), and
+        // cancelling the token stops the work, throwing OperationCanceledException.
         public static OptimizationResult Optimize(OptimizationInputs inputs, OptimizationListener? listener, CancellationToken cancellationToken)
         {
             var template = inputs.Template;
             var curve = inputs.SocialSecurity;
             var ages = ClaimingAges;
-            var jobs = inputs.Scenarios.SelectMany(scenario => ages.Select(age => (Scenario: scenario, Age: age))).ToList();
 
-            var byJob = new ConcurrentDictionary<(int ScenarioId, int Age), ClaimingAgeResult>();
-            var optima = new ConcurrentDictionary<int, ScenarioOptimum>();
-            var agesLeft = inputs.Scenarios.ToDictionary(s => s.Id, _ => new StrongBox<int>(ages.Count));
+            var byAge = new ClaimingAgeResult[ages.Count];
             int completed = 0;
             // The app's Automatic choices expand to every (order, conversion target) pair, up to 8.
             var candidates = AutomaticStrategy.Candidates(template);
-            // Each scenario's market paths, drawn once for every spend, claiming age and candidate
-            var pathsByScenario = inputs.Scenarios.ToDictionary(s => s.Id, s => PathSimulator.SeededPaths(template, s, inputs.Paths));
+            // The market's paths, drawn once for every spend, claiming age and candidate
+            var paths = PathSimulator.SeededPaths(template, inputs.Paths);
 
             try
             {
-                // NoBuffering hands out jobs one at a time, in order. Capped at one worker per core: uncapped, the loop
-                // takes every thread-pool thread it can get, starving the web server's own work (including streaming
-                // these results) until it finishes.
+                // NoBuffering hands out the claiming ages one at a time, in order. Capped at one worker per core:
+                // uncapped, the loop takes every thread-pool thread it can get, starving the web server's own work
+                // (including streaming these results) until it finishes.
                 Parallel.ForEach(
-                    Partitioner.Create(jobs, EnumerablePartitionerOptions.NoBuffering),
+                    Partitioner.Create(Enumerable.Range(0, ages.Count), EnumerablePartitionerOptions.NoBuffering),
                     new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount },
-                    job =>
+                    i =>
                     {
-                        var start = template.Birthdate.AddYears(job.Age);
-                        double monthly = curve.MonthlyBenefitAtAge(job.Age);
-                        var paths = pathsByScenario[job.Scenario.Id];
-                        byJob[(job.Scenario.Id, job.Age)] = BestCandidate(inputs, job.Scenario, job.Age, start, monthly, candidates, paths, cancellationToken);
-                        listener?.ClaimingAgeDone?.Invoke(Interlocked.Increment(ref completed), jobs.Count);
-
-                        // The scenario's last claiming age to finish completes the scenario
-                        if (Interlocked.Decrement(ref agesLeft[job.Scenario.Id].Value) == 0)
-                        {
-                            var optimum = ScenarioOptimumFor(inputs, job.Scenario, ages.Select(age => byJob[(job.Scenario.Id, age)]).ToList(), paths);
-                            optima[job.Scenario.Id] = optimum;
-                            listener?.ScenarioDone?.Invoke(optimum);
-                        }
+                        int age = ages[i];
+                        var start = template.Birthdate.AddYears(age);
+                        double monthly = curve.MonthlyBenefitAtAge(age);
+                        byAge[i] = BestCandidate(inputs, age, start, monthly, candidates, paths, cancellationToken);
+                        listener?.ClaimingAgeDone?.Invoke(Interlocked.Increment(ref completed), ages.Count);
                     });
             }
             catch (AggregateException e) when (cancellationToken.IsCancellationRequested
@@ -83,42 +70,40 @@ namespace MonteCarloSimulation.Optimizer
                 throw new OperationCanceledException(cancellationToken);
             }
 
-            var scenarios = inputs.Scenarios.Select(scenario => optima[scenario.Id]).ToList();
-            return new OptimizationResult(scenarios, BenefitByAge(curve), inputs.Paths);
+            return new OptimizationResult(OptimumFor(inputs, byAge, paths), BenefitByAge(curve), inputs.Paths);
         }
 
-        // One scenario's recommendation from its claiming ages: the highest midpoint spend (ties go to the earlier
-        // age), re-simulated on every path to report the share that really survives at that spend.
-        private static ScenarioOptimum ScenarioOptimumFor(
-            OptimizationInputs inputs, InvestmentScenario scenario, IReadOnlyList<ClaimingAgeResult> claimingAges, double[][] paths)
+        // The recommendation from the claiming ages: the highest midpoint spend (ties go to the earlier age),
+        // re-simulated on every path to report the share that really survives at that spend.
+        private static SpendOptimum OptimumFor(OptimizationInputs inputs, IReadOnlyList<ClaimingAgeResult> claimingAges, double[][] paths)
         {
             var recommended = claimingAges[0];
             foreach (var candidate in claimingAges.Skip(1))
                 if (candidate.SpendAtMidpoint > recommended.SpendAtMidpoint) recommended = candidate;
 
-            var check = new PathSimulator(inputs.Template, scenario, recommended.StartDate, recommended.MonthlyBenefit,
+            var check = new PathSimulator(inputs.Template, recommended.StartDate, recommended.MonthlyBenefit,
                 recommended.WithdrawalStrategy, recommended.RothConversionTarget, paths);
             int survivors = Enumerable.Range(0, inputs.Paths).Count(path => check.Survives(recommended.SpendAtMidpoint, path));
 
-            return new ScenarioOptimum(scenario.Id, scenario.Description, recommended, (double)survivors / inputs.Paths, claimingAges);
+            return new SpendOptimum(recommended, (double)survivors / inputs.Paths, claimingAges);
         }
 
         // How many screened candidates get a full break-even search besides the first.
         internal const int Finalists = 2;
 
-        // The candidate with the highest midpoint spend for one scenario and claiming age. A full break-even search
+        // The candidate with the highest midpoint spend for one claiming age. A full break-even search
         // for all 8 candidates would take ~4x today's time, so it's two-stage: the first candidate (Tax-optimized,
         // the 12% line) is searched in full, and its midpoint spend becomes the probe; every other candidate is
         // screened with one run per path at that spend (survivors, then after-tax money left); the top Finalists
         // are searched in full, warm-started from the first candidate's break-evens on the same paths.
         private static ClaimingAgeResult BestCandidate(
-            OptimizationInputs inputs, InvestmentScenario scenario, int age, DateOnly start, double monthly,
+            OptimizationInputs inputs, int age, DateOnly start, double monthly,
             IReadOnlyList<(WithdrawalStrategy Order, RothConversionTarget Target)> candidates, double[][] paths,
             CancellationToken cancellationToken)
         {
             ClaimingAgeResult FullSearch((WithdrawalStrategy Order, RothConversionTarget Target) c, double[]? hints, out double[] breakEvens)
             {
-                var simulator = new PathSimulator(inputs.Template, scenario, start, monthly, c.Order, c.Target, paths);
+                var simulator = new PathSimulator(inputs.Template, start, monthly, c.Order, c.Target, paths);
                 breakEvens = new double[inputs.Paths];
                 for (int path = 0; path < inputs.Paths; path++)
                 {
@@ -142,7 +127,7 @@ namespace MonteCarloSimulation.Optimizer
             var finalists = candidates.Skip(1)
                 .Select(c =>
                 {
-                    var simulator = new PathSimulator(inputs.Template, scenario, start, monthly, c.Order, c.Target, paths);
+                    var simulator = new PathSimulator(inputs.Template, start, monthly, c.Order, c.Target, paths);
                     int survivors = 0;
                     double afterTaxLeft = 0;
                     for (int path = 0; path < inputs.Paths; path++)

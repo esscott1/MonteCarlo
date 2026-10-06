@@ -7,96 +7,10 @@ const results = document.getElementById('results');
 let view = null;
 let handoff = null;
 
-// An investment scenario's description, from the server in English; in Spanish, the translation for its id
-function scenarioText(id, field, english) {
-    return I18n.language === 'es' ? t(`scenario.${id}.${field}`) : english;
-}
-
-// The inputs tile's tabs: click or arrow keys to switch, the choice remembered for the next visit
-const TAB_KEY = 'runnerTab';
-
-function selectTab(tab, focus) {
-    form.querySelectorAll('[role="tab"]').forEach((other) => {
-        const selected = other === tab;
-        other.setAttribute('aria-selected', String(selected));
-        other.tabIndex = selected ? 0 : -1;
-        document.getElementById(other.getAttribute('aria-controls')).hidden = !selected;
-    });
-    if (focus) tab.focus();
-    try { localStorage.setItem(TAB_KEY, tab.id); } catch { }
-}
-
-function initTabs() {
-    const tabs = [...form.querySelectorAll('[role="tab"]')];
-    tabs.forEach((tab, i) => {
-        tab.addEventListener('click', () => selectTab(tab, false));
-        tab.addEventListener('keydown', (e) => {
-            const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
-            if (next === undefined) return;
-            e.preventDefault();
-            selectTab(tabs[(next + tabs.length) % tabs.length], true);
-        });
-    });
-
-    let saved = null;
-    try { saved = localStorage.getItem(TAB_KEY); } catch { }
-    const remembered = tabs.find((tab) => tab.id === saved);
-    if (remembered) selectTab(remembered, false);
-
-    // A field that fails validation on a hidden tab can't show its message, so open the tab of the first one
-    let opened = false;
-    form.addEventListener('invalid', (e) => {
-        if (opened) return;
-        opened = true;
-        setTimeout(() => { opened = false; });
-        const panel = e.target.closest('[role="tabpanel"]');
-        if (panel?.hidden) selectTab(document.getElementById(panel.getAttribute('aria-labelledby')), false);
-    }, true);
-}
-
-// The asset mix, as entered (percentages) and as the API takes it (fractions)
-const ALLOCATIONS = ['stockAllocation', 'bondAllocation', 'cashAllocation'];
-
-function percentField(name) {
-    return Number(form.elements[name].value);
-}
-
-function formatAllocation(percent) {
-    return `${Number(percent.toFixed(2))}%`;
-}
-
-// The allocation must total 100%: say so on the total line, flag the Asset Classes tab, and block Run until it does.
-// While it does, show what the mix blends to.
-function updateAllocation() {
-    const values = ALLOCATIONS.map(percentField);
-    const total = values.reduce((a, b) => a + b, 0);
-    const valid = values.every(Number.isFinite) && Math.abs(total - 100) < 0.005;
-    const message = valid ? '' : t('runner.allocation.mustTotal', { total: formatAllocation(total) });
-    ALLOCATIONS.forEach((name) => form.elements[name].setCustomValidity(message));
-
-    const totalLine = document.getElementById('allocation-total');
-    totalLine.textContent = valid ? t('runner.allocation.total', { total: formatAllocation(total) }) : message;
-    totalLine.classList.toggle('invalid', !valid);
-    document.getElementById('tab-assets').classList.toggle('has-error', !valid);
-
-    const blended = document.getElementById('blended-line');
-    const [stocks, bonds, cash] = values.map((v) => v / 100);
-    const rho = percentField('stockBondCorrelation');
-    const s = stocks * percentField('stockStdDev') / 100;
-    const b = bonds * percentField('bondStdDev') / 100;
-    const c = cash * percentField('cashStdDev') / 100;
-    const mean = (stocks * percentField('stockReturn') + bonds * percentField('bondReturn') + cash * percentField('cashReturn')) / 100;
-    const stdDev = Math.sqrt(s * s + b * b + c * c + 2 * rho * s * b);
-    blended.textContent = valid && Number.isFinite(mean) && Number.isFinite(stdDev)
-        ? t('runner.allocation.blended', { mean: formatPercent(mean), stdDev: formatPercent(stdDev) })
-        : '';
-}
-
-function initAllocation() {
-    form.querySelectorAll('#panel-assets input').forEach((input) => input.addEventListener('input', updateAllocation));
-    // Once the page's text has loaded, so the lines never show untranslated keys
-    I18n.ready.then(updateAllocation);
-}
+// The inputs tile's shared code (tabs, money fields, the Asset Classes table, balance totals) is in inputs.js
+const { parseNumber, formatWithCommas, formatAllocation } = Inputs;
+const updateAllocation = () => Inputs.updateAllocation(form);
+const updateBalanceTotals = () => Inputs.updateBalanceTotals(form);
 
 function formatCurrency(value) {
     return Number(value).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -106,94 +20,6 @@ function formatPercent(value) {
     return (Number(value) * 100).toFixed(2) + '%';
 }
 
-function parseNumber(value) {
-    const stripped = String(value).replace(/,/g, '');
-    return stripped === '' ? NaN : Number(stripped);
-}
-
-function formatWithCommas(value) {
-    const num = parseNumber(value);
-    return Number.isNaN(num) ? String(value) : num.toLocaleString('en-US', { maximumFractionDigits: 2 });
-}
-
-function countDigits(str) {
-    return (str.match(/[0-9]/g) || []).length;
-}
-
-// Reformats a money input with thousands separators as the user types, keeping
-// the cursor sitting after the same digit it followed before reformatting.
-// Tracks which side of the decimal point the cursor is on, since a plain
-// digit-count-before-cursor can't tell "just before the dot" apart from
-// "just after it" and would otherwise misplace the next typed character.
-function formatMoneyInputLive(input) {
-    const value = input.value;
-    const cursorPos = input.selectionStart ?? value.length;
-
-    const dotIndexOriginal = value.indexOf('.');
-    const cursorInDecimal = dotIndexOriginal !== -1 && cursorPos > dotIndexOriginal;
-    const digitsBeforeCursor = cursorInDecimal
-        ? countDigits(value.slice(dotIndexOriginal + 1, cursorPos))
-        : countDigits(value.slice(0, cursorPos));
-
-    let raw = value.replace(/[^0-9.]/g, '');
-    const firstDot = raw.indexOf('.');
-    if (firstDot !== -1) {
-        raw = raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, '');
-    }
-
-    const hasDot = raw.includes('.');
-    const [intPart, decPart] = raw.split('.');
-    const formattedInt = intPart ? Number(intPart).toLocaleString('en-US') : '';
-    const formatted = hasDot ? `${formattedInt}.${decPart ?? ''}` : formattedInt;
-
-    input.value = formatted;
-
-    let newPos;
-    if (cursorInDecimal) {
-        const dotIndexFormatted = formatted.indexOf('.');
-        newPos = dotIndexFormatted + 1 + digitsBeforeCursor;
-    } else {
-        let seen = 0;
-        newPos = formatted.length;
-        for (let i = 0; i < formatted.length; i++) {
-            if (formatted[i] === '.') break;
-            if (/[0-9]/.test(formatted[i])) {
-                seen++;
-                if (seen === digitsBeforeCursor) {
-                    newPos = i + 1;
-                    break;
-                }
-            }
-        }
-        if (digitsBeforeCursor === 0) newPos = 0;
-    }
-    input.setSelectionRange(newPos, newPos);
-}
-
-function initMoneyInputs() {
-    document.querySelectorAll('.money-input').forEach((input) => {
-        input.addEventListener('keyup', () => formatMoneyInputLive(input));
-        input.addEventListener('blur', () => {
-            input.value = formatWithCommas(input.value);
-        });
-    });
-}
-
-function updateBalanceTotals() {
-    const taxDeferred = parseNumber(form.elements['initialTaxableBalance'].value) || 0;
-    const rothBasis = parseNumber(form.elements['initialRothBasis'].value) || 0;
-    const rothGain = parseNumber(form.elements['initialRothUnrealizedGain'].value) || 0;
-    const basis = parseNumber(form.elements['initialBrokerageBasis'].value) || 0;
-    const gain = parseNumber(form.elements['initialBrokerageUnrealizedGain'].value) || 0;
-
-    document.getElementById('roth-total').textContent = t('runner.totalRoth', { amount: formatCurrency(rothBasis + rothGain) });
-    document.getElementById('brokerage-total').textContent = t('runner.totalBrokerage', { amount: formatCurrency(basis + gain) });
-    document.getElementById('grand-total').textContent =
-        t('runner.totalMoney', { amount: formatCurrency(taxDeferred + rothBasis + rothGain + basis + gain) });
-}
-
-// A required input hidden inside the collapsed section can't show its validation message,
-// so expand the section whenever any field fails validation on submit.
 // Adds whole years to a yyyy-mm-dd date, clamping Feb 29 to Feb 28 in non-leap years (like DateOnly.AddYears).
 function addYears(isoDate, years) {
     const [y, m, d] = isoDate.split('-').map(Number);
@@ -215,18 +41,6 @@ function initSocialSecurityDefault() {
     birthdate.addEventListener('input', followBirthdate);
     birthdate.addEventListener('change', followBirthdate);
     followBirthdate();
-}
-
-function initCollapsibleInputs() {
-    const section = document.getElementById('inputs-section');
-    form.addEventListener('invalid', () => { section.open = true; }, true);
-}
-
-function initBalanceTotals() {
-    ['initialTaxableBalance', 'initialRothBasis', 'initialRothUnrealizedGain', 'initialBrokerageBasis', 'initialBrokerageUnrealizedGain']
-        .forEach((name) => form.elements[name].addEventListener('input', updateBalanceTotals));
-    // Once the page's text has loaded, so the totals never show untranslated keys
-    I18n.ready.then(updateBalanceTotals);
 }
 
 // User-supplied text is echoed back into the change-request result panel, so it has to be
@@ -739,17 +553,7 @@ form.addEventListener('submit', async (e) => {
         socialSecurityMonthlyAmount: parseNumber(formData.get('socialSecurityMonthlyAmount')),
         annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction')),
         enableRothConversions: form.elements['enableRothConversions'].checked,
-        // Entered as percentages; the API takes fractions. The correlation is already -1 to 1.
-        stockAllocation: percentField('stockAllocation') / 100,
-        bondAllocation: percentField('bondAllocation') / 100,
-        cashAllocation: percentField('cashAllocation') / 100,
-        stockReturn: percentField('stockReturn') / 100,
-        stockStdDev: percentField('stockStdDev') / 100,
-        bondReturn: percentField('bondReturn') / 100,
-        bondStdDev: percentField('bondStdDev') / 100,
-        cashReturn: percentField('cashReturn') / 100,
-        cashStdDev: percentField('cashStdDev') / 100,
-        stockBondCorrelation: percentField('stockBondCorrelation')
+        ...Inputs.readAssetMix(form)
     };
 
     view = { kind: 'loading' };
@@ -818,8 +622,8 @@ function initChart() {
     document.getElementById('inputs-section').addEventListener('toggle', (e) => { if (e.target.open) renderChart(); });
 }
 
-// "Run in Scenario runner" on the Optimal page: it leaves one scenario's recommendation and the inputs behind it in
-// sessionStorage. Read it once (so a reload doesn't re-run), fill the form, explain where the values came from, and run.
+// "Run in Scenario runner" on the Optimal page: it leaves its recommendation and the inputs behind it (the asset mix
+// included) in sessionStorage. Read it once (so a reload doesn't re-run), fill the form, explain where the values came from, and run.
 const SIMULATOR_HANDOFF_KEY = 'simulatorHandoff';
 
 function readSimulatorHandoff() {
@@ -827,27 +631,15 @@ function readSimulatorHandoff() {
         const raw = sessionStorage.getItem(SIMULATOR_HANDOFF_KEY);
         sessionStorage.removeItem(SIMULATOR_HANDOFF_KEY);
         const handoff = raw ? JSON.parse(raw) : null;
-        return handoff && handoff.version === 1 ? handoff : null;
+        return handoff && handoff.version === 2 ? handoff : null;
     } catch {
         return null;
     }
 }
 
-// The Optimal page ran one preset (a single return and std. dev. for the whole portfolio), so the Asset Classes tab is
-// set to 100% stocks at that preset's numbers: the same market.
-async function presetScenario(id) {
-    try {
-        const response = await fetch('/api/scenarios');
-        return (await response.json()).find((s) => s.id === id) ?? null;
-    } catch {
-        return null;
-    }
-}
-
-async function applySimulatorHandoff() {
+function applySimulatorHandoff() {
     const h = readSimulatorHandoff();
     if (!h) return;
-    const preset = await presetScenario(h.scenarioId);
 
     const set = (name, value) => { form.elements[name].value = value; };
     const setMoney = (name, value) => set(name, formatWithCommas(String(value)));
@@ -867,15 +659,10 @@ async function applySimulatorHandoff() {
         .forEach((name) => setMoney(name, h[name]));
     set('yearNewMoney', h.yearNewMoney);
     form.elements['enableRothConversions'].checked = h.enableRothConversions;
-    if (preset) {
-        [['stockAllocation', 100], ['bondAllocation', 0], ['cashAllocation', 0],
-            ['stockReturn', preset.mean * 100], ['stockStdDev', preset.stdDev * 100]]
-            .forEach(([name, value]) => set(name, String(Number(value.toFixed(4)))));
-    }
+    Inputs.setAssetMix(form, h.assetMix);
     updateBalanceTotals();
-    updateAllocation();
 
-    handoff = { ...h, investmentsFromPreset: preset !== null };
+    handoff = h;
     renderHandoffNote();
     form.requestSubmit();
     document.getElementById('handoff-note').scrollIntoView({ block: 'start' });
@@ -887,11 +674,10 @@ function renderHandoffNote() {
     results.insertAdjacentHTML('beforebegin', `
         <div id="handoff-note" class="handoff-note">
             ${t('runner.handoff', {
-                scenario: escapeHtml(scenarioText(handoff.scenarioId, 'description', handoff.scenarioDescription)),
                 age: handoff.recommendedAge,
                 amount: formatCurrency(handoff.withdrawalMonthly),
                 iterations: handoff.iterations,
-            })}${handoff.investmentsFromPreset ? ` ${t('runner.handoff.investments')}` : ''}
+            })}
         </div>`);
 }
 
@@ -905,13 +691,13 @@ document.addEventListener('i18n:change', () => {
 });
 
 I18n.ready.then(applySimulatorHandoff);
-initTabs();
-initAllocation();
+Inputs.initTabs(form, 'runnerTab');
+Inputs.initAllocation(form);
 initChart();
-initMoneyInputs();
-initBalanceTotals();
+Inputs.initMoneyInputs();
+Inputs.initBalanceTotals(form);
 initSocialSecurityDefault();
-initCollapsibleInputs();
+Inputs.initCollapsibleInputs(form);
 initRunToggles();
 initFootnotes();
 initEditFlyout();

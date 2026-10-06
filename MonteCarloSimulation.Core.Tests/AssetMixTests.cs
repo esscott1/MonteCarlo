@@ -118,5 +118,18 @@ namespace MonteCarloSimulation.Core.Tests
             var parameters = Parameters(null, 0.0807, 0.1915);
             Assert.Equal(RunSimulator.SeededReturns(0.0807, 0.1915, 30, 40), RunSimulator.SeededReturns(parameters, 30, 40));
         }
+
+        // The Optimizer draws a single path on demand; it must be that path of the full set, with or without a mix
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void SeededReturns_ForSomePaths_MatchThoseOfTheFullSet(bool mix)
+        {
+            var parameters = Parameters(mix ? Defaults() : null, 0.0807, 0.1915);
+            var all = RunSimulator.SeededReturns(parameters, 30, 25);
+
+            Assert.Equal(all[17], RunSimulator.SeededReturns(parameters, 30, 17, 1)[0]);
+            Assert.Equal(all[5..9], RunSimulator.SeededReturns(parameters, 30, 5, 4));
+        }
     }
 }

@@ -11,28 +11,38 @@ using MonteCarloSimulation.Optimizer;
 namespace MonteCarloSimulation.Web.Tests
 {
     // POST /api/optimal's contract: invalid input is a 400 with field errors, as before; valid input streams
-    // newline-delimited JSON - start, a progress event per claiming age, each scenario once, then done - and the
-    // streamed scenarios are exactly what SpendingOptimizer.Optimize computes for the same inputs.
+    // newline-delimited JSON - start, a progress event per claiming age, the result, then done - and the streamed
+    // result is exactly what SpendingOptimizer.Optimize computes for the same inputs.
     public class OptimalEndpointTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
     {
-        // The Optimal page's default inputs
+        // The Optimal page's default inputs, its default asset mix included
         private static OptimalRequest DefaultRequest() => new()
         {
-            Years = 30,
-            Birthdate = new DateOnly(1970, 1, 1),
+            Years = 40,
+            Birthdate = new DateOnly(1969, 7, 7),
             RetirementDate = new DateOnly(2027, 1, 1),
-            InitialTaxableBalance = 950_000,
+            InitialTaxableBalance = 1_000_000,
             InitialRothBasis = 15_000,
             InitialRothUnrealizedGain = 5_000,
-            InitialBrokerageBasis = 200_000,
-            InitialBrokerageUnrealizedGain = 200_000,
+            InitialBrokerageBasis = 100_000,
+            InitialBrokerageUnrealizedGain = 300_000,
             NewMoney = 1_000_000,
             YearNewMoney = 10,
             SocialSecurityAt62 = 2_750,
             SocialSecurityAt67 = 3_900,
             SocialSecurityAt70 = 4_800,
             AnnualStandardDeduction = 16_000,
-            EnableRothConversions = true
+            EnableRothConversions = true,
+            StockAllocation = 0.6,
+            BondAllocation = 0.3,
+            CashAllocation = 0.1,
+            StockReturn = 0.08,
+            StockStdDev = 0.19,
+            BondReturn = 0.045,
+            BondStdDev = 0.04,
+            CashReturn = 0.035,
+            CashStdDev = 0.01,
+            StockBondCorrelation = 0.1
         };
 
         private JsonSerializerOptions AppJsonOptions => factory.Services.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions;
@@ -58,11 +68,39 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.True(errors.TryGetProperty("socialSecurity", out _));
         }
 
+        [Fact]
+        public async Task AnAssetMixThatDoesNotTotal100Percent_OrABadCorrelation_IsA400()
+        {
+            var request = DefaultRequest();
+            request.CashAllocation = 0.2;
+            request.StockBondCorrelation = 1.5;
+
+            using var response = await PostAsync(request);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var errors = body.RootElement.GetProperty("errors");
+            Assert.Equal("Allocations must total 100%.", errors.GetProperty("stockAllocation")[0].GetString());
+            Assert.True(errors.TryGetProperty("stockBondCorrelation", out _));
+        }
+
+        [Fact]
+        public void TheMix_IsTheMarketTheOptimizerRuns()
+        {
+            var template = DefaultRequest().ToInputs().Template;
+
+            Assert.NotNull(template.AssetMix);
+            Assert.Equal(0.6, template.AssetMix!.StockWeight);
+            Assert.Equal(template.AssetMix.ExpectedReturn, template.Mean);
+            Assert.Equal(template.AssetMix.StdDev, template.StdDev);
+            Assert.Equal("60% stocks / 30% bonds / 10% cash", template.ScenarioDescription);
+        }
+
         // Null: the request leaves Paths out, which runs the default 500
         [Theory]
         [InlineData(null)]
         [InlineData(167)]
-        public async Task ValidRequest_StreamsStartProgressEachScenarioAndDone_MatchingTheOptimizer(int? paths)
+        public async Task ValidRequest_StreamsStartProgressTheResultAndDone_MatchingTheOptimizer(int? paths)
         {
             var request = DefaultRequest();
             request.Paths = paths;
@@ -75,37 +113,32 @@ namespace MonteCarloSimulation.Web.Tests
             var events = lines.Select(line => JsonDocument.Parse(line).RootElement).ToList();
             string TypeOf(JsonElement e) => e.GetProperty("type").GetString()!;
 
-            // start first, done last, nothing else but progress and scenarios between
+            // start first, done last, the progress events and then the result between
             Assert.Equal("start", TypeOf(events[0]));
             Assert.Equal("done", TypeOf(events[^1]));
-            Assert.All(events.Skip(1).SkipLast(1), e => Assert.Contains(TypeOf(e), new[] { "progress", "scenario" }));
+            Assert.Equal("result", TypeOf(events[^2]));
+            Assert.All(events.Skip(1).SkipLast(2), e => Assert.Equal("progress", TypeOf(e)));
 
             var inputs = request.ToInputs();
             Assert.Equal(paths ?? SpendingOptimizer.DefaultPaths, inputs.Paths);
-            int total = inputs.Scenarios.Count * SpendingOptimizer.ClaimingAges.Count;
+            int total = SpendingOptimizer.ClaimingAges.Count;
             var start = events[0];
             Assert.Equal(inputs.Paths, start.GetProperty("paths").GetInt32());
             Assert.Equal(total, start.GetProperty("totalClaimingAges").GetInt32());
-            Assert.Equal(inputs.Scenarios.Select(s => s.Id), start.GetProperty("scenarios").EnumerateArray().Select(s => s.GetProperty("scenarioId").GetInt32()));
 
             // One progress event per claiming age, each count once (worker threads may report slightly out of order)
             var progress = events.Where(e => TypeOf(e) == "progress").ToList();
             Assert.Equal(Enumerable.Range(1, total), progress.Select(p => p.GetProperty("completed").GetInt32()).Order());
             Assert.All(progress, p => Assert.Equal(total, p.GetProperty("total").GetInt32()));
 
-            // Each scenario once, serialized exactly as the optimizer's own result would be
+            // The result once, serialized exactly as the optimizer's own would be
             var expected = SpendingOptimizer.Optimize(inputs);
-            var streamed = events.Where(e => TypeOf(e) == "scenario").Select(e => e.GetProperty("scenario")).ToList();
-            Assert.Equal(expected.Scenarios.Count, streamed.Count);
-            foreach (var scenario in expected.Scenarios)
-            {
-                var match = Assert.Single(streamed, s => s.GetProperty("scenarioId").GetInt32() == scenario.ScenarioId);
-                Assert.Equal(JsonSerializer.Serialize(scenario, AppJsonOptions), match.GetRawText());
-            }
+            var streamed = events[^2].GetProperty("optimum");
+            Assert.Equal(JsonSerializer.Serialize(expected.Optimum, AppJsonOptions), streamed.GetRawText());
             Assert.Equal(JsonSerializer.Serialize(expected.BenefitByAge, AppJsonOptions), start.GetProperty("benefitByAge").GetRawText());
 
             // Enums travel as names, which optimal.js looks up
-            Assert.Equal(JsonValueKind.String, streamed[0].GetProperty("recommended").GetProperty("withdrawalStrategy").ValueKind);
+            Assert.Equal(JsonValueKind.String, streamed.GetProperty("recommended").GetProperty("withdrawalStrategy").ValueKind);
         }
 
         // --- Choosing how many market paths to simulate ---

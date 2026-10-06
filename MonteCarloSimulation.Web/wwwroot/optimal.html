@@ -9,7 +9,7 @@
     <style>html.i18n-pending body { visibility: hidden; }</style>
     <script>try { if (localStorage.getItem('lang') === 'es') document.documentElement.classList.add('i18n-pending'); } catch { }</script>
 </head>
-<body>
+<body class="wide">
     <div class="page-header">
         <a href="/" class="icon-button" aria-label="Back to home" data-i18n-aria-label="nav.backHome">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -25,100 +25,169 @@
     <p class="page-intro" data-i18n="optimal.intro">How much can you spend each month and still have the money last in 80&ndash;85% of simulated markets &mdash; and when should you start Social Security? Spending is shown per month in today's dollars, inflated each year; balances are as of your retirement date.</p>
 
     <form id="optimal-form">
-        <div class="field-grid">
-            <div class="subgroup-row">
-                <fieldset class="subgroup">
-                    <legend data-i18n="form.scenario">Scenario</legend>
+        <details id="inputs-section" class="inputs-section" open>
+        <summary data-i18n="runner.yourInputs">Your inputs</summary>
+        <div class="inputs-layout">
+            <div class="tabs-tile">
+                <div class="tab-list" role="tablist" aria-label="Your inputs" data-i18n-aria-label="runner.tabs.label">
+                    <button type="button" role="tab" id="tab-demographics" aria-controls="panel-demographics" aria-selected="true" data-i18n="runner.tab.demographics">Demographics</button>
+                    <button type="button" role="tab" id="tab-assets" aria-controls="panel-assets" aria-selected="false" tabindex="-1" data-i18n="runner.tab.assets">Asset Classes</button>
+                    <button type="button" role="tab" id="tab-money" aria-controls="panel-money" aria-selected="false" tabindex="-1" data-i18n="runner.tab.money">Your Money</button>
+                    <button type="button" role="tab" id="tab-income" aria-controls="panel-income" aria-selected="false" tabindex="-1" data-i18n="runner.tab.income">Other Income</button>
+                </div>
+
+                <div class="tab-panel field-grid" role="tabpanel" id="panel-demographics" aria-labelledby="tab-demographics">
                     <label><span data-i18n="form.retireOn">Retire On Date</span>
                         <input type="date" name="retirementDate" value="2027-01-01" required>
-                    </label>
-                    <label><span data-i18n="form.yearsLast">Years money lasts</span>
-                        <input type="number" name="years" min="1" max="100" step="1" value="40" style="width: calc(3ch + 1.6rem)" required>
                     </label>
                     <label><span data-i18n="form.birthdate">Birthdate</span>
                         <input type="date" name="birthdate" value="1969-07-07" required>
                     </label>
-                </fieldset>
-                <fieldset class="subgroup">
-                    <legend data-i18n="optimal.ssLegend">Social Security (monthly, today's $)</legend>
-                    <label><span data-i18n="optimal.atAge62">At age 62</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt62" pattern="[0-9,]*\.?[0-9]*" value="2,750" style="width: calc(16ch + 1rem)" required>
+                    <label><span data-i18n="runner.horizon">Horizon (years)</span>
+                        <input type="number" name="years" min="1" max="100" step="1" value="40" style="width: calc(3ch + 1.6rem)" required>
                     </label>
-                    <label><span data-i18n="optimal.atAge67">At age 67</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt67" pattern="[0-9,]*\.?[0-9]*" value="3,900" style="width: calc(16ch + 1rem)" required>
-                    </label>
-                    <label><span data-i18n="optimal.atAge70">At age 70</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt70" pattern="[0-9,]*\.?[0-9]*" value="4,800" style="width: calc(16ch + 1rem)" required>
-                    </label>
-                    <label><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" style="width: calc(16ch + 1rem)" required>
-                    </label>
-                </fieldset>
-                <fieldset class="subgroup">
-                    <legend data-i18n="form.taxDeferred">Tax Deferred Accts</legend>
-                    <label><span data-i18n="form.balance">Balance</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="enableRothConversions" checked>
-                        <span data-i18n="form.allowRoth">Allow Roth conversions</span>
-                    </label>
-                </fieldset>
+                </div>
+
+                <div class="tab-panel field-grid" role="tabpanel" id="panel-assets" aria-labelledby="tab-assets" hidden>
+                    <fieldset class="subgroup">
+                        <legend data-i18n="runner.returnsLegend">Ann Returns and Allocations</legend>
+                        <table class="asset-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col" data-i18n="runner.assetClass">Asset class</th>
+                                    <th scope="col" class="alloc" data-i18n="runner.allocationPercent">Allocation %</th>
+                                    <th class="gap" aria-hidden="true"></th>
+                                    <th scope="col" class="ret ret-first" data-i18n="runner.returnPercent">Return %</th>
+                                    <th scope="col" class="ret ret-last" data-i18n="runner.stdDevPercent">Std. dev. %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <th scope="row" data-i18n="runner.stocks">Stocks</th>
+                                    <td class="alloc"><input type="number" class="percent-input" name="stockAllocation" min="0" max="100" step="any" value="60" aria-label="Stocks allocation %" data-i18n-aria-label="runner.stocksAllocationLabel" required></td>
+                                    <td class="gap"></td>
+                                    <td class="ret ret-first"><input type="number" class="percent-input" name="stockReturn" min="-100" max="100" step="any" value="8" aria-label="Stocks return %" data-i18n-aria-label="runner.stocksReturnLabel" required></td>
+                                    <td class="ret ret-last"><input type="number" class="percent-input" name="stockStdDev" min="0" max="100" step="any" value="19" aria-label="Stocks std. dev. %" data-i18n-aria-label="runner.stocksStdDevLabel" required></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" data-i18n="runner.bonds">Bonds</th>
+                                    <td class="alloc"><input type="number" class="percent-input" name="bondAllocation" min="0" max="100" step="any" value="30" aria-label="Bonds allocation %" data-i18n-aria-label="runner.bondsAllocationLabel" required></td>
+                                    <td class="gap"></td>
+                                    <td class="ret ret-first"><input type="number" class="percent-input" name="bondReturn" min="-100" max="100" step="any" value="4.5" aria-label="Bonds return %" data-i18n-aria-label="runner.bondsReturnLabel" required></td>
+                                    <td class="ret ret-last"><input type="number" class="percent-input" name="bondStdDev" min="0" max="100" step="any" value="4" aria-label="Bonds std. dev. %" data-i18n-aria-label="runner.bondsStdDevLabel" required></td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" data-i18n="runner.cash">Cash</th>
+                                    <td class="alloc"><input type="number" class="percent-input" name="cashAllocation" min="0" max="100" step="any" value="10" aria-label="Cash allocation %" data-i18n-aria-label="runner.cashAllocationLabel" required></td>
+                                    <td class="gap"></td>
+                                    <td class="ret ret-first"><input type="number" class="percent-input" name="cashReturn" min="-100" max="100" step="any" value="3.5" aria-label="Cash return %" data-i18n-aria-label="runner.cashReturnLabel" required></td>
+                                    <td class="ret ret-last"><input type="number" class="percent-input" name="cashStdDev" min="0" max="100" step="any" value="1" aria-label="Cash std. dev. %" data-i18n-aria-label="runner.cashStdDevLabel" required></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="total-line" id="allocation-total" aria-live="polite">Total = 100%</p>
+                        <label><span data-i18n="runner.correlation">Stock&ndash;bond correlation</span>
+                            <input type="number" class="percent-input" name="stockBondCorrelation" min="-1" max="1" step="any" value="0.1" data-i18n-title="runner.correlationTitle" title="How closely stock and bond returns move together, from -1 (opposite) to 1 (in step). Cash moves on its own." required>
+                        </label>
+                        <p class="total-line" id="blended-line">Blended: 6.50% expected return, 11.58% std. dev.</p>
+                    </fieldset>
+                </div>
+
+                <div class="tab-panel field-grid" role="tabpanel" id="panel-money" aria-labelledby="tab-money" hidden>
+                    <fieldset class="subgroup">
+                        <legend data-i18n="form.taxDeferred">Tax Deferred Accts</legend>
+                        <label><span data-i18n="form.balance">Balance</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="enableRothConversions" checked>
+                            <span data-i18n="form.allowRoth">Allow Roth conversions</span>
+                        </label>
+                    </fieldset>
+                    <fieldset class="subgroup">
+                        <legend data-i18n="form.roth">Roth Accts</legend>
+                        <label><span data-i18n="form.basis">Basis</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialRothBasis" pattern="[0-9,]*\.?[0-9]*" value="15,000" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialRothUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="5,000" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <p class="total-line" id="roth-total">Total Roth = $20,000</p>
+                    </fieldset>
+                    <fieldset class="subgroup">
+                        <legend data-i18n="form.brokerage">Brokerage Accts</legend>
+                        <label><span data-i18n="form.basis">Basis</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageBasis" pattern="[0-9,]*\.?[0-9]*" value="100,000" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="300,000" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <p class="total-line" id="brokerage-total">Total Brokerage = $400,000</p>
+                    </fieldset>
+                    <p class="total-line" id="grand-total">Total money = $1,420,000</p>
+                </div>
+
+                <div class="tab-panel field-grid" role="tabpanel" id="panel-income" aria-labelledby="tab-income" hidden>
+                    <fieldset class="subgroup">
+                        <legend data-i18n="optimal.ssLegend">Social Security (monthly, today's $)</legend>
+                        <label><span data-i18n="optimal.atAge62">At age 62</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt62" pattern="[0-9,]*\.?[0-9]*" value="2,750" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <label><span data-i18n="optimal.atAge67">At age 67</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt67" pattern="[0-9,]*\.?[0-9]*" value="3,900" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <label><span data-i18n="optimal.atAge70">At age 70</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt70" pattern="[0-9,]*\.?[0-9]*" value="4,800" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <label><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                    </fieldset>
+                    <fieldset class="subgroup">
+                        <legend data-i18n="form.inheritance">Inheritance</legend>
+                        <label><span data-i18n="form.newMoney">New Money</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <label><span data-i18n="optimal.whenYears">When (years after retiring)</span>
+                            <input type="number" name="yearNewMoney" min="0" step="1" value="10" style="width: calc(16ch + 1.6rem)" required>
+                        </label>
+                    </fieldset>
+                </div>
             </div>
 
-            <div class="subgroup-row">
-                <fieldset class="subgroup">
-                    <legend data-i18n="form.roth">Roth Accts</legend>
-                    <label><span data-i18n="form.basis">Basis</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="initialRothBasis" pattern="[0-9,]*\.?[0-9]*" value="15,000" style="width: calc(16ch + 1rem)" required>
-                    </label>
-                    <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="initialRothUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="5,000" style="width: calc(16ch + 1rem)" required>
-                    </label>
-                </fieldset>
-                <fieldset class="subgroup">
-                    <legend data-i18n="form.brokerage">Brokerage Accts</legend>
-                    <label><span data-i18n="form.basis">Basis</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageBasis" pattern="[0-9,]*\.?[0-9]*" value="100,000" style="width: calc(16ch + 1rem)" required>
-                    </label>
-                    <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="300,000" style="width: calc(16ch + 1rem)" required>
-                    </label>
-                </fieldset>
-                <fieldset class="subgroup">
-                    <legend data-i18n="form.inheritance">Inheritance</legend>
-                    <label><span data-i18n="form.newMoney">New Money</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
-                    </label>
-                    <label><span data-i18n="optimal.whenYears">When (years after retiring)</span>
-                        <input type="number" name="yearNewMoney" min="0" step="1" value="10" style="width: calc(16ch + 1.6rem)" required>
-                    </label>
-                </fieldset>
-                <fieldset class="subgroup">
-                    <legend data-i18n="optimal.markets">Simulated markets</legend>
-                    <label class="checkbox-label">
-                        <input type="radio" name="paths" value="500" checked>
-                        <span data-i18n="optimal.paths500">500 &mdash; most precise</span>
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="radio" name="paths" value="333">
-                        333
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="radio" name="paths" value="167">
-                        <span data-i18n="optimal.paths167">167 &mdash; fastest</span>
-                    </label>
-                    <p class="subgroup-hint" data-i18n="optimal.pathsHint">Fewer markets finish sooner but pin the 80&ndash;85% band less precisely.</p>
-                </fieldset>
-            </div>
+            <section class="graph-tile recommendation-tile" aria-labelledby="recommendation-title">
+                <h2 id="recommendation-title" class="graph-title" data-i18n="optimal.recommendation">Recommendation</h2>
+                <p class="chart-note" id="card-placeholder" data-i18n="optimal.cardPlaceholder">Choose your inputs and select Find optimal: the most you can spend each month, the best age to start Social Security, and how likely the money is to last.</p>
+                <div id="optimal-card" aria-live="polite"></div>
+            </section>
         </div>
+        </details>
 
-        <button type="submit" id="optimal-submit" data-i18n="optimal.submit">Find optimal</button>
+        <div class="submit-row">
+            <button type="submit" id="optimal-submit" data-i18n="optimal.submit">Find optimal</button>
+            <fieldset class="markets-choice">
+                <legend data-i18n="optimal.markets">Simulated markets</legend>
+                <label class="checkbox-label">
+                    <input type="radio" name="paths" value="500" checked>
+                    <span data-i18n="optimal.paths500">500 &mdash; most precise</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="radio" name="paths" value="333">
+                    333
+                </label>
+                <label class="checkbox-label">
+                    <input type="radio" name="paths" value="167">
+                    <span data-i18n="optimal.paths167">167 &mdash; fastest</span>
+                </label>
+                <p class="subgroup-hint" data-i18n="optimal.pathsHint">Fewer markets finish sooner but pin the 80&ndash;85% band less precisely.</p>
+            </fieldset>
+        </div>
     </form>
 
     <section id="optimal-results" aria-live="polite"></section>
 
     <script src="i18n.js"></script>
+    <script src="inputs.js"></script>
     <script src="optimal.js"></script>
 </body>
 </html>
