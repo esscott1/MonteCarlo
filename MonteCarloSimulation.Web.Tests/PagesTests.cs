@@ -19,8 +19,8 @@ namespace MonteCarloSimulation.Web.Tests
         {
             string html = await GetAsync("/");
 
-            Assert.Equal("Monte Carlo Portfolio Optimizer", Title(html));
-            Assert.Equal("Monte Carlo Portfolio Optimizer", Heading(html));
+            Assert.Equal("Wicks Calculator", Title(html));
+            Assert.Equal("Wicks Calculator", Heading(html));
             Assert.True(HasId(html, "optimal-form"));
 
             // The menu, in order: Scenario runner, Model Info, Observe
