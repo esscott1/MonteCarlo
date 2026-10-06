@@ -61,9 +61,9 @@ It's worth being explicit: the tool-calling/AI round trip in the change-request 
 
 ## English and Spanish
 
-The landing page, the Scenario runner and Model Info read in English or Spanish: the **Español / English** button in
-the header switches, and the choice is remembered. The site always starts in English. The Observe page and its
-passphrase box stay in English.
+The splash (home) page, the Optimizer, the Scenario runner and Model Info read in English or Spanish: the **Español /
+English** button in the header switches, and the choice is remembered. The site always starts in English. The Observe
+and Translations pages and the passphrase box stay in English.
 
 - Static page text is English in the HTML, marked `data-i18n="key"` (or `data-i18n-title`, `-placeholder`,
   `-aria-label`); text the scripts build comes from `t('key', values)` with its English in

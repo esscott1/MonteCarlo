@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MonteCarloSimulation.Web.Tests
 {
-    // The site's page layout: "/" lands on the Optimal page, titled Monte Carlo Portfolio Optimizer, whose hamburger menu
-    // leads to the Scenario runner (index.html), Model Info and Observe. The Scenario runner keeps the change-request
-    // pencil and has a back arrow home; the other sub-pages go back to "/".
+    // The site's page layout: "/" lands on the splash page, titled Retirement Portfolio Explorer, with two tiles to the
+    // Scenario runner (index.html) and the Optimizer (optimal.html), and a hamburger menu to Model Info, Translations and
+    // Observe. Every tool page has a back arrow home; the Scenario runner keeps the change-request pencil.
     public class PagesTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
     {
         private Task<string> GetAsync(string path) => factory.CreateClient().GetStringAsync(path);
@@ -15,36 +15,52 @@ namespace MonteCarloSimulation.Web.Tests
         private static bool HasId(string html, string id) => html.Contains($"id=\"{id}\"");
 
         [Fact]
-        public async Task Root_IsTheOptimalPage_WithTheMenu()
+        public async Task Root_IsTheSplashPage_WithTilesAndMenu()
         {
             string html = await GetAsync("/");
 
-            Assert.Equal("Monte Carlo Portfolio Optimizer", Title(html));
-            Assert.Equal("Monte Carlo Portfolio Optimizer", Heading(html));
-            Assert.True(HasId(html, "optimal-form"));
+            Assert.Equal("Retirement Portfolio Explorer", Title(html));
+            Assert.Equal("Retirement Portfolio Explorer", Heading(html));
 
-            // The menu, in order: Scenario runner, Model Info, Translations, Observe
+            // Two tiles into the tools
+            Assert.Matches(@"<a class=""splash-tile"" href=""index.html""", html);
+            Assert.Matches(@"<a class=""splash-tile"" href=""optimal.html""", html);
+
+            // The menu, in order: Model Info, Translations, Observe (the two tools are the tiles, not menu items)
             Assert.True(HasId(html, "hamburger-toggle"));
             Assert.True(HasId(html, "observe-flyout"));
             var menu = Regex.Match(html, @"<div id=""hamburger-menu""[^>]*>(.*?)</div>", RegexOptions.Singleline).Groups[1].Value;
             var items = Regex.Matches(menu, @"role=""menuitem""[^>]*>([^<]+)<").Select(m => m.Groups[1].Value);
-            Assert.Equal(new[] { "Scenario runner", "Model Info", "Translations", "Observe" }, items);
-            Assert.Matches(@"<a href=""index.html"" id=""scenario-runner-menu-item"" role=""menuitem""[^>]*>Scenario runner</a>", menu);
+            Assert.Equal(new[] { "Model Info", "Translations", "Observe" }, items);
 
-            // The pencil stays on the Scenario runner; this page is home, so no back arrow
+            // This page is home, so no back arrow and no change-request pencil
             Assert.False(HasId(html, "edit-toggle"));
             Assert.DoesNotContain(@"aria-label=""Back to home""", html);
 
-            // menu.js loads before optimal.js
+            // i18n.js loads before menu.js
+            int i18nScript = html.IndexOf("<script src=\"i18n.js\"></script>");
             int menuScript = html.IndexOf("<script src=\"menu.js\"></script>");
-            int optimalScript = html.IndexOf("<script src=\"optimal.js\"></script>");
-            Assert.True(menuScript >= 0 && optimalScript > menuScript);
+            Assert.True(i18nScript >= 0 && menuScript > i18nScript);
         }
 
         [Fact]
-        public async Task Root_AndOptimalHtml_ServeTheSamePage()
+        public async Task Root_AndSplashHtml_ServeTheSamePage()
         {
-            Assert.Equal(await GetAsync("/optimal.html"), await GetAsync("/"));
+            Assert.Equal(await GetAsync("/splash.html"), await GetAsync("/"));
+        }
+
+        [Fact]
+        public async Task OptimalHtml_IsTheOptimizer_WithABackArrow_AndNoMenu()
+        {
+            string html = await GetAsync("/optimal.html");
+
+            Assert.Equal("Monte Carlo Portfolio Optimizer", Heading(html));
+            Assert.True(HasId(html, "optimal-form"));
+            Assert.Matches(@"<a href=""/"" class=""icon-button"" aria-label=""Back to home""[^>]*>", html);
+
+            // The menu moved to the splash
+            Assert.False(HasId(html, "hamburger-toggle"));
+            Assert.False(HasId(html, "observe-flyout"));
         }
 
         [Fact]
@@ -113,6 +129,7 @@ namespace MonteCarloSimulation.Web.Tests
         }
 
         [Theory]
+        [InlineData("/optimal.html")]
         [InlineData("/model-info.html")]
         [InlineData("/observe.html")]
         [InlineData("/translations.html")]
@@ -127,7 +144,8 @@ namespace MonteCarloSimulation.Web.Tests
         // English/Spanish: each translated page has the language button and loads i18n.js before its own script.
         // The Observe page stays English.
         [Theory]
-        [InlineData("/", "optimal.js")]
+        [InlineData("/", "menu.js")]
+        [InlineData("/optimal.html", "optimal.js")]
         [InlineData("/index.html", "app.js")]
         [InlineData("/model-info.html", "model-info.js")]
         public async Task TranslatedPages_HaveTheLanguageButton_AndLoadI18nFirst(string path, string pageScript)

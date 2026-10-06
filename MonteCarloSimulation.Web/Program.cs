@@ -37,11 +37,12 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// The Optimal page is the landing page: "/" serves optimal.html. index.html is the Scenario runner, reached from
-// the landing page's menu; both keep their file names, so existing links still work.
+// The splash page is the home: "/" serves splash.html, which introduces the app and has tiles to the Scenario runner
+// (index.html) and the Optimizer (optimal.html), plus the menu to Model Info/Translations/Observe. Every page keeps
+// its file name, so /optimal.html and /index.html still work directly.
 var defaultFiles = new DefaultFilesOptions();
 defaultFiles.DefaultFileNames.Clear();
-defaultFiles.DefaultFileNames.Add("optimal.html");
+defaultFiles.DefaultFileNames.Add("splash.html");
 app.UseDefaultFiles(defaultFiles);
 app.UseStaticFiles();
 app.UseRateLimiter();
