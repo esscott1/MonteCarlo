@@ -86,12 +86,12 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.All(new[] { "socialSecurityMonthlyAmount", "socialSecurityStartDate", "annualStandardDeduction", "newMoney", "yearNewMoney", "enableRothConversions" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
 
-            // The investments default to 60/30/10, 0.1 correlation, and 8/19, 4.5/1, 3.5/1
+            // The investments default to 60/30/10, 0.1 correlation, and 8/19, 4.5/4, 3.5/1
             string investments = Panel("panel-investments");
             var defaults = new Dictionary<string, string>
             {
                 ["stockAllocation"] = "60", ["bondAllocation"] = "30", ["cashAllocation"] = "10", ["stockBondCorrelation"] = "0.1",
-                ["stockReturn"] = "8", ["stockStdDev"] = "19", ["bondReturn"] = "4.5", ["bondStdDev"] = "1", ["cashReturn"] = "3.5", ["cashStdDev"] = "1",
+                ["stockReturn"] = "8", ["stockStdDev"] = "19", ["bondReturn"] = "4.5", ["bondStdDev"] = "4", ["cashReturn"] = "3.5", ["cashStdDev"] = "1",
             };
             foreach (var (name, value) in defaults)
                 Assert.Matches($@"name=""{name}""[^>]*value=""{Regex.Escape(value)}""", investments);

@@ -34,7 +34,7 @@ namespace MonteCarloSimulation.Core.Tests
             {
                 StockWeight = 0.6, BondWeight = 0.3, CashWeight = 0.1,
                 StockMean = 0.08, StockStdDev = 0.19,
-                BondMean = 0.045, BondStdDev = 0.01,
+                BondMean = 0.045, BondStdDev = 0.04,
                 CashMean = 0.035, CashStdDev = 0.01,
                 StockBondCorrelation = 0.1
             };

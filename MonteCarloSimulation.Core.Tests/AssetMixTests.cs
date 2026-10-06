@@ -8,7 +8,7 @@ namespace MonteCarloSimulation.Core.Tests
         {
             StockWeight = 0.6, BondWeight = 0.3, CashWeight = 0.1,
             StockMean = 0.08, StockStdDev = 0.19,
-            BondMean = 0.045, BondStdDev = 0.01,
+            BondMean = 0.045, BondStdDev = 0.04,
             CashMean = 0.035, CashStdDev = 0.01,
             StockBondCorrelation = 0.1
         };
@@ -40,8 +40,8 @@ namespace MonteCarloSimulation.Core.Tests
         {
             var mix = Defaults();
             Assert.Equal(0.065, mix.ExpectedReturn, 12);
-            // (0.6 x 19%)^2 + (0.3 x 1%)^2 + (0.1 x 1%)^2 + 2 x 0.1 x (0.6 x 19%) x (0.3 x 1%)
-            Assert.Equal(Math.Sqrt(0.0130744), mix.StdDev, 12);
+            // (0.6 x 19%)^2 + (0.3 x 4%)^2 + (0.1 x 1%)^2 + 2 x 0.1 x (0.6 x 19%) x (0.3 x 4%)
+            Assert.Equal(Math.Sqrt(0.0134146), mix.StdDev, 12);
         }
 
         [Fact]

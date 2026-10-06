@@ -37,7 +37,7 @@ namespace MonteCarloSimulation.Web.Tests
             StockReturn = 0.08,
             StockStdDev = 0.19,
             BondReturn = 0.045,
-            BondStdDev = 0.01,
+            BondStdDev = 0.04,
             CashReturn = 0.035,
             CashStdDev = 0.01,
             StockBondCorrelation = 0.1
@@ -68,7 +68,7 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(0.6, mix.GetProperty("stockWeight").GetDouble());
             Assert.Equal(0.1, mix.GetProperty("stockBondCorrelation").GetDouble());
             Assert.Equal(0.065, parameters.GetProperty("mean").GetDouble(), 12);
-            Assert.Equal(Math.Sqrt(0.0130744), parameters.GetProperty("stdDev").GetDouble(), 12);
+            Assert.Equal(Math.Sqrt(0.0134146), parameters.GetProperty("stdDev").GetDouble(), 12);
             Assert.Equal("60% stocks / 30% bonds / 10% cash", parameters.GetProperty("scenarioDescription").GetString());
             Assert.Equal(5, body.RootElement.GetProperty("output").GetProperty("result").GetProperty("runs").GetArrayLength());
         }
