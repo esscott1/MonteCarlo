@@ -84,29 +84,33 @@
                             <thead>
                                 <tr>
                                     <th scope="col" data-i18n="runner.assetClass">Asset class</th>
-                                    <th scope="col" data-i18n="runner.allocationPercent">Allocation %</th>
-                                    <th scope="col" data-i18n="runner.returnPercent">Return %</th>
-                                    <th scope="col" data-i18n="runner.stdDevPercent">Std. dev. %</th>
+                                    <th scope="col" class="alloc" data-i18n="runner.allocationPercent">Allocation %</th>
+                                    <th class="gap" aria-hidden="true"></th>
+                                    <th scope="col" class="ret ret-first" data-i18n="runner.returnPercent">Return %</th>
+                                    <th scope="col" class="ret ret-last" data-i18n="runner.stdDevPercent">Std. dev. %</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
                                     <th scope="row" data-i18n="runner.stocks">Stocks</th>
-                                    <td><input type="number" class="percent-input" name="stockAllocation" min="0" max="100" step="any" value="60" aria-label="Stocks allocation %" data-i18n-aria-label="runner.stocksAllocationLabel" required></td>
-                                    <td><input type="number" class="percent-input" name="stockReturn" min="-100" max="100" step="any" value="8" aria-label="Stocks return %" data-i18n-aria-label="runner.stocksReturnLabel" required></td>
-                                    <td><input type="number" class="percent-input" name="stockStdDev" min="0" max="100" step="any" value="19" aria-label="Stocks std. dev. %" data-i18n-aria-label="runner.stocksStdDevLabel" required></td>
+                                    <td class="alloc"><input type="number" class="percent-input" name="stockAllocation" min="0" max="100" step="any" value="60" aria-label="Stocks allocation %" data-i18n-aria-label="runner.stocksAllocationLabel" required></td>
+                                    <td class="gap"></td>
+                                    <td class="ret ret-first"><input type="number" class="percent-input" name="stockReturn" min="-100" max="100" step="any" value="8" aria-label="Stocks return %" data-i18n-aria-label="runner.stocksReturnLabel" required></td>
+                                    <td class="ret ret-last"><input type="number" class="percent-input" name="stockStdDev" min="0" max="100" step="any" value="19" aria-label="Stocks std. dev. %" data-i18n-aria-label="runner.stocksStdDevLabel" required></td>
                                 </tr>
                                 <tr>
                                     <th scope="row" data-i18n="runner.bonds">Bonds</th>
-                                    <td><input type="number" class="percent-input" name="bondAllocation" min="0" max="100" step="any" value="30" aria-label="Bonds allocation %" data-i18n-aria-label="runner.bondsAllocationLabel" required></td>
-                                    <td><input type="number" class="percent-input" name="bondReturn" min="-100" max="100" step="any" value="4.5" aria-label="Bonds return %" data-i18n-aria-label="runner.bondsReturnLabel" required></td>
-                                    <td><input type="number" class="percent-input" name="bondStdDev" min="0" max="100" step="any" value="4" aria-label="Bonds std. dev. %" data-i18n-aria-label="runner.bondsStdDevLabel" required></td>
+                                    <td class="alloc"><input type="number" class="percent-input" name="bondAllocation" min="0" max="100" step="any" value="30" aria-label="Bonds allocation %" data-i18n-aria-label="runner.bondsAllocationLabel" required></td>
+                                    <td class="gap"></td>
+                                    <td class="ret ret-first"><input type="number" class="percent-input" name="bondReturn" min="-100" max="100" step="any" value="4.5" aria-label="Bonds return %" data-i18n-aria-label="runner.bondsReturnLabel" required></td>
+                                    <td class="ret ret-last"><input type="number" class="percent-input" name="bondStdDev" min="0" max="100" step="any" value="4" aria-label="Bonds std. dev. %" data-i18n-aria-label="runner.bondsStdDevLabel" required></td>
                                 </tr>
                                 <tr>
                                     <th scope="row" data-i18n="runner.cash">Cash</th>
-                                    <td><input type="number" class="percent-input" name="cashAllocation" min="0" max="100" step="any" value="10" aria-label="Cash allocation %" data-i18n-aria-label="runner.cashAllocationLabel" required></td>
-                                    <td><input type="number" class="percent-input" name="cashReturn" min="-100" max="100" step="any" value="3.5" aria-label="Cash return %" data-i18n-aria-label="runner.cashReturnLabel" required></td>
-                                    <td><input type="number" class="percent-input" name="cashStdDev" min="0" max="100" step="any" value="1" aria-label="Cash std. dev. %" data-i18n-aria-label="runner.cashStdDevLabel" required></td>
+                                    <td class="alloc"><input type="number" class="percent-input" name="cashAllocation" min="0" max="100" step="any" value="10" aria-label="Cash allocation %" data-i18n-aria-label="runner.cashAllocationLabel" required></td>
+                                    <td class="gap"></td>
+                                    <td class="ret ret-first"><input type="number" class="percent-input" name="cashReturn" min="-100" max="100" step="any" value="3.5" aria-label="Cash return %" data-i18n-aria-label="runner.cashReturnLabel" required></td>
+                                    <td class="ret ret-last"><input type="number" class="percent-input" name="cashStdDev" min="0" max="100" step="any" value="1" aria-label="Cash std. dev. %" data-i18n-aria-label="runner.cashStdDevLabel" required></td>
                                 </tr>
                             </tbody>
                         </table>
