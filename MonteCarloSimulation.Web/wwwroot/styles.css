@@ -188,6 +188,16 @@ fieldset {
     margin: 0;
 }
 
+.quota-notice {
+    font-size: 0.85rem;
+    color: #888;
+    margin: 0;
+}
+
+.quota-notice.blocked {
+    color: #b3261e;
+}
+
 .subgroup-hint {
     font-size: 0.8rem;
     color: #888;

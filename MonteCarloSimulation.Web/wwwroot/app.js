@@ -475,6 +475,14 @@ function initEditFlyout() {
     const editResult = document.getElementById('edit-result');
     const submitButton = flyout.querySelector('button[type="submit"]');
     const closeButton = document.getElementById('edit-close');
+    const quota = window.QuotaNotice.create({
+        storageKey: 'quota:change-request',
+        notice: document.getElementById('edit-quota'),
+        submitButton,
+        blockedText: (limit, clock, relative) =>
+            `You've used all ${limit} change requests for this hour from this network. You can submit another at ${clock} (${relative}).`,
+        remainingText: (remaining, limit) => `${remaining} of ${limit} change requests left this hour.`,
+    });
 
     const AUTO_CLOSE_MS = 5000;
     let autoCloseTimer = null;
@@ -502,6 +510,7 @@ function initEditFlyout() {
         flyout.hidden = false;
         toggle.setAttribute('aria-expanded', 'true');
         flyout.querySelector('input, textarea').focus();
+        quota.restore();
     }
 
     function closeFlyout() {
@@ -569,6 +578,12 @@ function initEditFlyout() {
             passphrase: flyout.elements.passphrase.value
         };
 
+        // Still refused: say until when, without spending a request
+        if (quota.isBlocked()) {
+            quota.restore();
+            return;
+        }
+
         submitButton.disabled = true;
         editResult.innerHTML = '<p class="loading">Asking the agent to create the story&hellip;</p>';
 
@@ -579,13 +594,13 @@ function initEditFlyout() {
                 body: JSON.stringify(payload)
             });
 
-            // The rate limiter rejects before the endpoint runs, so there's no JSON body to read.
+            const data = await response.json().catch(() => ({}));
+            // Every response says how many requests are left; a 429 says when the next one is allowed
+            quota.update(response, data);
             if (response.status === 429) {
-                editResult.innerHTML = '<div class="error-box"><p>Too many change requests from this address. Try again later.</p></div>';
+                editResult.innerHTML = '';
                 return;
             }
-
-            const data = await response.json().catch(() => ({}));
 
             if (!response.ok) {
                 if (data.errors) {
@@ -603,7 +618,7 @@ function initEditFlyout() {
         } catch (err) {
             editResult.innerHTML = `<div class="error-box"><p>Request failed: ${escapeHtml(err.message)}</p></div>`;
         } finally {
-            submitButton.disabled = false;
+            submitButton.disabled = quota.isBlocked();
         }
     });
 }

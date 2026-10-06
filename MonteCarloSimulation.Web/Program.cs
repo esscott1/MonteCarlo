@@ -15,15 +15,20 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddHttpClient<JiraClient>();
 builder.Services.AddSingleton<ChangeRequestAgent>();
 
-// Partitioned by caller IP and applied as middleware, so it rejects abusive traffic before
-// the endpoint runs - and therefore before anything reaches a paid API or writes to Jira.
+// The two passphrase forms - change requests and Observe access - allow 5 attempts an hour per caller address, over a
+// rolling hour (RequestQuota via QuotaFilter), so a refusal can say exactly when the next attempt is allowed.
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddKeyedSingleton(Quotas.ChangeRequest, (services, _) =>
+    new RequestQuota(5, TimeSpan.FromHours(1), services.GetRequiredService<TimeProvider>()));
+builder.Services.AddKeyedSingleton(Quotas.ObserveAccess, (services, _) =>
+    new RequestQuota(5, TimeSpan.FromHours(1), services.GetRequiredService<TimeProvider>()));
+
+// The Observe token check runs on every Observe page load and needs no countdown, so it keeps the built-in limiter.
+// Partitioned by caller IP and applied as middleware, so it rejects abusive traffic before the endpoint runs.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy("change-request", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromHours(1) }));
-    options.AddPolicy("observe-access", context => RateLimitPartition.GetFixedWindowLimiter(
+    options.AddPolicy("observe-verify", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromHours(1) }));
 });
@@ -134,7 +139,8 @@ app.MapPost("/api/change-request", async (
             new { message = "The change request could not be completed. Please try again." },
             statusCode: StatusCodes.Status502BadGateway);
     }
-}).RequireRateLimiting("change-request");
+}).AddEndpointFilter(new QuotaFilter(
+    app.Services.GetRequiredKeyedService<RequestQuota>(Quotas.ChangeRequest), "Too many change requests from this address."));
 
 // Issues a short-lived, stateless signed token gating the Observe dashboard, keyed by the
 // same passphrase already used for change requests - no separate secret to provision.
@@ -151,7 +157,8 @@ app.MapPost("/api/observe-access", (ObserveAccessRequest request, IConfiguration
     }
 
     return Results.Ok(new { token = ObserveAccessToken.Issue(secret!) });
-}).RequireRateLimiting("observe-access");
+}).AddEndpointFilter(new QuotaFilter(
+    app.Services.GetRequiredKeyedService<RequestQuota>(Quotas.ObserveAccess), "Too many attempts from this address."));
 
 // Verifies a token issued above. Pure computation from the token + shared secret - no
 // server-side session state - so it works identically no matter which instance handles it.
@@ -162,7 +169,7 @@ app.MapGet("/api/observe-access/verify", (HttpContext ctx, IConfiguration config
     return !string.IsNullOrEmpty(secret) && ObserveAccessToken.IsValid(token, secret)
         ? Results.Ok()
         : Results.StatusCode(StatusCodes.Status401Unauthorized);
-}).RequireRateLimiting("observe-access");
+}).RequireRateLimiting("observe-verify");
 
 app.Run();
 
@@ -171,3 +178,10 @@ record RunResponse(SimulationParameters Parameters, SimulationRunOutput Output);
 record ChangeRequestResponse(string IssueKey, string IssueUrl, string Summary, string Description, bool ServerCorrected);
 
 record ObserveAccessRequest(string Passphrase);
+
+// Service keys of the two RequestQuota singletons
+static class Quotas
+{
+    public const string ChangeRequest = "change-request";
+    public const string ObserveAccess = "observe-access";
+}
