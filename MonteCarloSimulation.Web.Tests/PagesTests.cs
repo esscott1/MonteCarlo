@@ -10,8 +10,8 @@ namespace MonteCarloSimulation.Web.Tests
     {
         private Task<string> GetAsync(string path) => factory.CreateClient().GetStringAsync(path);
 
-        private static string Title(string html) => Regex.Match(html, "<title[^>]*>(.*?)</title>").Groups[1].Value;
-        private static string Heading(string html) => Regex.Match(html, "<h1[^>]*>(.*?)</h1>").Groups[1].Value;
+        private static string Title(string html) => Regex.Match(html, "<title>(.*?)</title>").Groups[1].Value;
+        private static string Heading(string html) => Regex.Match(html, "<h1>(.*?)</h1>").Groups[1].Value;
         private static bool HasId(string html, string id) => html.Contains($"id=\"{id}\"");
 
         [Fact]
@@ -27,13 +27,13 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.True(HasId(html, "hamburger-toggle"));
             Assert.True(HasId(html, "observe-flyout"));
             var menu = Regex.Match(html, @"<div id=""hamburger-menu""[^>]*>(.*?)</div>", RegexOptions.Singleline).Groups[1].Value;
-            var items = Regex.Matches(menu, @"role=""menuitem""[^>]*>([^<]+)<").Select(m => m.Groups[1].Value);
+            var items = Regex.Matches(menu, @"role=""menuitem"">([^<]+)<").Select(m => m.Groups[1].Value);
             Assert.Equal(new[] { "Scenario runner", "Model Info", "Observe" }, items);
-            Assert.Matches(@"<a href=""index.html"" id=""scenario-runner-menu-item"" role=""menuitem""[^>]*>Scenario runner</a>", menu);
+            Assert.Contains(@"<a href=""index.html"" id=""scenario-runner-menu-item"" role=""menuitem"">Scenario runner</a>", menu);
 
             // The pencil stays on the Scenario runner; this page is home, so no back arrow
             Assert.False(HasId(html, "edit-toggle"));
-            Assert.DoesNotContain(@"aria-label=""Back to home""", html);
+            Assert.DoesNotContain("Back to home", html);
 
             // menu.js loads before optimal.js
             int menuScript = html.IndexOf("<script src=\"menu.js\"></script>");
@@ -59,7 +59,7 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.True(HasId(html, "run-form"));
             Assert.True(HasId(html, "edit-toggle"));
             Assert.True(HasId(html, "edit-flyout"));
-            Assert.Matches(@"<a href=""/"" class=""icon-button"" aria-label=""Back to home""[^>]*>", html);
+            Assert.Contains(@"<a href=""/"" class=""icon-button"" aria-label=""Back to home"">", html);
 
             // The menu moved to the landing page
             Assert.False(HasId(html, "hamburger-toggle"));
@@ -73,7 +73,7 @@ namespace MonteCarloSimulation.Web.Tests
         {
             string html = await GetAsync(path);
 
-            Assert.Matches(@"<a href=""/"" class=""icon-button"" aria-label=""Back to home""[^>]*>", html);
+            Assert.Contains(@"<a href=""/"" class=""icon-button"" aria-label=""Back to home"">", html);
             Assert.DoesNotContain("href=\"index.html\"", html);
         }
 
@@ -90,9 +90,7 @@ namespace MonteCarloSimulation.Web.Tests
         {
             string script = await GetAsync("/optimal.js");
 
-            // The button's text comes from the translations: t('optimal.runInScenarioRunner')
-            Assert.Contains(">${t('optimal.runInScenarioRunner')}</button>", script);
-            Assert.Contains(@"""optimal.runInScenarioRunner"": ""Run in Scenario runner""", await GetAsync("/i18n/en.json"));
+            Assert.Contains(">Run in Scenario runner</button>", script);
             Assert.Contains("window.location.href = 'index.html';", script);
             Assert.DoesNotContain("Run in Simulator", script);
         }

@@ -10,6 +10,8 @@ This plan covers six pull requests:
 - **PR C and PR D** translate the site into Spanish.
 - **PR E** adds a Translations page whose edits arrive as Jira-tracked pull requests.
 
+**Update 2026-10-06: Spanish cancelled.** Eric decided against a Spanish version. PR C (PR #57, merged) was reverted, PR D (PR #59) was closed unmerged, and PR E won't be built. The Spanish sections below are kept as a record only.
+
 The table in [Who does what, and when](#who-does-what-and-when) lists every step in order.
 
 ## Where things stand
@@ -244,11 +246,11 @@ The shared steps run inside each handler's job, because GitHub runs every job on
 | 5 | **Claude** | ~~**PR A**: request countdown~~ **Done: PR #51, merged 2026-10-06; tested live.** | Done |
 | 6 | **Claude** | ~~**PR B**: auto In Progress, dispatcher, title handler, master checks, Jira report-back, PR #24 folded in, README; set `JIRA_EMAIL` and `JIRA_API_TOKEN` GitHub secrets~~ **Done: PR #52, merged 2026-10-06** (plus PR #53, the bold blue limit message). | Done |
 | 7 | **Eric** | Close PR #24 (superseded by PR B) | When PR B merges |
-| 8 | **Eric + Claude** | End-to-end test: submit a title change; it moves to In Progress, the dispatcher routes it, a PR opens with tests passing, the story moves to In Review; Eric merges | After PR B deploys |
-| 9 | **Claude** | **PR C**: Spanish part 1 | After step 8 passes |
-| 10 | **Claude** | **PR D**: Spanish part 2 (Model Info) | After PR C merges |
-| 11 | **Claude** | **PR E**: Translations page and the `agent-translation-update` handler | After PR D merges |
-| 12 | **Eric** | Share the Translations page and passphrase with the Spanish reviewer; merge their translation PRs | After PR E deploys |
+| 8 | **Eric + Claude** | ~~End-to-end test: submit a title change; it moves to In Progress, the dispatcher routes it, a PR opens with tests passing, the story moves to In Review; Eric merges~~ **Done: SCRUM-56 (PR #54) and SCRUM-57 (PR #56), merged 2026-10-06** (plus PR #55 and PR #58: CI on the agent's PRs, shown as a commit status). | Done |
+| 9 | **Claude** | ~~**PR C**: Spanish part 1~~ **Merged as PR #57, then reverted: Spanish cancelled.** | Cancelled |
+| 10 | **Claude** | ~~**PR D**: Spanish part 2 (Model Info)~~ **PR #59 closed unmerged: Spanish cancelled.** | Cancelled |
+| 11 | **Claude** | ~~**PR E**: Translations page and the `agent-translation-update` handler~~ | Cancelled |
+| 12 | **Eric** | ~~Share the Translations page and passphrase with the Spanish reviewer; merge their translation PRs~~ | Cancelled |
 
 **Every PR, every time (Claude):**
 - tests pass before the PR opens;

@@ -21,9 +21,8 @@
             storageKey: 'quota:observe-access',
             notice: document.getElementById('observe-quota'),
             submitButton: observeSubmitButton,
-            // The Observe passphrase stays in English, whatever the page's language
-            blockedText: (limit, clock, minutes) =>
-                `You've used all ${limit} passphrase attempts for this hour from this network. You can try again at ${clock} (${minutes < 1 ? 'in less than a minute' : `in ${minutes} min`}).`,
+            blockedText: (limit, clock, relative) =>
+                `You've used all ${limit} passphrase attempts for this hour from this network. You can try again at ${clock} (${relative}).`,
             remainingText: (remaining, limit) => `${remaining} of ${limit} attempts left this hour.`,
         });
 
