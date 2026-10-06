@@ -1,6 +1,6 @@
 namespace MonteCarloSimulation.Core
 {
-    // Entry point for both front ends: runs every iteration and assembles the output. The year-by-year
+    // Entry point for the Scenario runner (POST /api/run): runs every iteration and assembles the output. The year-by-year
     // simulation lives in RunSimulator.
     public static class MonteCarloEngine
     {
@@ -22,7 +22,6 @@ namespace MonteCarloSimulation.Core
             {
                 Result = new SimulationResult { Runs = runs },
                 AllRates = runs.SelectMany(r => r.Years.Select(y => y.RateOfReturn)).ToList(),
-                OutOfMoneyMessage = FailureTrace.Build(runs),
                 LastSuccessfulRun = runs.LastOrDefault(r => !r.Failed)?.Years,
                 WithdrawalStrategy = order,
                 RothConversionTarget = target

@@ -112,7 +112,7 @@ The web app deploys to Azure via [.github/workflows/deploy-azure.yml](.github/wo
 
 Provisioned resources: resource group `rg-montecarlo`, region `westus2`, Web App `montecarlo-otsconsulting` (Linux, .NET 10), live at `https://montecarlo.otsconsulting.ai/` (custom domain, set up per [docs/azure-custom-domain.md](docs/azure-custom-domain.md)) and `https://montecarlo-otsconsulting.azurewebsites.net/`.
 
-Only `MonteCarloSimulation.Web` (which references `MonteCarloSimulation.Core` directly) ships to Azure — the console app, `MonteCarloSimulation1`, is a local dev tool only and is never deployed.
+Only `MonteCarloSimulation.Web` (which references `MonteCarloSimulation.Core` directly) ships to Azure.
 
 ## Keys and secrets
 
