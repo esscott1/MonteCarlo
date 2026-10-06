@@ -367,7 +367,7 @@
   "info.case.gate": "Antes de los 59&frac12;, el modelo bloquea el dinero con impuestos diferidos y las ganancias de Roth; solo se pueden gastar el corretaje y la base de Roth. Las conversiones a Roth son la salida: los dólares convertidos cuentan como base de Roth, así que se pueden gastar de inmediato.",
   "info.case.callout": "El orden optimizado para impuestos va primero por las ganancias: vende corretaje mientras las ganancias tributan al 0%. Esas ganancias llenan la franja del 0%, y el llenado del 12% ({c1}) detiene las conversiones antes de empujarlas al 15%. Convertir menos significa menos base nueva de Roth, así que cuando el corretaje se agota antes de los 59&frac12; no alcanza el dinero accesible &mdash; aunque la cuenta con impuestos diferidos siga llena. El orden proporcional gasta algo de base de Roth junto con el corretaje, realiza menos ganancias y sigue convirtiendo. Por eso la app elige el orden para cada hogar en lugar de usar siempre uno.",
   "info.case.runsOut": "Se queda sin dinero accesible",
-  "info.case.stillGoing": "Sigue adelante",
+  "info.case.stillGoing": "Todavía sigue",
   "info.case.yearAge": "{year}, edad {age}",
   "info.case.household": "El hogar donde el orden proporcional con el llenado del 12% gana más ({household}): su gasto al 82.5% es {baseline}/mes con la referencia optimizada para impuestos y {alternative}/mes con el orden proporcional. Abajo está la trayectoria de mercado {path} con el gasto de la referencia ({spend}/mes), la primera trayectoria en que la referencia falla y el orden proporcional no:",
   "info.case.col.year": "Año",
