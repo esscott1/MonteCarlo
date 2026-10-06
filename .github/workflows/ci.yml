@@ -1,16 +1,22 @@
 name: CI
 
-# Runs the full test suite on every pull request, so each PR shows a pass/fail check before it's merged - including
-# the PRs the agent workflows open. The deploy workflow runs the same tests again after merge.
+# Runs the full test suite on every pull request, so each PR shows a pass/fail check before it's merged. The deploy
+# workflow runs the same tests again after merge.
+#
+# A pull request opened by a workflow with its built-in GITHUB_TOKEN - as the agent workflows do - doesn't start other
+# workflows (GitHub's rule against runaway chains), so pull_request never fires for those. agent-finish therefore starts
+# this workflow on the agent's branch with workflow_dispatch (the one event that rule allows); its check shows on the PR
+# because it runs on the PR's head commit.
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-# A new push to the same PR cancels the run it supersedes
+# A new push to the same PR (or a new run on the same branch) cancels the run it supersedes
 concurrency:
-  group: ci-${{ github.event.pull_request.number }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

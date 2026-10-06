@@ -39,6 +39,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # To start ci.yml on the agent's branch (agent-finish)
+      actions: write
     uses: ./.github/workflows/agent-title-change.yml
     with:
       issue_key: ${{ github.event.client_payload.issue_key }}
