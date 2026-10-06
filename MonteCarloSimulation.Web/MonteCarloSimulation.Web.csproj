@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MonteCarloSimulation.Core\MonteCarloSimulation.Core.csproj" />
+    <ProjectReference Include="..\MonteCarloSimulation.Optimizer\MonteCarloSimulation.Optimizer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -9,7 +10,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>449b4cf2-6e07-4e5e-8e62-345edfc9d78c</UserSecretsId>

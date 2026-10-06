@@ -3,13 +3,22 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mark retire NOW</title>
+    <title data-i18n="runner.pageTitle">Eric's retirement</title>
     <link rel="stylesheet" href="styles.css" />
+    <!-- A visitor who chose Spanish sees nothing until i18n.js has applied it, so English never flashes -->
+    <style>html.i18n-pending body { visibility: hidden; }</style>
+    <script>try { if (localStorage.getItem('lang') === 'es') document.documentElement.classList.add('i18n-pending'); } catch { }</script>
 </head>
 <body>
     <div class="page-header">
-        <h1>Mark retire NOW</h1>
-        <button type="button" id="edit-toggle" class="icon-button" aria-label="Change request" aria-haspopup="dialog" aria-expanded="false">
+        <a href="/" class="icon-button" aria-label="Back to home" data-i18n-aria-label="nav.backHome">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 12H5" />
+                <path d="M12 19l-7-7 7-7" />
+            </svg>
+        </a>
+        <h1 data-i18n="runner.heading">Eric's retirement</h1>
+        <button type="button" id="edit-toggle" class="icon-button" aria-label="Change request" data-i18n-aria-label="flyout.toggleLabel" aria-haspopup="dialog" aria-expanded="false">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 20h9" />
                 <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
@@ -18,70 +27,124 @@
 
         <form id="edit-flyout" class="flyout" role="dialog" aria-labelledby="edit-flyout-title" hidden>
             <div class="flyout-header">
-                <h2 id="edit-flyout-title" class="flyout-title">Ask AI for Change.</h2>
-                <button type="button" id="edit-close" class="flyout-close" aria-label="Close">&times;</button>
+                <h2 id="edit-flyout-title" class="flyout-title" data-i18n="flyout.title">Ask AI for Change.</h2>
+                <button type="button" id="edit-close" class="flyout-close" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
             </div>
-            <label>Summary
-                <input type="text" name="summary" placeholder="Change the H1 and Title">
+            <label><span data-i18n="flyout.summary">Summary</span>
+                <input type="text" name="summary" placeholder="Change the H1 and Title" data-i18n-placeholder="flyout.summaryPlaceholder">
             </label>
-            <label>Description
-                <textarea name="description" rows="4" maxlength="35" placeholder="Enter new page title."></textarea>
+            <label><span data-i18n="flyout.description">Description</span>
+                <textarea name="description" rows="4" maxlength="35" placeholder="Enter new page title." data-i18n-placeholder="flyout.descriptionPlaceholder"></textarea>
             </label>
-            <label>Passphrase
+            <label><span data-i18n="flyout.passphrase">Passphrase</span>
                 <input type="password" name="passphrase" autocomplete="off">
             </label>
             <div class="flyout-actions">
-                <button type="button" id="edit-cancel">Cancel</button>
-                <button type="submit">Submit</button>
+                <button type="button" id="edit-cancel" data-i18n="common.cancel">Cancel</button>
+                <button type="submit" data-i18n="common.submit">Submit</button>
             </div>
+            <p class="quota-notice" id="edit-quota" aria-live="polite" hidden></p>
             <div id="edit-result" aria-live="polite"></div>
         </form>
+
+        <button type="button" class="lang-toggle" lang="es" aria-label="Ver en español">Español</button>
     </div>
 
     <form id="run-form">
         <fieldset>
-            <legend>Investment Scenario</legend>
-            <div id="scenario-options">Loading scenarios&hellip;</div>
+            <legend data-i18n="runner.investmentScenario">Investment Scenario</legend>
+            <div id="scenario-options"><span data-i18n="runner.loadingScenarios">Loading scenarios&hellip;</span></div>
         </fieldset>
 
+        <details id="inputs-section" class="inputs-section" open>
+        <summary data-i18n="runner.yourInputs">Your inputs</summary>
         <div class="field-grid">
-            <label>Years
-                <input type="number" name="years" min="1" step="1" value="30" required>
-            </label>
-            <label>Iterations
-                <input type="number" name="iterations" min="1" step="1" value="10" required>
-            </label>
-            <label>Annual Withdrawal
-                <input type="text" inputmode="decimal" class="money-input" name="withdrawal" pattern="[0-9,]*\.?[0-9]*" value="96,000" required>
-            </label>
-            <label>Initial Taxable Balance
-                <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="400,000" required>
-            </label>
-            <label>Initial Nontaxable Balance
-                <input type="text" inputmode="decimal" class="money-input" name="initialNontaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="950,000" required>
-            </label>
-            <label>New Money (inheritance)
-                <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" required>
-            </label>
-            <label>Year New Money Arrives
-                <input type="number" name="yearNewMoney" min="0" step="1" value="10" required>
-            </label>
-            <label>Years Until Social Security
-                <input type="number" name="socialSecurityYearsUntilStart" min="0" step="1" value="5" required>
-            </label>
-            <label>Initial Annual Social Security
-                <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAnnualAmount" pattern="[0-9,]*\.?[0-9]*" value="34,000" required>
-            </label>
-            <label>Annual Standard Deduction
-                <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="0" required>
-            </label>
+            <div class="subgroup-row">
+                <fieldset class="subgroup">
+                    <legend data-i18n="form.scenario">Scenario</legend>
+                    <label><span data-i18n="form.retireOn">Retire On Date</span>
+                        <input type="date" name="retirementDate" value="2027-01-01" data-i18n-title="runner.retireOnTitle" title="Withdrawals begin on this date. Enter account balances as you expect them on this date; dollar amounts are in today's dollars." required>
+                    </label>
+                    <label><span data-i18n="form.yearsLast">Years money lasts</span>
+                        <input type="number" name="years" min="1" max="999" step="1" value="30" style="width: calc(3ch + 1.6rem)" data-i18n-title="runner.yearsTitle" title="Counted from the Retire On Date." required>
+                    </label>
+                    <label><span data-i18n="runner.iterations">Iterations / Runs (99 max)</span>
+                        <input type="number" name="iterations" min="1" max="99" step="1" value="10" style="width: calc(3ch + 2rem)" required>
+                    </label>
+                    <label><span data-i18n="runner.monthlyWithdrawal">Monthly Withdrawal</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="withdrawal" pattern="[0-9,]*\.?[0-9]*" value="8,000" style="width: calc(9ch + 1rem)" data-i18n-title="runner.withdrawalTitle" title="Monthly spending in today's dollars." required>
+                    </label>
+                    <label><span data-i18n="form.birthdate">Birthdate</span>
+                        <input type="date" name="birthdate" value="1970-01-01" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend data-i18n="runner.govt">Gov't</legend>
+                    <label><span data-i18n="runner.initialSs">Initial SS (monthly)</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityMonthlyAmount" pattern="[0-9,]*\.?[0-9]*" value="2,750" style="width: calc(16ch + 1rem)" data-i18n-title="runner.ssTitle" title="Monthly benefit in today's dollars (as on your SSA statement)." required>
+                    </label>
+                    <label><span data-i18n="runner.ssStart">Social Security Start</span>
+                        <input type="date" name="socialSecurityStartDate" value="2032-01-01" data-i18n-title="runner.ssStartTitle" title="Date of your first payment; between ages 62 and 70. Defaults to your 62nd birthday." required>
+                    </label>
+                    <label><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend data-i18n="form.taxDeferred">Tax Deferred Accts</legend>
+                    <label><span data-i18n="form.balance">Balance</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="950,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="enableRothConversions" checked>
+                        <span data-i18n="form.allowRoth">Allow Roth conversions</span>
+                    </label>
+                </fieldset>
+            </div>
+
+            <div class="subgroup-row">
+                <fieldset class="subgroup">
+                    <legend data-i18n="form.roth">Roth Accts</legend>
+                    <label><span data-i18n="form.basis">Basis</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="initialRothBasis" pattern="[0-9,]*\.?[0-9]*" value="15,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="initialRothUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="5,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <p class="total-line" id="roth-total">Total Roth = $20,000</p>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend data-i18n="form.brokerage">Brokerage Accts</legend>
+                    <label><span data-i18n="form.basis">Basis</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageBasis" pattern="[0-9,]*\.?[0-9]*" value="200,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="200,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <p class="total-line" id="brokerage-total">Total Brokerage = $400,000</p>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend data-i18n="form.inheritance">Inheritance</legend>
+                    <label><span data-i18n="form.newMoney">New Money</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label><span data-i18n="runner.whenYears">When (years from now)</span>
+                        <input type="number" name="yearNewMoney" min="0" step="1" value="10" style="width: calc(16ch + 1.6rem)" required>
+                    </label>
+                </fieldset>
+            </div>
         </div>
 
-        <button type="submit">Run</button>
+        <p class="total-line" id="grand-total">Total money = $1,370,000</p>
+        </details>
+
+        <button type="submit" data-i18n="runner.submit">Run</button>
     </form>
 
     <section id="results" aria-live="polite"></section>
 
+    <script src="i18n.js"></script>
+    <script src="quota.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

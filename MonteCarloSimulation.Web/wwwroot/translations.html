@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Translations</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="translations-page">
+    <div class="page-header">
+        <a href="/" class="icon-button" aria-label="Back to home">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 12H5" />
+                <path d="M12 19l-7-7 7-7" />
+            </svg>
+        </a>
+        <h1>Translations</h1>
+    </div>
+
+    <p class="page-intro">Every piece of the site's text, in English and Spanish. Correct the Spanish, preview it on any page, then
+        submit: your changes become a Jira story and a pull request, and go live once it's merged.</p>
+
+    <form id="unlock-form" class="translations-unlock" autocomplete="off" hidden>
+        <label for="unlock-passphrase">Passphrase</label>
+        <input type="password" id="unlock-passphrase" name="passphrase" required />
+        <button type="submit">Unlock</button>
+        <p class="quota-notice" id="unlock-quota" aria-live="polite" hidden></p>
+        <div id="unlock-result" aria-live="polite"></div>
+    </form>
+
+    <main id="translations" hidden>
+        <div class="translations-toolbar">
+            <input type="search" id="search" placeholder="Search key, English or Spanish" aria-label="Search" />
+            <select id="where" aria-label="Part of the site">
+                <option value="">All parts of the site</option>
+            </select>
+            <label class="checkbox-label"><input type="checkbox" id="changed-only" /> Changed only</label>
+            <span id="counts" class="info-meta" aria-live="polite"></span>
+        </div>
+
+        <div class="translations-actions">
+            <label for="preview-page">Preview on</label>
+            <select id="preview-page">
+                <option value="/">Landing page</option>
+                <option value="/index.html">Scenario runner</option>
+                <option value="/model-info.html">Model Info</option>
+            </select>
+            <button type="button" id="preview">Preview</button>
+            <button type="button" id="discard" class="secondary-button">Discard changes</button>
+        </div>
+
+        <div class="table-scroll">
+            <table class="run-table translation-table">
+                <thead><tr><th>Key</th><th>English</th><th>Spanish</th></tr></thead>
+                <tbody id="rows"></tbody>
+            </table>
+        </div>
+
+        <form id="submit-form" class="translations-submit" autocomplete="off">
+            <h2>Submit your changes</h2>
+            <p id="submit-summary">No changes yet.</p>
+            <label for="note">Note for the pull request (optional)</label>
+            <textarea id="note" name="note" maxlength="500" rows="2"></textarea>
+            <div id="submit-passphrase-field" hidden>
+                <label for="submit-passphrase">Passphrase</label>
+                <input type="password" id="submit-passphrase" name="passphrase" />
+            </div>
+            <button type="submit" id="submit" disabled>Submit</button>
+            <p class="quota-notice" id="submit-quota" aria-live="polite" hidden></p>
+            <div id="submit-result" aria-live="polite"></div>
+        </form>
+    </main>
+
+    <script src="quota.js"></script>
+    <script src="translations.js"></script>
+</body>
+</html>

@@ -113,6 +113,16 @@ fieldset {
     margin: 0.4rem 0;
 }
 
+.inputs-section {
+    margin-bottom: 1rem;
+}
+
+.inputs-section > summary {
+    cursor: pointer;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
 .field-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -125,6 +135,82 @@ fieldset {
     flex-direction: column;
     font-size: 0.9rem;
     gap: 0.25rem;
+    align-items: flex-start;
+}
+
+.field-grid input {
+    box-sizing: border-box;
+}
+
+.field-grid label.checkbox-label {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.subgroup-row {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.5rem;
+}
+
+.subgroup-row fieldset.subgroup {
+    flex: 1 1 220px;
+}
+
+.field-grid fieldset.subgroup {
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 0.5rem;
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.field-grid fieldset.subgroup legend {
+    font-size: 0.85rem;
+    padding: 0 0.25rem;
+}
+
+.total-line {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #888;
+    margin: 0;
+}
+
+.quota-notice {
+    font-size: 0.85rem;
+    color: #888;
+    margin: 0;
+}
+
+/* "You've used all 5 ... You can submit another at ..." - bold blue so it stands out: a medium blue on light
+   backgrounds, light blue on dark ones (both well above 4.5:1 contrast) */
+.quota-notice.blocked {
+    color: #0b57d0;
+    font-weight: 700;
+}
+
+@media (prefers-color-scheme: dark) {
+    .quota-notice.blocked {
+        color: #8ab4f8;
+    }
+}
+
+.subgroup-hint {
+    font-size: 0.8rem;
+    color: #888;
+    margin: 0;
 }
 
 input[type="number"] {
@@ -190,6 +276,12 @@ button[type="submit"]:hover {
 
 .run-table th {
     background: rgba(0, 0, 0, 0.05);
+}
+
+.breakdown-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    list-style: disc;
 }
 
 .run-toggle {
@@ -305,4 +397,487 @@ details pre {
 .flyout-close:focus-visible {
     opacity: 1;
     color: #1a73e8;
+}
+
+.hamburger-toggle {
+    margin-left: auto;
+}
+
+/* Español / English, pushed to the right of the header; the hamburger (landing page) sits just after it */
+.lang-toggle {
+    margin-left: auto;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.lang-toggle:hover,
+.lang-toggle:focus-visible {
+    color: #1a73e8;
+    border-color: #1a73e8;
+}
+
+.lang-toggle + .hamburger-toggle {
+    margin-left: 0;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 10;
+    min-width: 160px;
+    padding: 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.dropdown-menu button {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.dropdown-menu button:hover,
+.dropdown-menu button:focus-visible {
+    background: rgba(26, 115, 232, 0.1);
+    color: #1a73e8;
+}
+
+.flyout-right {
+    left: auto;
+    right: 0;
+}
+
+.observe-section {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.observe-section h2 {
+    margin-top: 0;
+}
+
+.placeholder-text {
+    color: #888;
+    font-style: italic;
+}
+
+/* Page links in the landing page's menu - styled like the menu's buttons */
+.dropdown-menu a {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.dropdown-menu a:hover,
+.dropdown-menu a:focus-visible {
+    background: rgba(26, 115, 232, 0.1);
+    color: #1a73e8;
+}
+
+/* Optimal page */
+.page-intro {
+    margin: 0 0 1rem;
+    color: #555;
+}
+
+.recommended-row td {
+    font-weight: 600;
+}
+
+/* Superscript footnote with a hover/focus/tap tooltip (main page year tables) */
+.footnote {
+    position: relative;
+    margin-left: 0.15em;
+}
+
+.footnote-ref {
+    color: #1a73e8;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.footnote-tip {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 1.4em;
+    z-index: 10;
+    width: 20rem;
+    max-width: 70vw;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid #c9d7ef;
+    border-radius: 6px;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    color: #333;
+    font-size: 0.8rem;
+    font-weight: normal;
+    line-height: 1.35;
+    white-space: normal;
+}
+
+.footnote:hover .footnote-tip,
+.footnote:focus-within .footnote-tip,
+.footnote.open .footnote-tip {
+    display: block;
+}
+
+/* Model Info page */
+.info-section {
+    margin: 2rem 0;
+}
+
+.info-section h2 {
+    font-size: 1.25rem;
+    margin: 0 0 0.6rem;
+}
+
+.info-section h3 {
+    font-size: 1rem;
+    margin: 1.2rem 0 0.4rem;
+}
+
+.info-section p {
+    margin: 0 0 0.7rem;
+}
+
+.info-lede {
+    font-size: 1.05rem;
+}
+
+.info-meta {
+    color: #666;
+    font-size: 0.85rem;
+}
+
+.info-notes {
+    margin: 0 0 0.8rem;
+    padding-left: 1.2rem;
+}
+
+.info-notes li {
+    margin-bottom: 0.35rem;
+}
+
+.info-callout {
+    border-left: 4px solid #1a73e8;
+    padding-left: 0.8rem;
+}
+
+.info-code {
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    overflow-x: auto;
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 0.8rem;
+}
+
+.stat-tile {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.8rem;
+    display: grid;
+    gap: 0.3rem;
+    align-content: start;
+}
+
+.stat-tile b {
+    font-size: 1.4rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-tile span {
+    color: #666;
+    font-size: 0.85rem;
+}
+
+.stat-tile.key {
+    border-color: var(--ok-border);
+    background: var(--ok-bg);
+    color: #1e1e1e;
+}
+
+.stat-tile.key span {
+    color: #333;
+}
+
+.table-scroll {
+    overflow-x: auto;
+    margin-bottom: 0.8rem;
+}
+
+.table-scroll .run-table {
+    margin-bottom: 0;
+}
+
+.run-table td.num,
+.run-table th.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.strategy-code {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.gain {
+    color: #188038;
+}
+
+.loss {
+    color: #c5221f;
+}
+
+.strategy-grid td.grid-cell {
+    min-width: 8.5rem;
+}
+
+.grid-main {
+    display: block;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.grid-sub {
+    display: block;
+    color: #666;
+    font-size: 0.75rem;
+}
+
+.strategy-grid td.grid-cell.gain {
+    background: rgba(52, 168, 83, 0.12);
+}
+
+.strategy-grid td.grid-cell.loss {
+    background: rgba(217, 48, 37, 0.1);
+}
+
+.strategy-grid td.grid-cell.baseline {
+    background: rgba(26, 115, 232, 0.1);
+}
+
+.run-table tr.slice-group th {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.run-table td.household {
+    min-width: 22rem;
+}
+
+.case-study tr.year-first td {
+    border-top-width: 2px;
+}
+
+.summary-link {
+    color: inherit;
+    text-decoration: underline;
+}
+
+/* Optimal page: "Run in Simulator" on each scenario's result, and the note it leaves on the main page */
+.simulator-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.run-in-simulator {
+    padding: 0.45rem 1rem;
+    font-size: 0.95rem;
+    border: none;
+    border-radius: 4px;
+    background: #1a73e8;
+    color: white;
+    cursor: pointer;
+}
+
+.run-in-simulator:hover {
+    background: #1558b0;
+}
+
+.run-in-simulator:focus-visible {
+    outline: 2px solid #8ab4f8;
+    outline-offset: 2px;
+}
+
+.simulator-message {
+    color: #f28b82;
+    font-size: 0.9rem;
+}
+
+.handoff-note {
+    margin-top: 2rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--border);
+    border-left: 4px solid #1a73e8;
+    border-radius: 6px;
+    font-size: 0.92rem;
+}
+
+.handoff-note + #results {
+    margin-top: 1rem;
+}
+
+/* Translations page (translations.html): English and Spanish side by side, the Spanish editable */
+body.translations-page {
+    max-width: 1200px;
+}
+
+.translations-unlock,
+.translations-toolbar,
+.translations-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.translations-unlock .quota-notice,
+.translations-unlock #unlock-result {
+    flex-basis: 100%;
+}
+
+.translations-toolbar input[type="search"] {
+    flex: 1 1 16rem;
+    padding: 0.4rem;
+}
+
+.translations-actions button,
+.secondary-button {
+    padding: 0.45rem 1rem;
+    font-size: 0.95rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+.translation-table td {
+    vertical-align: top;
+}
+
+.translation-table td.translation-key {
+    font-size: 0.8rem;
+    word-break: break-all;
+    width: 14rem;
+}
+
+.translation-key .info-meta {
+    display: block;
+    word-break: normal;
+}
+
+.translation-table td.translation-english {
+    width: 40%;
+}
+
+.translation-table textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    min-height: 2.6rem;
+    resize: vertical;
+}
+
+.translation-table tr.changed td {
+    background: rgba(26, 115, 232, 0.08);
+}
+
+.translation-error {
+    color: #d93025;
+    font-size: 0.85rem;
+    margin: 0.25rem 0 0;
+}
+
+.translations-submit {
+    margin: 1.5rem 0 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 40rem;
+}
+
+.translations-submit h2 {
+    margin: 0;
+}
+
+.translations-submit textarea,
+.translations-submit input {
+    font: inherit;
+    padding: 0.4rem;
+}
+
+.translations-submit button[type="submit"] {
+    align-self: flex-start;
+}
+
+.translations-page button[type="submit"]:disabled {
+    background: #9aa0a6;
+    cursor: default;
+}
+
+/* Shown on a translated page while the Translations page's Preview is on (i18n.js) */
+.i18n-preview-banner {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    background: #1a73e8;
+    color: white;
+    font-size: 0.9rem;
+}
+
+.i18n-preview-banner button {
+    border: 1px solid white;
+    border-radius: 4px;
+    background: none;
+    color: white;
+    padding: 0.2rem 0.75rem;
+    cursor: pointer;
+    font: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+    .translation-error {
+        color: #f28b82;
+    }
 }

@@ -1,19 +1,37 @@
-﻿const form = document.getElementById('run-form');
+﻿// The Scenario runner. Text comes from i18n.js (t), so the page reads in English or Spanish.
+const form = document.getElementById('run-form');
 const scenarioOptions = document.getElementById('scenario-options');
 const results = document.getElementById('results');
+
+// What the page shows, kept so switching language can redraw it without re-running: the scenario list, the results
+// area ({ kind: 'loading' | 'errors' | 'failed' | 'results', ... }) and the note about values loaded from the Optimal page.
+let scenarios = null;
+let view = null;
+let handoff = null;
+
+// An investment scenario's label or description, from the server in English; in Spanish, the translation for its id
+function scenarioText(id, field, english) {
+    return I18n.language === 'es' ? t(`scenario.${id}.${field}`) : english;
+}
+
+function renderScenarioOptions() {
+    if (!scenarios) return;
+    const checked = form.querySelector('input[name="scenarioId"]:checked')?.value;
+    scenarioOptions.innerHTML = scenarios.map((s, i) => `
+        <label class="scenario-option">
+            <input type="radio" name="scenarioId" value="${s.id}" ${(checked ? String(s.id) === checked : i === 0) ? 'checked' : ''}>
+            ${scenarioText(s.id, 'menuLabel', s.menuLabel)}
+        </label>
+    `).join('');
+}
 
 async function loadScenarios() {
     try {
         const response = await fetch('/api/scenarios');
-        const scenarios = await response.json();
-        scenarioOptions.innerHTML = scenarios.map((s, i) => `
-            <label class="scenario-option">
-                <input type="radio" name="scenarioId" value="${s.id}" ${i === 0 ? 'checked' : ''}>
-                ${s.menuLabel}
-            </label>
-        `).join('');
+        scenarios = await response.json();
+        renderScenarioOptions();
     } catch (err) {
-        scenarioOptions.textContent = 'Failed to load scenarios.';
+        scenarioOptions.textContent = t('runner.scenariosFailed');
     }
 }
 
@@ -98,59 +116,232 @@ function initMoneyInputs() {
     });
 }
 
+function updateBalanceTotals() {
+    const taxDeferred = parseNumber(form.elements['initialTaxableBalance'].value) || 0;
+    const rothBasis = parseNumber(form.elements['initialRothBasis'].value) || 0;
+    const rothGain = parseNumber(form.elements['initialRothUnrealizedGain'].value) || 0;
+    const basis = parseNumber(form.elements['initialBrokerageBasis'].value) || 0;
+    const gain = parseNumber(form.elements['initialBrokerageUnrealizedGain'].value) || 0;
+
+    document.getElementById('roth-total').textContent = t('runner.totalRoth', { amount: formatCurrency(rothBasis + rothGain) });
+    document.getElementById('brokerage-total').textContent = t('runner.totalBrokerage', { amount: formatCurrency(basis + gain) });
+    document.getElementById('grand-total').textContent =
+        t('runner.totalMoney', { amount: formatCurrency(taxDeferred + rothBasis + rothGain + basis + gain) });
+}
+
+// A required input hidden inside the collapsed section can't show its validation message,
+// so expand the section whenever any field fails validation on submit.
+// Adds whole years to a yyyy-mm-dd date, clamping Feb 29 to Feb 28 in non-leap years (like DateOnly.AddYears).
+function addYears(isoDate, years) {
+    const [y, m, d] = isoDate.split('-').map(Number);
+    const date = new Date(Date.UTC(y + years, m - 1, d));
+    if (date.getUTCMonth() !== m - 1) date.setUTCDate(0);
+    return date.toISOString().slice(0, 10);
+}
+
+// The Social Security start date defaults to the 62nd birthday and follows the birthdate until the user picks
+// a start date of their own.
+function initSocialSecurityDefault() {
+    const birthdate = form.elements['birthdate'];
+    const startDate = form.elements['socialSecurityStartDate'];
+    let chosenByUser = false;
+    const followBirthdate = () => {
+        if (!chosenByUser && birthdate.value) startDate.value = addYears(birthdate.value, 62);
+    };
+    startDate.addEventListener('input', () => { chosenByUser = true; });
+    birthdate.addEventListener('input', followBirthdate);
+    birthdate.addEventListener('change', followBirthdate);
+    followBirthdate();
+}
+
+function initCollapsibleInputs() {
+    const section = document.getElementById('inputs-section');
+    form.addEventListener('invalid', () => { section.open = true; }, true);
+}
+
+function initBalanceTotals() {
+    ['initialTaxableBalance', 'initialRothBasis', 'initialRothUnrealizedGain', 'initialBrokerageBasis', 'initialBrokerageUnrealizedGain']
+        .forEach((name) => form.elements[name].addEventListener('input', updateBalanceTotals));
+    // Once the page's text has loaded, so the totals never show untranslated keys
+    I18n.ready.then(updateBalanceTotals);
+}
+
 // User-supplied text is echoed back into the change-request result panel, so it has to be
 // escaped rather than interpolated raw.
 function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function renderErrors(errors) {
+// Validation errors from the server, which writes them in English: field names and messages are shown in the
+// page's language
+function errorList(errors) {
     const list = Object.entries(errors)
-        .map(([field, messages]) => `<li><strong>${field}:</strong> ${messages.join(' ')}</li>`)
+        .map(([field, messages]) =>
+            `<li><strong>${escapeHtml(I18n.fieldName(field))}:</strong> ${escapeHtml([].concat(messages).map(I18n.translateServerMessage).join(' '))}</li>`)
         .join('');
-    results.innerHTML = `<div class="error-box"><p>Please fix the following:</p><ul>${list}</ul></div>`;
+    return `<div class="error-box"><p>${t('common.fixErrors')}</p><ul>${list}</ul></div>`;
 }
 
-function renderRunDetailTable(yearDetails) {
-    const rows = yearDetails.map((yd) => `
+function bulletList(items) {
+    return `<ul class="breakdown-list">${items.map((item) => `<li>${item}</li>`).join('')}</ul>`;
+}
+
+// The engine's day-count/365.25 age can land a hair under a whole number on a birthday
+// (e.g. 64.9993), so allow ~2 days of slack before flooring to completed years.
+function yearWithAge(yd) {
+    const partial = yd.yearFraction < 0.9995 ? `<br><small>${t('runner.partial', { months: Math.round(yd.yearFraction * 12) })}</small>` : '';
+    return `${t('runner.yearAge', { year: yd.calendarYear, age: Math.floor(yd.ageInYear + 0.005) })}${partial}`;
+}
+
+function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax, socialSecurityMonths, brokerageGains) {
+    const taxablePct = taxablePercentOfBalance === undefined ? '' : ` ${t('runner.money.ofBalance', { pct: formatPercent(taxablePercentOfBalance) })}`;
+    // A Brokerage sale is part embedded gain, part tax-free return of basis (average cost)
+    const brokerageSplit = brokerageGains > 0.5 && brokerageAmt > 0
+        ? ` ${t('runner.money.gainsBasis', { gains: formatCurrency(brokerageGains), basis: formatCurrency(brokerageAmt - brokerageGains) })}`
+        : '';
+    const items = [
+        t('runner.money.total', { amount: formatCurrency(total) }),
+        t('runner.money.taxable', { amount: formatCurrency(taxableAmt) }) + taxablePct,
+        t('runner.money.brokerage', { amount: formatCurrency(brokerageAmt) }) + brokerageSplit,
+        t('runner.money.roth', { amount: formatCurrency(rothAmt) }),
+    ];
+    if (socialSecurity > 0) {
+        const detail = socialSecurityMonths < 12
+            ? t('runner.money.ssMonthsTax', { months: socialSecurityMonths, tax: formatCurrency(socialSecurityTax) })
+            : t('runner.money.ssTax', { tax: formatCurrency(socialSecurityTax) });
+        items.push(t('runner.money.socialSecurity', { amount: formatCurrency(socialSecurity), detail }));
+    }
+    return bulletList(items);
+}
+
+function ratePercent(rate) {
+    return `${(rate * 100).toFixed(0)}%`;
+}
+
+function hasNextBracket(nextRate) {
+    return nextRate !== null && nextRate !== undefined;
+}
+
+// The year's own Brokerage sales filled the 0% capital gains band, so more taxable income would have pushed
+// those gains to 15% - which is why Tax Deferred draws and Roth conversions stopped short. Not when the year
+// harvested gains: harvesting only fills room left over, so extra income would just have meant harvesting less.
+function zeroRateBandFilledBySales(yd) {
+    const bandFull = yd.capitalGainsBracketRate > 0 || (yd.amountUntilNextCapitalGainsBracket ?? 0) < 1;
+    return yd.realizedGains > 0.5 && yd.zeroRateGains > 0.5 && !(yd.harvestedGains > 0.5) && bandFull;
+}
+
+// A superscript marker with a hover/focus/tap tooltip. Each note in a cell gets its own number, in the order the
+// notes appear.
+function footnote(text, number) {
+    return `<sup class="footnote"><a href="#" class="footnote-ref" aria-label="${t('runner.note.aria', { number })}">${number}</a><span class="footnote-tip" role="tooltip">${text}</span></sup>`;
+}
+
+function zeroRateBandNote(yd, conversionsEnabled) {
+    let ending = '';
+    if (yd.rothConversionAmount > 0) {
+        ending = t('runner.note.zeroRate.conversionStopped', { amount: formatCurrency(yd.rothConversionAmount) });
+    } else if (conversionsEnabled) {
+        ending = t('runner.note.zeroRate.noConversion');
+    }
+    return t('runner.note.zeroRate', { gains: formatCurrency(yd.realizedGains), ending });
+}
+
+// Which account paid the year's ordinary income tax. The parts add up to the "ord tax paid" line; the conversion's
+// capital gains cost is on the LTCG line, not here.
+function ordinaryTaxSourcesNote(yd) {
+    const parts = [];
+    if (yd.taxDeferredWithdrawalTax > 0.5) {
+        parts.push(t('runner.note.taxDeferred', { amount: formatCurrency(yd.taxDeferredWithdrawalTax) }));
+    }
+    if (yd.socialSecurityTax > 0.5) {
+        parts.push(t('runner.note.socialSecurity', { amount: formatCurrency(yd.socialSecurityTax) }));
+    }
+    const fromBrokerage = yd.rothConversionOrdinaryTaxFromBrokerage;
+    const fromConversion = yd.rothConversionOrdinaryTaxFromConversion;
+    if (fromBrokerage + fromConversion > 0.5) {
+        const total = formatCurrency(fromBrokerage + fromConversion);
+        if (fromBrokerage > 0.5 && fromConversion > 0.5) {
+            parts.push(t('runner.note.conversionSplit', { total, brokerage: formatCurrency(fromBrokerage), conversion: formatCurrency(fromConversion) }));
+        } else {
+            parts.push(t(fromBrokerage > 0.5 ? 'runner.note.conversionFromBrokerage' : 'runner.note.conversionFromConversion', { total }));
+        }
+    }
+    return `${t('runner.note.whoPaid', { amount: formatCurrency(yd.ordinaryTaxAmount) })}<br>`
+        + parts.map((p) => `&bull; ${p}`).join('<br>');
+}
+
+function taxesBreakdown(yd, conversionsEnabled) {
+    const zeroRateNote = zeroRateBandFilledBySales(yd) ? zeroRateBandNote(yd, conversionsEnabled) : '';
+    const zeroRateOnConversion = zeroRateNote && yd.rothConversionAmount > 0;
+    const sourcesNote = yd.ordinaryTaxAmount > 0.5 ? ordinaryTaxSourcesNote(yd) : '';
+
+    // Number the notes in the order they appear: LTCG line, then ordinary tax line, then conversion line
+    let next = 1;
+    const zeroRateOnGainsLine = zeroRateNote && !zeroRateOnConversion ? footnote(zeroRateNote, next++) : '';
+    const sourcesMarker = sourcesNote ? footnote(sourcesNote, next++) : '';
+    const zeroRateOnConversionLine = zeroRateOnConversion ? footnote(zeroRateNote, next++) : '';
+
+    const items = [
+        t('runner.tax.capGains', { amount: formatCurrency(yd.capitalGainsTaxAmount), rate: ratePercent(yd.capitalGainsBracketRate) }) + zeroRateOnGainsLine,
+        t('runner.tax.ordinary', { amount: formatCurrency(yd.ordinaryTaxAmount), rate: ratePercent(yd.ordinaryBracketRate) }) + sourcesMarker,
+        hasNextBracket(yd.nextBracketRate)
+            ? t('runner.tax.untilNext', { amount: formatCurrency(yd.amountUntilNextBracket), rate: ratePercent(yd.nextBracketRate) })
+            : t('runner.tax.topBracket'),
+    ];
+    if (yd.harvestedGains > 0) {
+        items.push(t('runner.tax.harvested', { amount: formatCurrency(yd.harvestedGains) }));
+    }
+    if (yd.rothConversionAmount > 0) {
+        items.push(t('runner.tax.converted', { amount: formatCurrency(yd.rothConversionAmount), tax: formatCurrency(yd.rothConversionTax) }) + zeroRateOnConversionLine);
+    }
+    if (yd.irmaaSurcharge > 0.5) {
+        // Medicare premiums surcharge, set by income two years earlier and paid on top of spending
+        items.push(t('runner.tax.irmaa', { amount: formatCurrency(yd.irmaaSurcharge), year: yd.calendarYear - 2 }));
+    }
+    return bulletList(items);
+}
+
+function renderRunDetailTable(yearDetails, conversionsEnabled) {
+    const rows = yearDetails.map((yd) => {
+        return `
         <tr>
-            <td>${yd.year}</td>
-            <td>${formatCurrency(yd.withdrawal)} (taxable ${formatCurrency(yd.taxableWithdrawal)}, nontaxable ${formatCurrency(yd.nontaxableWithdrawal)})</td>
-            <td>${formatPercent(yd.taxRate)}</td>
+            <td>${yearWithAge(yd)}</td>
+            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax, yd.socialSecurityMonths, yd.realizedGains)}</td>
+            <td>${taxesBreakdown(yd, conversionsEnabled)}</td>
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
-            <td>${formatCurrency(yd.balance)} (taxable ${formatCurrency(yd.taxableBalance)}, nontaxable ${formatCurrency(yd.nontaxableBalance)})</td>
+            <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
 
     return `
         <table class="run-table">
             <thead>
-                <tr><th>Year</th><th>Withdrawal</th><th>Tax Rate</th><th>Return</th><th>Total Balance</th></tr>
+                <tr>${['year', 'withdrawal', 'taxes', 'return', 'totalBalance'].map((key) => `<th>${t(`runner.table.${key}`)}</th>`).join('')}</tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>
     `;
 }
 
-function renderPerRunTable(result) {
-    const rows = result.endingBalances.map((balance, i) => {
-        const failureYear = result.failureYears[i];
-        const failureNote = (failureYear !== null && failureYear !== undefined)
-            ? `<span class="failure">ran out of money in year ${failureYear}</span>`
+function renderPerRunTable(result, conversionsEnabled) {
+    const rows = result.runs.map((run, i) => {
+        const failureNote = run.failed
+            ? `<span class="failure">${t('runner.run.failed', { year: run.failureYear })}</span>`
             : '<span class="success">&mdash;</span>';
         return `
             <tr>
                 <td><button type="button" class="run-toggle" aria-expanded="false">${i + 1} <span class="run-toggle-icon">&#9656;</span></button></td>
-                <td>${formatCurrency(balance)}</td>
-                <td>${formatCurrency(result.lowestBalanceValues[i])} in year ${result.lowestBalanceYears[i]}</td>
-                <td>${formatPercent(result.averageAnnualReturns[i])}</td>
-                <td>${formatPercent(result.averageTaxRates[i])}</td>
-                <td>Year ${result.highestReturnYears[i]} (${formatPercent(result.highestReturnValues[i])})</td>
-                <td>Year ${result.lowestReturnYears[i]} (${formatPercent(result.lowestReturnValues[i])})</td>
+                <td>${formatCurrency(run.endingBalance)}</td>
+                <td>${t('runner.run.lowest', { amount: formatCurrency(run.lowestBalanceValue), year: run.lowestBalanceYear })}</td>
+                <td>${formatPercent(run.averageAnnualReturn)}</td>
+                <td>${formatPercent(run.averageTaxRate)}</td>
+                <td>${t('runner.run.yearRate', { year: run.highestReturnYear, rate: formatPercent(run.highestReturnValue) })}</td>
+                <td>${t('runner.run.yearRate', { year: run.lowestReturnYear, rate: formatPercent(run.lowestReturnValue) })}</td>
                 <td>${failureNote}</td>
             </tr>
             <tr class="run-detail-row" hidden>
-                <td colspan="8">${renderRunDetailTable(result.runDetails[i])}</td>
+                <td colspan="8">${renderRunDetailTable(run.years, conversionsEnabled)}</td>
             </tr>
         `;
     }).join('');
@@ -158,20 +349,24 @@ function renderPerRunTable(result) {
     return `
         <table class="run-table">
             <thead>
-                <tr>
-                    <th>Run</th>
-                    <th>Ending Balance</th>
-                    <th>Lowest Balance</th>
-                    <th>Avg Annual Return</th>
-                    <th>Avg Tax Rate</th>
-                    <th>Highest Return</th>
-                    <th>Lowest Return</th>
-                    <th>Failure Year</th>
-                </tr>
+                <tr>${['run', 'endingBalance', 'lowestBalance', 'avgReturn', 'avgTaxRate', 'highestReturn', 'lowestReturn', 'failureYear']
+                    .map((key) => `<th>${t(`runner.table.${key}`)}</th>`).join('')}</tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>
     `;
+}
+
+// Which accounts the engine drew from: the order it ran (with Automatic, the one it picked for these inputs) and
+// the conversion-tax rule from the parameters the server ran with. The app chooses these, not the user.
+function accountChoiceLine(parameters, output) {
+    const order = t(`order.${output.withdrawalStrategy ?? parameters.withdrawalStrategy}`);
+    const target = output.rothConversionTarget ?? 'None';
+    const funding = target !== 'None' ? t('runner.funding', { how: t(`funding.${parameters.conversionTaxFunding}`) }) : '';
+    const picked = parameters.withdrawalStrategy === 'Automatic' || parameters.rothConversionTarget === 'Automatic'
+        ? t('runner.pickedBest')
+        : t('runner.pickedApp');
+    return `<p>${t('runner.accounts', { order, conversions: t(`target.phrase.${target}`), funding, picked })} (<a href="model-info.html" class="summary-link">${t('common.why')}</a>)</p>`;
 }
 
 function renderSummary(parameters, output) {
@@ -179,6 +374,18 @@ function renderSummary(parameters, output) {
     const totalAvgRate = output.allRates.reduce((a, b) => a + b, 0) / output.allRates.length;
     const variance = output.allRates.reduce((a, b) => a + Math.pow(b - totalAvgRate, 2), 0) / output.allRates.length;
     const stdDev = Math.sqrt(variance);
+    const avgLifetimeTax = result.runs.reduce((a, run) => a + run.lifetimeTaxesPaid, 0) / result.runs.length;
+    const avgLifetimeIrmaa = result.runs.reduce((a, run) => a + run.lifetimeIrmaaSurcharges, 0) / result.runs.length;
+    const irmaaLine = avgLifetimeIrmaa > 0.5 ? `<p>${t('runner.irmaaLine', { amount: formatCurrency(avgLifetimeIrmaa) })}</p>` : '';
+    const lifetimeTaxLine = `<p>${t('runner.lifetimeTax', {
+        amount: formatCurrency(avgLifetimeTax),
+        through: result.outOfMoneyCount > 0 ? t('runner.lifetimeTax.through') : '',
+    })}</p>${irmaaLine}`;
+    const scenarioLine = `<p>${t('runner.scenarioLine', {
+        description: escapeHtml(scenarioText(parameters.scenarioId, 'description', parameters.scenarioDescription)),
+        mean: formatPercent(parameters.mean),
+        stdDev: formatPercent(parameters.stdDev),
+    })}</p>`;
 
     if (result.outOfMoneyCount > 0) {
         const survival = 1 - (result.outOfMoneyCount / parameters.iterations);
@@ -186,11 +393,13 @@ function renderSummary(parameters, output) {
         const avgFailureReturn = result.failedScenarioAverages.reduce((a, b) => a + b, 0) / result.failedScenarioAverages.length;
         return `
             <div class="summary-box ${survival > 0.8 ? 'ok' : 'warn'}">
-                <p><strong>${survival > 0.8 ? '🙂' : '🙁'} ${result.outOfMoneyCount} of ${parameters.iterations} portfolios did not survive ${parameters.years} years.</strong> Survival rate: ${formatPercent(survival)}</p>
-                <p>Scenario: ${parameters.scenarioDescription} &mdash; Initial mean: ${formatPercent(parameters.mean)}, Initial std dev: ${formatPercent(parameters.stdDev)}</p>
-                <p>Actual realized average return: ${formatPercent(totalAvgRate)} with std dev ${stdDev.toFixed(4)}</p>
-                <p>Inheritance of ${formatCurrency(parameters.newMoney)} in year ${parameters.yearNewMoney} was considered</p>
-                <p>Average year of failure: ${avgFailureYear.toFixed(0)}, with an average return of ${formatPercent(avgFailureReturn)}</p>
+                <p><strong>${survival > 0.8 ? '🙂' : '🙁'} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}</p>
+                ${scenarioLine}
+                <p>${t('runner.realized', { mean: formatPercent(totalAvgRate), stdDev: stdDev.toFixed(4) })}</p>
+                <p>${t('runner.inheritance', { amount: formatCurrency(parameters.newMoney), year: new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney })}</p>
+                <p>${t('runner.avgFailure', { year: avgFailureYear.toFixed(0), rate: formatPercent(avgFailureReturn) })}</p>
+                ${lifetimeTaxLine}
+                ${accountChoiceLine(parameters, output)}
             </div>
         `;
     }
@@ -198,56 +407,80 @@ function renderSummary(parameters, output) {
     const avgBalance = result.successMoneyRemaining.reduce((a, b) => a + b, 0) / result.successMoneyRemaining.length;
     return `
         <div class="summary-box ok">
-            <p><strong>🙂 All scenarios survived!</strong></p>
-            <p>Scenario: ${parameters.scenarioDescription} &mdash; Initial mean: ${formatPercent(parameters.mean)}, Initial std dev: ${formatPercent(parameters.stdDev)}</p>
-            <p>Average balance remaining: ${formatCurrency(avgBalance)}</p>
+            <p><strong>🙂 ${t('runner.allSurvived')}</strong></p>
+            ${scenarioLine}
+            <p>${t('runner.avgBalance', { amount: formatCurrency(avgBalance) })}</p>
+            ${lifetimeTaxLine}
+            ${accountChoiceLine(parameters, output)}
         </div>
     `;
 }
 
-function renderDetail(output) {
+// Every failed run's years, as plain text. Built here from the run data (rather than the server's own trace) so it reads
+// in the page's language, with US dollar and percent formatting wherever the server runs.
+function failureTrace(runs) {
+    const percent = (value) => `${(value * 100).toFixed(2)}%`;
+    return runs.filter((run) => run.failed).map((run) => run.years.map((y) => [
+        t('runner.trace.year', { year: y.year }),
+        t('runner.trace.rate', { rate: percent(y.rateOfReturn) }),
+        t('runner.trace.withdrawal', {
+            total: formatCurrency(y.withdrawal), taxable: formatCurrency(y.taxableWithdrawal),
+            brokerage: formatCurrency(y.brokerageWithdrawal), roth: formatCurrency(y.rothWithdrawal),
+        }),
+        t('runner.trace.taxRate', { rate: percent(y.taxRate) }),
+        t('runner.trace.balance', {
+            total: formatCurrency(y.balance), taxable: formatCurrency(y.taxableBalance),
+            brokerage: formatCurrency(y.brokerageBalance), roth: formatCurrency(y.rothBalance),
+        }),
+    ].join('\n')).join('\n\n')).join('\n\n\n');
+}
+
+function renderDetail(output, conversionsEnabled) {
     if (output.result.outOfMoneyCount > 0) {
         return `
             <details>
-                <summary>Show year-by-year detail for failed runs</summary>
-                <pre>${output.outOfMoneyMessage}</pre>
+                <summary>${t('runner.detail.failed')}</summary>
+                <pre>${escapeHtml(failureTrace(output.result.runs))}</pre>
             </details>
         `;
     }
 
-    if (!output.lastBalances) return '';
-
-    const rows = output.lastBalances.slice(1).map((balance, idx) => {
-        const ji = idx + 1;
-        return `
-            <tr>
-                <td>${ji}</td>
-                <td>${formatCurrency(output.lastAnnualWithdrawals[ji])} (taxable ${formatCurrency(output.lastTaxableWithdrawals[ji])}, nontaxable ${formatCurrency(output.lastNontaxableWithdrawals[ji])})</td>
-                <td>${formatPercent(output.lastTaxRates[ji])}</td>
-                <td>${formatCurrency(output.lastAnnualReturns[ji])}</td>
-                <td>${formatCurrency(balance)} (taxable ${formatCurrency(output.lastTaxableBalances[ji])}, nontaxable ${formatCurrency(output.lastNontaxableBalances[ji])})</td>
-            </tr>
-        `;
-    }).join('');
+    if (!output.lastSuccessfulRun) return '';
 
     return `
         <details>
-            <summary>Show year-by-year detail for the last successful run</summary>
-            <table class="run-table">
-                <thead>
-                    <tr><th>Year</th><th>Withdrawal</th><th>Tax Rate</th><th>Year's Return ($)</th><th>Total Balance</th></tr>
-                </thead>
-                <tbody>${rows}</tbody>
-            </table>
+            <summary>${t('runner.detail.lastSuccess')}</summary>
+            ${renderRunDetailTable(output.lastSuccessfulRun.slice(1), conversionsEnabled)}
         </details>
     `;
 }
 
-function renderResults(parameters, output) {
-    results.innerHTML =
-        renderSummary(parameters, output) +
-        renderPerRunTable(output.result) +
-        renderDetail(output);
+// The results area from `view` - after each run, and whenever the language changes
+function renderView() {
+    if (!view) {
+        results.innerHTML = '';
+    } else if (view.kind === 'loading') {
+        results.innerHTML = `<p class="loading">${t('runner.running')}</p>`;
+    } else if (view.kind === 'errors') {
+        results.innerHTML = errorList(view.errors);
+    } else if (view.kind === 'failed') {
+        results.innerHTML = `<div class="error-box"><p>${t('common.requestFailedWith', { message: escapeHtml(view.message) })}</p></div>`;
+    } else {
+        const { parameters, output } = view;
+        results.innerHTML =
+            renderSummary(parameters, output) +
+            renderPerRunTable(output.result, parameters.enableRothConversions) +
+            renderDetail(output, parameters.enableRothConversions);
+    }
+}
+
+function initFootnotes() {
+    results.addEventListener('click', (e) => {
+        const ref = e.target.closest('.footnote-ref');
+        if (!ref) return;
+        e.preventDefault();
+        ref.parentElement.classList.toggle('open');
+    });
 }
 
 function initRunToggles() {
@@ -272,6 +505,15 @@ function initEditFlyout() {
     const editResult = document.getElementById('edit-result');
     const submitButton = flyout.querySelector('button[type="submit"]');
     const closeButton = document.getElementById('edit-close');
+    const quota = window.QuotaNotice.create({
+        storageKey: 'quota:change-request',
+        notice: document.getElementById('edit-quota'),
+        submitButton,
+        blockedText: (limit, clock, minutes) => t('quota.changeRequests.blocked', {
+            limit, clock, relative: minutes < 1 ? t('quota.relative.soon') : t('quota.relative.minutes', { minutes }),
+        }),
+        remainingText: (remaining, limit) => t('quota.changeRequests.remaining', { remaining, limit }),
+    });
 
     const AUTO_CLOSE_MS = 5000;
     let autoCloseTimer = null;
@@ -299,6 +541,7 @@ function initEditFlyout() {
         flyout.hidden = false;
         toggle.setAttribute('aria-expanded', 'true');
         flyout.querySelector('input, textarea').focus();
+        quota.restore();
     }
 
     function closeFlyout() {
@@ -313,6 +556,9 @@ function initEditFlyout() {
     toggle.addEventListener('click', () => {
         if (flyout.hidden) openFlyout(); else closeFlyout();
     });
+
+    // A countdown on screen re-words itself in the new language
+    document.addEventListener('i18n:change', () => quota.restore());
 
     cancel.addEventListener('click', closeFlyout);
     closeButton.addEventListener('click', closeFlyout);
@@ -332,17 +578,16 @@ function initEditFlyout() {
     });
 
     function renderAgentResult(data) {
-        const verdict = data.serverCorrected
-            ? "Server verification rebuilt the fields — the agent's draft did not match the required format exactly."
-            : "Server verification passed — the agent's draft matched the required format exactly.";
+        const verdict = data.serverCorrected ? t('flyout.verdict.corrected') : t('flyout.verdict.passed');
+        const link = `<a href="${escapeHtml(data.issueUrl)}" target="_blank" rel="noopener">${escapeHtml(data.issueKey)}</a>`;
 
         editResult.innerHTML = `
             <div class="summary-box ok">
-                <p>Created <a href="${escapeHtml(data.issueUrl)}" target="_blank" rel="noopener">${escapeHtml(data.issueKey)}</a> in Jira, still in To Do.</p>
+                <p>${t('flyout.created', { link })}</p>
             </div>
             <details class="agent-trace">
-                <summary>What the agent did</summary>
-                <p>The agent was forced to call one tool, <code>create_jira_story</code>, with these arguments:</p>
+                <summary>${t('flyout.whatAgentDid')}</summary>
+                <p>${t('flyout.forcedTool')}</p>
                 <p><strong>summary:</strong> ${escapeHtml(data.summary)}</p>
                 <p><strong>description:</strong> ${escapeHtml(data.description)}</p>
                 <p class="agent-note">${verdict}</p>
@@ -366,8 +611,14 @@ function initEditFlyout() {
             passphrase: flyout.elements.passphrase.value
         };
 
+        // Still refused: say until when, without spending a request
+        if (quota.isBlocked()) {
+            quota.restore();
+            return;
+        }
+
         submitButton.disabled = true;
-        editResult.innerHTML = '<p class="loading">Asking the agent to create the story&hellip;</p>';
+        editResult.innerHTML = `<p class="loading">${t('flyout.asking')}</p>`;
 
         try {
             const response = await fetch('/api/change-request', {
@@ -376,31 +627,26 @@ function initEditFlyout() {
                 body: JSON.stringify(payload)
             });
 
-            // The rate limiter rejects before the endpoint runs, so there's no JSON body to read.
+            const data = await response.json().catch(() => ({}));
+            // Every response says how many requests are left; a 429 says when the next one is allowed
+            quota.update(response, data);
             if (response.status === 429) {
-                editResult.innerHTML = '<div class="error-box"><p>Too many change requests from this address. Try again later.</p></div>';
+                editResult.innerHTML = '';
                 return;
             }
 
-            const data = await response.json().catch(() => ({}));
-
             if (!response.ok) {
-                if (data.errors) {
-                    const list = Object.entries(data.errors)
-                        .map(([field, messages]) => `<li><strong>${escapeHtml(field)}:</strong> ${escapeHtml(messages.join(' '))}</li>`)
-                        .join('');
-                    editResult.innerHTML = `<div class="error-box"><p>Please fix the following:</p><ul>${list}</ul></div>`;
-                } else {
-                    editResult.innerHTML = `<div class="error-box"><p>${escapeHtml(data.message || 'The request failed.')}</p></div>`;
-                }
+                editResult.innerHTML = data.errors
+                    ? errorList(data.errors)
+                    : `<div class="error-box"><p>${escapeHtml(I18n.translateServerMessage(data.message || 'The request failed.'))}</p></div>`;
                 return;
             }
 
             renderAgentResult(data);
         } catch (err) {
-            editResult.innerHTML = `<div class="error-box"><p>Request failed: ${escapeHtml(err.message)}</p></div>`;
+            editResult.innerHTML = `<div class="error-box"><p>${t('common.requestFailedWith', { message: escapeHtml(err.message) })}</p></div>`;
         } finally {
-            submitButton.disabled = false;
+            submitButton.disabled = quota.isBlocked();
         }
     });
 }
@@ -413,17 +659,25 @@ form.addEventListener('submit', async (e) => {
         scenarioId: Number(formData.get('scenarioId')),
         years: Number(formData.get('years')),
         iterations: Number(formData.get('iterations')),
-        withdrawal: parseNumber(formData.get('withdrawal')),
+        // Entered per month; the model and API work in annual amounts.
+        withdrawal: parseNumber(formData.get('withdrawal')) * 12,
+        birthdate: formData.get('birthdate'),
+        retirementDate: formData.get('retirementDate'),
         initialTaxableBalance: parseNumber(formData.get('initialTaxableBalance')),
-        initialNontaxableBalance: parseNumber(formData.get('initialNontaxableBalance')),
+        initialRothBasis: parseNumber(formData.get('initialRothBasis')),
+        initialRothUnrealizedGain: parseNumber(formData.get('initialRothUnrealizedGain')),
+        initialBrokerageBasis: parseNumber(formData.get('initialBrokerageBasis')),
+        initialBrokerageUnrealizedGain: parseNumber(formData.get('initialBrokerageUnrealizedGain')),
         newMoney: parseNumber(formData.get('newMoney')),
         yearNewMoney: Number(formData.get('yearNewMoney')),
-        socialSecurityYearsUntilStart: Number(formData.get('socialSecurityYearsUntilStart')),
-        socialSecurityAnnualAmount: parseNumber(formData.get('socialSecurityAnnualAmount')),
-        annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction'))
+        socialSecurityStartDate: formData.get('socialSecurityStartDate'),
+        socialSecurityMonthlyAmount: parseNumber(formData.get('socialSecurityMonthlyAmount')),
+        annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction')),
+        enableRothConversions: form.elements['enableRothConversions'].checked
     };
 
-    results.innerHTML = '<p class="loading">Running simulation&hellip;</p>';
+    view = { kind: 'loading' };
+    renderView();
 
     try {
         const response = await fetch('/api/run', {
@@ -434,18 +688,93 @@ form.addEventListener('submit', async (e) => {
 
         if (!response.ok) {
             const problem = await response.json();
-            renderErrors(problem.errors || {});
-            return;
+            view = { kind: 'errors', errors: problem.errors || {} };
+        } else {
+            const data = await response.json();
+            // The server echoes the scenario's description but not its id, which the Spanish text is keyed by
+            data.parameters.scenarioId = payload.scenarioId;
+            view = { kind: 'results', parameters: data.parameters, output: data.output };
         }
-
-        const data = await response.json();
-        renderResults(data.parameters, data.output);
     } catch (err) {
-        results.innerHTML = `<div class="error-box"><p>Request failed: ${err.message}</p></div>`;
+        view = { kind: 'failed', message: err.message };
     }
+    renderView();
 });
 
-loadScenarios();
+// "Run in Scenario runner" on the Optimal page: it leaves one scenario's recommendation and the inputs behind it in
+// sessionStorage. Read it once (so a reload doesn't re-run), fill the form, explain where the values came from, and run.
+const SIMULATOR_HANDOFF_KEY = 'simulatorHandoff';
+
+function readSimulatorHandoff() {
+    try {
+        const raw = sessionStorage.getItem(SIMULATOR_HANDOFF_KEY);
+        sessionStorage.removeItem(SIMULATOR_HANDOFF_KEY);
+        const handoff = raw ? JSON.parse(raw) : null;
+        return handoff && handoff.version === 1 ? handoff : null;
+    } catch {
+        return null;
+    }
+}
+
+function applySimulatorHandoff() {
+    const h = readSimulatorHandoff();
+    if (!h) return;
+
+    const set = (name, value) => { form.elements[name].value = value; };
+    const setMoney = (name, value) => set(name, formatWithCommas(String(value)));
+
+    const radio = form.querySelector(`input[name="scenarioId"][value="${h.scenarioId}"]`);
+    if (radio) radio.checked = true;
+    set('years', h.years);
+    set('iterations', h.iterations);
+    setMoney('withdrawal', h.withdrawalMonthly);
+    set('retirementDate', h.retirementDate);
+    // Birthdate first, then the Social Security start date - marked as the user's own, so the page's
+    // follow-the-62nd-birthday default doesn't overwrite it if the birthdate changes later
+    set('birthdate', h.birthdate);
+    set('socialSecurityStartDate', h.socialSecurityStartDate);
+    form.elements['socialSecurityStartDate'].dispatchEvent(new Event('input'));
+    setMoney('socialSecurityMonthlyAmount', h.socialSecurityMonthlyAmount);
+    setMoney('annualStandardDeduction', h.annualStandardDeduction);
+    ['initialTaxableBalance', 'initialRothBasis', 'initialRothUnrealizedGain', 'initialBrokerageBasis', 'initialBrokerageUnrealizedGain', 'newMoney']
+        .forEach((name) => setMoney(name, h[name]));
+    set('yearNewMoney', h.yearNewMoney);
+    form.elements['enableRothConversions'].checked = h.enableRothConversions;
+    updateBalanceTotals();
+
+    handoff = h;
+    renderHandoffNote();
+    form.requestSubmit();
+    document.getElementById('handoff-note').scrollIntoView({ block: 'start' });
+}
+
+function renderHandoffNote() {
+    if (!handoff) return;
+    document.getElementById('handoff-note')?.remove();
+    results.insertAdjacentHTML('beforebegin', `
+        <div id="handoff-note" class="handoff-note">
+            ${t('runner.handoff', {
+                scenario: escapeHtml(scenarioText(handoff.scenarioId, 'description', handoff.scenarioDescription)),
+                age: handoff.recommendedAge,
+                amount: formatCurrency(handoff.withdrawalMonthly),
+                iterations: handoff.iterations,
+            })}
+        </div>`);
+}
+
+// Switching language redraws everything the page shows; nothing re-runs
+document.addEventListener('i18n:change', () => {
+    renderScenarioOptions();
+    updateBalanceTotals();
+    renderHandoffNote();
+    renderView();
+});
+
+I18n.ready.then(loadScenarios).then(applySimulatorHandoff);
 initMoneyInputs();
+initBalanceTotals();
+initSocialSecurityDefault();
+initCollapsibleInputs();
 initRunToggles();
+initFootnotes();
 initEditFlyout();

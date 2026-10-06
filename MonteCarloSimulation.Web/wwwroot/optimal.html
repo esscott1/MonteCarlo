@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="optimal.pageTitle">Monte Carlo Portfolio Optimizer</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- A visitor who chose Spanish sees nothing until i18n.js has applied it, so English never flashes -->
+    <style>html.i18n-pending body { visibility: hidden; }</style>
+    <script>try { if (localStorage.getItem('lang') === 'es') document.documentElement.classList.add('i18n-pending'); } catch { }</script>
+</head>
+<body>
+    <div class="page-header">
+        <h1 data-i18n="optimal.heading">Monte Carlo Portfolio Optimizer</h1>
+
+        <button type="button" class="lang-toggle" lang="es" aria-label="Ver en español">Español</button>
+
+        <button type="button" id="hamburger-toggle" class="icon-button hamburger-toggle" aria-label="Menu" data-i18n-aria-label="menu.label" aria-haspopup="true" aria-expanded="false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 6h18" />
+                <path d="M3 12h18" />
+                <path d="M3 18h18" />
+            </svg>
+        </button>
+
+        <div id="hamburger-menu" class="dropdown-menu" role="menu" hidden>
+            <a href="index.html" id="scenario-runner-menu-item" role="menuitem" data-i18n="menu.scenarioRunner">Scenario runner</a>
+            <a href="model-info.html" id="model-info-menu-item" role="menuitem" data-i18n="menu.modelInfo">Model Info</a>
+            <a href="translations.html" id="translations-menu-item" role="menuitem" data-i18n="menu.translations">Translations</a>
+            <button type="button" id="observe-menu-item" role="menuitem">Observe</button>
+        </div>
+
+        <form id="observe-flyout" class="flyout flyout-right" role="dialog" aria-labelledby="observe-flyout-title" hidden>
+            <div class="flyout-header">
+                <h2 id="observe-flyout-title" class="flyout-title">Enter Passphrase</h2>
+                <button type="button" id="observe-close" class="flyout-close" aria-label="Close">&times;</button>
+            </div>
+            <label>Passphrase
+                <input type="password" name="passphrase" autocomplete="off">
+            </label>
+            <div class="flyout-actions">
+                <button type="button" id="observe-cancel">Cancel</button>
+                <button type="submit">Submit</button>
+            </div>
+            <p class="quota-notice" id="observe-quota" aria-live="polite" hidden></p>
+            <div id="observe-result" aria-live="polite"></div>
+        </form>
+    </div>
+
+    <p class="page-intro" data-i18n="optimal.intro">How much can you spend each month and still have the money last in 80&ndash;85% of simulated markets &mdash; and when should you start Social Security? Spending is shown per month in today's dollars, inflated each year; balances are as of your retirement date.</p>
+
+    <form id="optimal-form">
+        <div class="field-grid">
+            <div class="subgroup-row">
+                <fieldset class="subgroup">
+                    <legend data-i18n="form.scenario">Scenario</legend>
+                    <label><span data-i18n="form.retireOn">Retire On Date</span>
+                        <input type="date" name="retirementDate" value="2027-01-01" required>
+                    </label>
+                    <label><span data-i18n="form.yearsLast">Years money lasts</span>
+                        <input type="number" name="years" min="1" max="100" step="1" value="30" style="width: calc(3ch + 1.6rem)" required>
+                    </label>
+                    <label><span data-i18n="form.birthdate">Birthdate</span>
+                        <input type="date" name="birthdate" value="1970-01-01" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend data-i18n="optimal.ssLegend">Social Security (monthly, today's $)</legend>
+                    <label><span data-i18n="optimal.atAge62">At age 62</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt62" pattern="[0-9,]*\.?[0-9]*" value="2,750" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label><span data-i18n="optimal.atAge67">At age 67</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt67" pattern="[0-9,]*\.?[0-9]*" value="3,900" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label><span data-i18n="optimal.atAge70">At age 70</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt70" pattern="[0-9,]*\.?[0-9]*" value="4,800" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend data-i18n="form.taxDeferred">Tax Deferred Accts</legend>
+                    <label><span data-i18n="form.balance">Balance</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="950,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="enableRothConversions" checked>
+                        <span data-i18n="form.allowRoth">Allow Roth conversions</span>
+                    </label>
+                </fieldset>
+            </div>
+
+            <div class="subgroup-row">
+                <fieldset class="subgroup">
+                    <legend data-i18n="form.roth">Roth Accts</legend>
+                    <label><span data-i18n="form.basis">Basis</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="initialRothBasis" pattern="[0-9,]*\.?[0-9]*" value="15,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="initialRothUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="5,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend data-i18n="form.brokerage">Brokerage Accts</legend>
+                    <label><span data-i18n="form.basis">Basis</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageBasis" pattern="[0-9,]*\.?[0-9]*" value="200,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="200,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend data-i18n="form.inheritance">Inheritance</legend>
+                    <label><span data-i18n="form.newMoney">New Money</span>
+                        <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
+                    </label>
+                    <label><span data-i18n="optimal.whenYears">When (years after retiring)</span>
+                        <input type="number" name="yearNewMoney" min="0" step="1" value="10" style="width: calc(16ch + 1.6rem)" required>
+                    </label>
+                </fieldset>
+                <fieldset class="subgroup">
+                    <legend data-i18n="optimal.markets">Simulated markets</legend>
+                    <label class="checkbox-label">
+                        <input type="radio" name="paths" value="500" checked>
+                        <span data-i18n="optimal.paths500">500 &mdash; most precise</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="radio" name="paths" value="333">
+                        333
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="radio" name="paths" value="167">
+                        <span data-i18n="optimal.paths167">167 &mdash; fastest</span>
+                    </label>
+                    <p class="subgroup-hint" data-i18n="optimal.pathsHint">Fewer markets finish sooner but pin the 80&ndash;85% band less precisely.</p>
+                </fieldset>
+            </div>
+        </div>
+
+        <button type="submit" id="optimal-submit" data-i18n="optimal.submit">Find optimal</button>
+    </form>
+
+    <section id="optimal-results" aria-live="polite"></section>
+
+    <script src="i18n.js"></script>
+    <script src="quota.js"></script>
+    <script src="menu.js"></script>
+    <script src="optimal.js"></script>
+</body>
+</html>
