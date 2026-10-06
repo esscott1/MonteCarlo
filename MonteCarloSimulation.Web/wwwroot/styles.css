@@ -403,6 +403,29 @@ details pre {
     margin-left: auto;
 }
 
+/* Español / English, pushed to the right of the header; the hamburger (landing page) sits just after it */
+.lang-toggle {
+    margin-left: auto;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.lang-toggle:hover,
+.lang-toggle:focus-visible {
+    color: #1a73e8;
+    border-color: #1a73e8;
+}
+
+.lang-toggle + .hamburger-toggle {
+    margin-left: 0;
+}
+
 .dropdown-menu {
     position: absolute;
     top: 100%;

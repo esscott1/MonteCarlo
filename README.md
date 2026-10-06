@@ -56,6 +56,24 @@ Every key named here is described in [Keys and secrets](#keys-and-secrets).
 
 It's worth being explicit: the tool-calling/AI round trip in the change-request flow isn't load-bearing for the application's actual purpose. It's included specifically to demonstrate the pattern — a real production application in this situation would most likely not choose to route a simple, deterministic string-composition task through an LLM call at all.
 
+## English and Spanish
+
+The landing page and the Scenario runner read in English or Spanish: the **Español / English** button in the header
+switches, and the choice is remembered. The site always starts in English. The Observe page and its passphrase box
+stay in English; the Model Info page follows in a later change.
+
+- Static page text is English in the HTML, marked `data-i18n="key"` (or `data-i18n-title`, `-placeholder`,
+  `-aria-label`); text the scripts build comes from `t('key', values)` with its English in
+  [i18n/en.json](MonteCarloSimulation.Web/wwwroot/i18n/en.json). [i18n/es.json](MonteCarloSimulation.Web/wwwroot/i18n/es.json)
+  has the Spanish for every key. [i18n.js](MonteCarloSimulation.Web/wwwroot/i18n.js) applies it.
+- Server messages (validation errors, the passphrase and rate-limit messages) come back in English and are re-worded in
+  the browser by matching their English templates (the `server.*` keys). Numbers and money keep the US format.
+- **Reviewing the Spanish:** [docs/i18n-review.csv](docs/i18n-review.csv) lists every string side by side (key, where,
+  English, Spanish, and a column for corrections) and opens in Excel or Google Sheets; [docs/i18n-glossary.md](docs/i18n-glossary.md)
+  lists the terms. After changing `es.json`, regenerate the sheet with `node tools/i18n/review-sheet.mjs`.
+- `tools/i18n/i18n.test.mjs` (run by CI) fails if a key is missing or unused, a translation drops a `{placeholder}`, a
+  server message has no template, or the review sheet is out of date.
+
 ## Deployment
 
 Every pull request runs the full test suite through [.github/workflows/ci.yml](.github/workflows/ci.yml), so it shows a pass/fail check before it's merged. That includes the pull requests opened by the change-request agent.
