@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="splash.pageTitle">Retirement Portfolio Explorer</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- A visitor who chose Spanish sees nothing until i18n.js has applied it, so English never flashes -->
+    <style>html.i18n-pending body { visibility: hidden; }</style>
+    <script>try { if (localStorage.getItem('lang') === 'es') document.documentElement.classList.add('i18n-pending'); } catch { }</script>
+</head>
+<body>
+    <div class="page-header">
+        <h1 data-i18n="splash.heading">Retirement Portfolio Explorer</h1>
+
+        <button type="button" class="lang-toggle" lang="es" aria-label="Ver en español">Español</button>
+
+        <button type="button" id="hamburger-toggle" class="icon-button hamburger-toggle" aria-label="Menu" data-i18n-aria-label="menu.label" aria-haspopup="true" aria-expanded="false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 6h18" />
+                <path d="M3 12h18" />
+                <path d="M3 18h18" />
+            </svg>
+        </button>
+
+        <div id="hamburger-menu" class="dropdown-menu" role="menu" hidden>
+            <a href="model-info.html" id="model-info-menu-item" role="menuitem" data-i18n="menu.modelInfo">Model Info</a>
+            <a href="translations.html" id="translations-menu-item" role="menuitem" data-i18n="menu.translations">Translations</a>
+            <button type="button" id="observe-menu-item" role="menuitem">Observe</button>
+        </div>
+
+        <form id="observe-flyout" class="flyout flyout-right" role="dialog" aria-labelledby="observe-flyout-title" hidden>
+            <div class="flyout-header">
+                <h2 id="observe-flyout-title" class="flyout-title">Enter Passphrase</h2>
+                <button type="button" id="observe-close" class="flyout-close" aria-label="Close">&times;</button>
+            </div>
+            <label>Passphrase
+                <input type="password" name="passphrase" autocomplete="off">
+            </label>
+            <div class="flyout-actions">
+                <button type="button" id="observe-cancel">Cancel</button>
+                <button type="submit">Submit</button>
+            </div>
+            <p class="quota-notice" id="observe-quota" aria-live="polite" hidden></p>
+            <div id="observe-result" aria-live="polite"></div>
+        </form>
+    </div>
+
+    <p class="page-intro" data-i18n="splash.intro">Explore how long a retirement portfolio can last. The Scenario runner plays one plan through thousands of randomized markets; the Optimizer finds the highest spending that survives 80&ndash;85% of them and the best age to start Social Security.</p>
+
+    <div class="splash-tiles">
+        <a class="splash-tile" href="index.html">
+            <span class="splash-tile-title" data-i18n="splash.runnerTitle">Scenario runner</span>
+            <span class="splash-tile-desc" data-i18n="splash.runnerDesc">Run one plan through many randomized markets and see the year-by-year outcomes and survival rate.</span>
+        </a>
+        <a class="splash-tile" href="optimal.html">
+            <span class="splash-tile-title" data-i18n="splash.optimizerTitle">Optimizer</span>
+            <span class="splash-tile-desc" data-i18n="splash.optimizerDesc">Find the most you can spend while the money lasts in 80&ndash;85% of markets, and the best age to claim Social Security.</span>
+        </a>
+    </div>
+
+    <script src="i18n.js"></script>
+    <script src="quota.js"></script>
+    <script src="menu.js"></script>
+</body>
+</html>

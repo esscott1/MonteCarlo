@@ -117,7 +117,7 @@ test('every household description in the lab data matches the lab.household.* te
 });
 
 test('the Observe passphrase box stays in English', () => {
-    const html = readText('optimal.html');
+    const html = readText('splash.html');
     const flyout = /<form id="observe-flyout"[\s\S]*?<\/form>/.exec(html)[0];
     assert.doesNotMatch(flyout, /data-i18n/);
 });

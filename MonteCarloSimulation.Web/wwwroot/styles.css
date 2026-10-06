@@ -794,6 +794,49 @@ details pre {
     color: #555;
 }
 
+/* Splash page: two tiles into the Scenario runner and the Optimizer */
+.splash-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.splash-tile {
+    display: grid;
+    gap: 0.4rem;
+    align-content: start;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+}
+
+.splash-tile:hover,
+.splash-tile:focus-visible {
+    border-color: #1a73e8;
+    background: rgba(26, 115, 232, 0.1);
+    outline: none;
+}
+
+.splash-tile-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1a73e8;
+}
+
+.splash-tile-desc {
+    color: #555;
+    font-size: 0.9rem;
+}
+
+@media (prefers-color-scheme: dark) {
+    .splash-tile-desc {
+        color: #aaa;
+    }
+}
+
 .recommended-row td {
     font-weight: 600;
 }

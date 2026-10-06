@@ -1,5 +1,5 @@
-// The landing page's header menu: the hamburger menu (Scenario runner, Model Info, Observe) and the Observe
-// passphrase flyout. Wrapped in its own scope so it shares no names with optimal.js, which loads after it.
+// The splash/home page's header menu: the hamburger menu (Model Info, Translations, Observe) and the Observe
+// passphrase flyout. Wrapped in its own scope so it shares no names with other page scripts.
 (function () {
     // User-supplied text is echoed back into the passphrase result panel, so it has to be escaped
     function escapeHtml(value) {

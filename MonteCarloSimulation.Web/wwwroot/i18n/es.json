@@ -9,9 +9,16 @@
 
   "nav.backHome": "Volver al inicio",
   "menu.label": "Menú",
-  "menu.scenarioRunner": "Simulador de escenarios",
   "menu.modelInfo": "Información del modelo",
   "menu.translations": "Traducciones",
+
+  "splash.pageTitle": "Explorador de cartera para la jubilación",
+  "splash.heading": "Explorador de cartera para la jubilación",
+  "splash.intro": "Explore cuánto puede durar una cartera de jubilación. El Simulador de escenarios recorre un plan a través de miles de mercados aleatorios; el Optimizador encuentra el mayor gasto que sobrevive en el 80&ndash;85% de ellos y la mejor edad para empezar a cobrar el Seguro Social.",
+  "splash.runnerTitle": "Simulador de escenarios",
+  "splash.runnerDesc": "Recorra un plan a través de muchos mercados aleatorios y vea los resultados año por año y la tasa de supervivencia.",
+  "splash.optimizerTitle": "Optimizador",
+  "splash.optimizerDesc": "Encuentre lo máximo que puede gastar mientras el dinero alcanza en el 80&ndash;85% de los mercados, y la mejor edad para cobrar el Seguro Social.",
 
   "form.scenario": "Escenario",
   "form.retireOn": "Fecha de jubilación",
