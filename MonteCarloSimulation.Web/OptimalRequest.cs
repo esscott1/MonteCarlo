@@ -3,10 +3,10 @@ using MonteCarloSimulation.Optimizer;
 
 namespace MonteCarloSimulation.Web
 {
-    // Input for the Optimal page: the main page's inputs minus the withdrawal (which is solved for), the run count
+    // Input for the Optimal page: the main page's inputs (the asset mix included) minus the withdrawal (which is solved for), the run count
     // (replaced by Paths, the number of market paths: one of SpendingOptimizer.PathChoices, DefaultPaths when
     // omitted) and the single Social Security amount/date - replaced by the monthly benefit estimates at 62, 67 and 70.
-    public class OptimalRequest
+    public class OptimalRequest : AssetMixRequest
     {
         public int Years { get; set; }
         public DateOnly Birthdate { get; set; }
@@ -48,30 +48,38 @@ namespace MonteCarloSimulation.Web
             if (AnnualStandardDeduction < 0) errors["annualStandardDeduction"] = "Must be non-negative.";
             if (Paths is int paths && !SpendingOptimizer.PathChoices.Contains(paths))
                 errors["paths"] = $"Simulated markets must be one of {string.Join(", ", SpendingOptimizer.PathChoices)}.";
+            ValidateAssetMix(errors);
             return errors;
         }
 
-        public OptimizationInputs ToInputs() => new()
+        public OptimizationInputs ToInputs()
         {
-            Template = new SimulationParameters
+            var mix = ToAssetMix();
+            return new OptimizationInputs
             {
-                Years = Years,
-                Iterations = 1,
-                Birthdate = Birthdate,
-                RetirementDate = RetirementDate,
-                InitialTaxableBalance = InitialTaxableBalance,
-                InitialRothBasis = InitialRothBasis,
-                InitialRothUnrealizedGain = InitialRothUnrealizedGain,
-                InitialBrokerageBasis = InitialBrokerageBasis,
-                InitialBrokerageUnrealizedGain = InitialBrokerageUnrealizedGain,
-                NewMoney = NewMoney,
-                YearNewMoney = YearNewMoney,
-                AnnualStandardDeduction = AnnualStandardDeduction,
-                EnableRothConversions = EnableRothConversions,
-                ScenarioDescription = "Optimal"
-            },
-            SocialSecurity = new SocialSecurityCurve(SocialSecurityAt62, SocialSecurityAt67, SocialSecurityAt70),
-            Paths = Paths ?? SpendingOptimizer.DefaultPaths
-        };
+                Template = new SimulationParameters
+                {
+                    Years = Years,
+                    Iterations = 1,
+                    Birthdate = Birthdate,
+                    RetirementDate = RetirementDate,
+                    InitialTaxableBalance = InitialTaxableBalance,
+                    InitialRothBasis = InitialRothBasis,
+                    InitialRothUnrealizedGain = InitialRothUnrealizedGain,
+                    InitialBrokerageBasis = InitialBrokerageBasis,
+                    InitialBrokerageUnrealizedGain = InitialBrokerageUnrealizedGain,
+                    NewMoney = NewMoney,
+                    YearNewMoney = YearNewMoney,
+                    AnnualStandardDeduction = AnnualStandardDeduction,
+                    EnableRothConversions = EnableRothConversions,
+                    Mean = mix.ExpectedReturn,
+                    StdDev = mix.StdDev,
+                    AssetMix = mix,
+                    ScenarioDescription = MixDescription()
+                },
+                SocialSecurity = new SocialSecurityCurve(SocialSecurityAt62, SocialSecurityAt67, SocialSecurityAt70),
+                Paths = Paths ?? SpendingOptimizer.DefaultPaths
+            };
+        }
     }
 }

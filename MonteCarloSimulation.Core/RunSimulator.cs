@@ -42,15 +42,19 @@ namespace MonteCarloSimulation.Core
         }
 
         // The same for these parameters' market: their asset mix when they have one, else Mean/StdDev.
-        public static double[][] SeededReturns(SimulationParameters parameters, int years, int paths)
+        public static double[][] SeededReturns(SimulationParameters parameters, int years, int paths) =>
+            SeededReturns(parameters, years, 0, paths);
+
+        // Just paths first..first+count-1, for these parameters' market.
+        public static double[][] SeededReturns(SimulationParameters parameters, int years, int first, int count)
         {
-            var returns = new double[paths][];
-            for (int path = 0; path < paths; path++)
+            var returns = new double[count][];
+            for (int i = 0; i < count; i++)
             {
-                var random = new Random(path);
-                returns[path] = new double[years];
+                var random = new Random(first + i);
+                returns[i] = new double[years];
                 for (int year = 0; year < years; year++)
-                    returns[path][year] = DrawReturn(parameters, random);
+                    returns[i][year] = DrawReturn(parameters, random);
             }
             return returns;
         }

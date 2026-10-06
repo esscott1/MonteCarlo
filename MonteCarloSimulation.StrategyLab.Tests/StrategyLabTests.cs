@@ -209,6 +209,8 @@ namespace MonteCarloSimulation.StrategyLab.Tests
             Assert.Equal(4, summary.Subsets.Count);
             Assert.Equal(4, summary.PageDefault.Count);
             Assert.NotNull(summary.CaseStudy);
+            // The Optimal page's defaults, in its default asset mix: one before/after comparison
+            Assert.Equal("60% stocks / 30% bonds / 10% cash", summary.OptimalDefaults?.Mix);
             Assert.True(summary.ScenariosCompared > 0);
         }
 

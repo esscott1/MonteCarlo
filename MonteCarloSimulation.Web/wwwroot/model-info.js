@@ -236,13 +236,14 @@ function orderChoice(s) {
             : t('info.orders.noneQualifies')}</p>`;
 }
 
-// The Optimal page's default inputs before and after the app chose its own accounts
+// The Optimal page's default inputs (its default asset mix) before and after the app chose its own accounts
 function optimalDefaults(s) {
-    const rows = s.optimalDefaults.map((r) => {
+    const r = s.optimalDefaults;
+    const rows = [r].map(() => {
         const b = r.before;
         const a = r.after;
         const change = (x, y) => `<span class="info-meta">(${pct(y / x - 1, 1)})</span>`;
-        return `<tr><td>${r.scenarioId}. ${scenarioDescription(r.scenarioId, r.description)}</td>
+        return `<tr><td>${I18n.translateData('info.optimal.defaultMix', r.mix)}</td>
             <td class="num">${b.recommendedAge} &rarr; ${a.recommendedAge}</td>
             <td class="num">${perMonth(b.spendAt85)} &rarr; ${perMonth(a.spendAt85)} ${change(b.spendAt85, a.spendAt85)}</td>
             <td class="num">${perMonth(b.spendAtMidpoint)} &rarr; ${perMonth(a.spendAtMidpoint)} ${change(b.spendAtMidpoint, a.spendAtMidpoint)}</td>
@@ -251,7 +252,7 @@ function optimalDefaults(s) {
     });
     return `
         <p>${t('info.optimal.intro')}</p>
-        ${table([t('info.col.investmentScenario'), t('info.optimal.col.age'), t('info.optimal.col.survival85'), t('info.optimal.col.survival825'), t('info.optimal.col.survival80'), t('info.optimal.col.survivalAtSpend')], rows)}`;
+        ${table([t('info.optimal.col.mix'), t('info.optimal.col.age'), t('info.optimal.col.survival85'), t('info.optimal.col.survival825'), t('info.optimal.col.survival80'), t('info.optimal.col.survivalAtSpend')], rows)}`;
 }
 
 function grid(s, byCode) {

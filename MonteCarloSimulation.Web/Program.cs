@@ -47,8 +47,6 @@ app.UseDefaultFiles(defaultFiles);
 app.UseStaticFiles();
 app.UseRateLimiter();
 
-app.MapGet("/api/scenarios", () => InvestmentScenarios.All);
-
 app.MapPost("/api/run", (RunRequest request) =>
 {
     var validationErrors = request.Validate();

@@ -64,6 +64,41 @@ namespace MonteCarloSimulation.Web.Tests
         }
 
         [Fact]
+        public async Task OptimalPage_InputsAreTabbedLikeTheScenarioRunner_BesideTheRecommendation()
+        {
+            string html = await GetAsync("/optimal.html");
+
+            // The runner's four tabs, in order; the first is selected
+            var tabs = Regex.Matches(html, @"role=""tab"" id=""(tab-\w+)"" aria-controls=""(panel-\w+)"" aria-selected=""(\w+)""");
+            Assert.Equal(new[] { "tab-demographics", "tab-assets", "tab-money", "tab-income" }, tabs.Select(m => m.Groups[1].Value));
+            Assert.Equal(new[] { "true", "false", "false", "false" }, tabs.Select(m => m.Groups[3].Value));
+
+            string Panel(string id) => Regex.Match(html, $@"id=""{id}""(.*?)(?=<div class=""tab-panel|<section class=""graph-tile)", RegexOptions.Singleline).Groups[1].Value;
+            Assert.All(new[] { "retirementDate", "birthdate", "years" }, name => Assert.Contains($@"name=""{name}""", Panel("panel-demographics")));
+            Assert.All(new[] { "stockAllocation", "stockReturn", "stockStdDev", "bondAllocation", "bondReturn", "bondStdDev", "cashAllocation", "cashReturn", "cashStdDev", "stockBondCorrelation" },
+                name => Assert.Contains($@"name=""{name}""", Panel("panel-assets")));
+            Assert.All(new[] { "initialTaxableBalance", "enableRothConversions", "initialRothBasis", "initialRothUnrealizedGain", "initialBrokerageBasis", "initialBrokerageUnrealizedGain" },
+                name => Assert.Contains($@"name=""{name}""", Panel("panel-money")));
+            Assert.All(new[] { "socialSecurityAt62", "socialSecurityAt67", "socialSecurityAt70", "annualStandardDeduction", "newMoney", "yearNewMoney" },
+                name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
+
+            // The Optimizer finds the spend, so there's no withdrawal to enter; and there are no preset scenarios to pick
+            Assert.DoesNotContain(@"name=""withdrawal""", html);
+            Assert.DoesNotContain(@"name=""scenarioId""", html);
+
+            // The recommendation fills the tile beside the inputs; the market count sits beside Find optimal, outside the tabs
+            Assert.Matches(@"<section class=""graph-tile recommendation-tile""[^>]*>[\s\S]*?id=""optimal-card""", html);
+            var submitRow = Regex.Match(html, @"<div class=""submit-row"">(.*?)\r?\n        </div>", RegexOptions.Singleline).Groups[1].Value;
+            Assert.Contains(@"id=""optimal-submit""", submitRow);
+            Assert.Contains(@"name=""paths""", submitRow);
+            Assert.DoesNotContain(@"name=""paths""", Panel("panel-demographics") + Panel("panel-income"));
+
+            // The shared inputs code loads before the page's own
+            int inputsScript = html.IndexOf("<script src=\"inputs.js\"></script>");
+            Assert.True(inputsScript >= 0 && html.IndexOf("<script src=\"optimal.js\"></script>") > inputsScript);
+        }
+
+        [Fact]
         public async Task IndexHtml_IsTheScenarioRunner_WithThePencilAndABackArrow()
         {
             string html = await GetAsync("/index.html");

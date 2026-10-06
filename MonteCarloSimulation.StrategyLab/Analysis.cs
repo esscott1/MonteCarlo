@@ -443,7 +443,7 @@ namespace MonteCarloSimulation.StrategyLab
         CaseStudy? CaseStudy,
         FundingComparison? Funding,
         List<OrderChoice>? OrderChoice,
-        List<OptimalDefaultsRow>? OptimalDefaults,
+        OptimalDefaultsComparison? OptimalDefaults,
         ConversionChoice? ConversionChoice);
 
     // The app's pick of order and conversion line, against the best of every combination per household (Rows use

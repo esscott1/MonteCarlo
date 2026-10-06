@@ -4,8 +4,8 @@
     "paths": 200,
     "seed": 2026,
     "singleYearCases": 1000,
-    "generatedAtUtc": "2026-09-30T22:24:27.1910218Z",
-    "runtimeSeconds": 1940.3510882
+    "generatedAtUtc": "2026-10-06T22:45:08.1921376Z",
+    "runtimeSeconds": 467.0547773
   },
   "set": "main",
   "combinations": [
@@ -8253,80 +8253,23 @@
       "qualifies": true
     }
   ],
-  "optimalDefaults": [
-    {
-      "scenarioId": 1,
-      "description": "Use the last 54 years of 10 year govt bonds",
-      "before": {
-        "recommendedAge": 68,
-        "spendAt85": 112782.71484375,
-        "spendAtMidpoint": 113315.82641601562,
-        "spendAt80": 113493.5302734375,
-        "survivalRate": 0.826
-      },
-      "after": {
-        "recommendedAge": 68,
-        "spendAt85": 112841.94946289062,
-        "spendAtMidpoint": 113315.82641601562,
-        "spendAt80": 113493.5302734375,
-        "survivalRate": 0.826
-      }
+  "optimalDefaults": {
+    "mix": "60% stocks / 30% bonds / 10% cash",
+    "before": {
+      "recommendedAge": 70,
+      "spendAt85": 95004.7607421875,
+      "spendAtMidpoint": 95941.83349609375,
+      "spendAt80": 97167.236328125,
+      "survivalRate": 0.826
     },
-    {
-      "scenarioId": 2,
-      "description": "Use the last 95 years of S\u0026P returns",
-      "before": {
-        "recommendedAge": 65,
-        "spendAt85": 87810.82153320312,
-        "spendAtMidpoint": 90440.21606445312,
-        "spendAt80": 92412.26196289062,
-        "survivalRate": 0.826
-      },
-      "after": {
-        "recommendedAge": 67,
-        "spendAt85": 88591.3330078125,
-        "spendAtMidpoint": 90481.7054271698,
-        "spendAt80": 92322.58930206299,
-        "survivalRate": 0.826
-      }
-    },
-    {
-      "scenarioId": 3,
-      "description": "Use the last 30 years of S\u0026P returns",
-      "before": {
-        "recommendedAge": 64,
-        "spendAt85": 105522.85766601562,
-        "spendAtMidpoint": 107871.36840820312,
-        "spendAt80": 110700.25634765625,
-        "survivalRate": 0.826
-      },
-      "after": {
-        "recommendedAge": 62,
-        "spendAt85": 106685.00518798828,
-        "spendAtMidpoint": 108175.30632019043,
-        "spendAt80": 111547.03903198242,
-        "survivalRate": 0.826
-      }
-    },
-    {
-      "scenarioId": 4,
-      "description": "Use the current 10 year bond yield",
-      "before": {
-        "recommendedAge": 69,
-        "spendAt85": 108858.0322265625,
-        "spendAtMidpoint": 108918.91479492188,
-        "spendAt80": 108918.91479492188,
-        "survivalRate": 0.836
-      },
-      "after": {
-        "recommendedAge": 69,
-        "spendAt85": 108858.0322265625,
-        "spendAtMidpoint": 108858.0322265625,
-        "spendAt80": 108858.0322265625,
-        "survivalRate": 0.894
-      }
+    "after": {
+      "recommendedAge": 70,
+      "spendAt85": 95004.7607421875,
+      "spendAtMidpoint": 95941.83349609375,
+      "spendAt80": 97239.31884765625,
+      "survivalRate": 0.826
     }
-  ],
+  },
   "conversionChoice": {
     "rows": [
       {

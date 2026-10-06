@@ -344,6 +344,46 @@ body.wide {
     margin: 0 0 0.5rem;
 }
 
+/* Optimal page: the recommendation card fills the tile beside the inputs */
+.recommendation-tile .summary-box {
+    margin-bottom: 0;
+}
+
+/* Optimal page: Find optimal, with the Simulated markets choice beside it */
+.submit-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.markets-choice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 1rem;
+    margin: 0;
+    padding: 0.25rem 0.75rem 0.5rem;
+    background: var(--surface);
+    font-size: 0.9rem;
+}
+
+.markets-choice legend {
+    font-size: 0.85rem;
+    padding: 0 0.25rem;
+}
+
+.markets-choice .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.markets-choice .subgroup-hint {
+    flex-basis: 100%;
+}
+
 /* The balance chart (chart.js): green upper, blue middle, orange lower, lighter in dark mode */
 :root {
     --band-upper: #34a853;

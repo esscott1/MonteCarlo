@@ -4,10 +4,20 @@ namespace MonteCarloSimulation.Optimizer.Tests
 {
     public class OptimizerTests
     {
-        private static readonly InvestmentScenario Volatile = InvestmentScenarios.ById(2)!; // 95 years of S&P
-        private static readonly InvestmentScenario Flat = new(99, "Flat 4%, no volatility", 0.04, 0);
+        // The markets these tests optimize for: the template's own. Volatile is a single-return market like 95 years
+        // of the S&P; Flat is 4% a year with no volatility; DefaultMix is the Optimal page's default asset mix.
+        private const double VolatileMean = 0.0807, VolatileStdDev = 0.1915;
 
-        private static SimulationParameters Template(int years = 30) => new()
+        private static readonly AssetMix DefaultMix = new()
+        {
+            StockWeight = 0.6, BondWeight = 0.3, CashWeight = 0.1,
+            StockMean = 0.08, StockStdDev = 0.19,
+            BondMean = 0.045, BondStdDev = 0.04,
+            CashMean = 0.035, CashStdDev = 0.01,
+            StockBondCorrelation = 0.1
+        };
+
+        private static SimulationParameters Template(double mean, double stdDev, AssetMix? mix = null, int years = 30) => new()
         {
             Years = years,
             Birthdate = new DateOnly(1966, 1, 1),
@@ -20,8 +30,15 @@ namespace MonteCarloSimulation.Optimizer.Tests
             AnnualStandardDeduction = 16_000,
             EnableRothConversions = true,
             WithdrawalStrategy = WithdrawalStrategy.TaxOptimized,
+            Mean = mean,
+            StdDev = stdDev,
+            AssetMix = mix,
             ScenarioDescription = "optimizer test"
         };
+
+        private static SimulationParameters Volatile() => Template(VolatileMean, VolatileStdDev);
+        private static SimulationParameters Flat() => Template(0.04, 0);
+        private static SimulationParameters Mixed() => Template(DefaultMix.ExpectedReturn, DefaultMix.StdDev, DefaultMix);
 
         private static readonly SocialSecurityCurve Defaults = new(2_750, 3_900, 4_800);
 
@@ -64,7 +81,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
         [Fact]
         public void BreakEven_SurvivesAtTheAnswer_AndFailsOneStepAbove()
         {
-            var simulator = new PathSimulator(Template(), Flat, new DateOnly(2033, 1, 1), 3_900, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
+            var simulator = new PathSimulator(Flat(), new DateOnly(2033, 1, 1), 3_900, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
 
             double breakEven = simulator.BreakEven(0);
 
@@ -73,16 +90,33 @@ namespace MonteCarloSimulation.Optimizer.Tests
             Assert.False(simulator.Survives(breakEven + PathSimulator.Precision, 0));
         }
 
+        // The simulator draws its own path when none were precomputed: the same draw Core's engine makes for that seed,
+        // in a single-return market and in an asset mix.
         [Theory]
-        [InlineData(40_000, 0)]
-        [InlineData(80_000, 1)]
-        [InlineData(120_000, 2)]
-        [InlineData(95_000, 7)]
-        public void Survives_MatchesCoresEngineForTheSameSeededPath(double withdrawal, int path)
+        [InlineData(40_000, 0, false)]
+        [InlineData(80_000, 1, false)]
+        [InlineData(120_000, 2, false)]
+        [InlineData(95_000, 7, false)]
+        [InlineData(60_000, 0, true)]
+        [InlineData(85_000, 3, true)]
+        [InlineData(110_000, 5, true)]
+        public void Survives_MatchesCoresEngineForTheSameSeededPath(double withdrawal, int path, bool mix)
         {
-            var simulator = new PathSimulator(Template(), Volatile, new DateOnly(2033, 1, 1), 3_900, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
+            var simulator = new PathSimulator(mix ? Mixed() : Volatile(), new DateOnly(2033, 1, 1), 3_900, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
 
             Assert.Equal(simulator.SurvivesViaEngine(withdrawal, path), simulator.Survives(withdrawal, path));
+        }
+
+        [Fact]
+        public void SeededPaths_AreThePathsTheSimulatorWouldDrawItself()
+        {
+            var template = Mixed();
+            var paths = PathSimulator.SeededPaths(template, 12);
+            var shared = new PathSimulator(template, new DateOnly(2033, 1, 1), 3_900, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12, paths);
+            var own = new PathSimulator(template, new DateOnly(2033, 1, 1), 3_900, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
+
+            for (int path = 0; path < 12; path++)
+                Assert.Equal(own.BreakEven(path), shared.BreakEven(path));
         }
 
         // --- End to end ---
@@ -90,26 +124,40 @@ namespace MonteCarloSimulation.Optimizer.Tests
         [Fact]
         public void Optimize_RecommendedSpend_SurvivesBetween80And85Percent_AndIsRepeatable()
         {
-            var inputs = new OptimizationInputs { Template = Template(), SocialSecurity = Defaults, Scenarios = new[] { Volatile }, Paths = 200 };
+            var inputs = new OptimizationInputs { Template = Mixed(), SocialSecurity = Defaults, Paths = 200 };
 
-            var first = SpendingOptimizer.Optimize(inputs);
-            var second = SpendingOptimizer.Optimize(inputs);
+            var first = SpendingOptimizer.Optimize(inputs).Optimum;
+            var second = SpendingOptimizer.Optimize(inputs).Optimum;
 
-            var optimum = Assert.Single(first.Scenarios);
-            Assert.InRange(optimum.VerifiedSurvivalRate, 0.80, 0.85);
-            Assert.True(optimum.Recommended.SpendAt85 <= optimum.Recommended.SpendAtMidpoint);
-            Assert.True(optimum.Recommended.SpendAtMidpoint <= optimum.Recommended.SpendAt80);
-            Assert.Equal(9, optimum.ClaimingAges.Count);
-            Assert.Equal(optimum.Recommended, second.Scenarios[0].Recommended);
-            Assert.Equal(optimum.ClaimingAges, second.Scenarios[0].ClaimingAges);
+            Assert.InRange(first.VerifiedSurvivalRate, 0.80, 0.85);
+            Assert.True(first.Recommended.SpendAt85 <= first.Recommended.SpendAtMidpoint);
+            Assert.True(first.Recommended.SpendAtMidpoint <= first.Recommended.SpendAt80);
+            Assert.Equal(9, first.ClaimingAges.Count);
+            Assert.Equal(first.Recommended, second.Recommended);
+            Assert.Equal(first.ClaimingAges, second.ClaimingAges);
+        }
+
+        [Fact]
+        public void Optimize_RunsTheTemplatesAssetMix()
+        {
+            // An all-stock mix at 4% with no volatility is the Flat market, return for return: same answer
+            var flatMix = new AssetMix { StockWeight = 1, StockMean = 0.04 };
+            var viaMix = SpendingOptimizer.Optimize(new OptimizationInputs { Template = Template(0, 0, flatMix), SocialSecurity = Defaults, Paths = 5 }).Optimum;
+            var viaFlat = SpendingOptimizer.Optimize(new OptimizationInputs { Template = Flat(), SocialSecurity = Defaults, Paths = 5 }).Optimum;
+            Assert.Equal(viaFlat.ClaimingAges, viaMix.ClaimingAges);
+
+            // ...and a riskier mix changes it: the mix, not Mean/StdDev, decides the market
+            var stocks = new AssetMix { StockWeight = 1, StockMean = 0.04, StockStdDev = 0.25 };
+            var viaStocks = SpendingOptimizer.Optimize(new OptimizationInputs { Template = Template(0.04, 0, stocks), SocialSecurity = Defaults, Paths = 40 }).Optimum;
+            Assert.NotEqual(viaFlat.Recommended.SpendAtMidpoint, viaStocks.Recommended.SpendAtMidpoint);
         }
 
         [Fact]
         public void Optimize_WithNoSocialSecurity_AllAgesTie_AndTheEarliestIsRecommended()
         {
-            var inputs = new OptimizationInputs { Template = Template(), SocialSecurity = new(0, 0, 0), Scenarios = new[] { Flat }, Paths = 5 };
+            var inputs = new OptimizationInputs { Template = Flat(), SocialSecurity = new(0, 0, 0), Paths = 5 };
 
-            var optimum = SpendingOptimizer.Optimize(inputs).Scenarios[0];
+            var optimum = SpendingOptimizer.Optimize(inputs).Optimum;
 
             Assert.Single(optimum.ClaimingAges.Select(a => a.SpendAtMidpoint).Distinct());
             Assert.Equal(62, optimum.Recommended.Age);
@@ -124,7 +172,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
             // Retire 2026-01-01 for 30 years (window ends 2056-01-01); born 1966, so claiming at 70 starts
             // 2036-01-01: 20 full years of 12 payments. Inflation from 2026 is 2.5% a year through the first 20
             // retirement years (to 2046), then 1%.
-            var simulator = new PathSimulator(Template(), Flat, new DateOnly(2036, 1, 1), 4_800, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
+            var simulator = new PathSimulator(Flat(), new DateOnly(2036, 1, 1), 4_800, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
 
             double expected = Enumerable.Range(2036, 20)
                 .Sum(year => 4_800 * 12 * Math.Pow(1.025, Math.Min(year - 2026, 20)) * Math.Pow(1.01, Math.Max(0, year - 2046)));
@@ -137,16 +185,14 @@ namespace MonteCarloSimulation.Optimizer.Tests
         {
             // Social Security doesn't depend on the market path, so Core's public (unseeded) Run pays the same
             // amounts; with no spending the run survives all 30 years.
-            var parameters = Template();
+            var parameters = Volatile();
             parameters.Iterations = 1;
             parameters.Withdrawal = 0;
-            parameters.Mean = Volatile.Mean;
-            parameters.StdDev = Volatile.StdDev;
             parameters.SocialSecurityStartDate = new DateOnly(2031, 7, 15); // mid-year start: a partial first year
             parameters.SocialSecurityMonthlyAmount = 3_133;
 
             var coreYears = MonteCarloEngine.Run(parameters).Result.Runs[0].Years;
-            var simulator = new PathSimulator(Template(), Volatile, new DateOnly(2031, 7, 15), 3_133, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
+            var simulator = new PathSimulator(Volatile(), new DateOnly(2031, 7, 15), 3_133, WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
 
             Assert.Equal(30, coreYears.Count);
             Assert.Equal(coreYears.Sum(y => y.SocialSecurityIncome), simulator.TotalSocialSecurity, 6);
@@ -158,9 +204,9 @@ namespace MonteCarloSimulation.Optimizer.Tests
             // Nothing before 67 and a steep climb to 70: over a 30-year horizon waiting wins, and the savings easily
             // bridge the gap. (With an enormous age-70 benefit the bridge itself would bind, favoring a slightly
             // earlier start - so this uses a realistic size.)
-            var inputs = new OptimizationInputs { Template = Template(), SocialSecurity = new(0, 0, 5_000), Scenarios = new[] { Flat }, Paths = 5 };
+            var inputs = new OptimizationInputs { Template = Flat(), SocialSecurity = new(0, 0, 5_000), Paths = 5 };
 
-            var optimum = SpendingOptimizer.Optimize(inputs).Scenarios[0];
+            var optimum = SpendingOptimizer.Optimize(inputs).Optimum;
 
             Assert.Equal(70, optimum.Recommended.Age);
             Assert.Equal(new DateOnly(2036, 1, 1), optimum.Recommended.StartDate);
@@ -169,27 +215,26 @@ namespace MonteCarloSimulation.Optimizer.Tests
         [Fact]
         public void Optimize_RecommendsTheAgeWithTheHighestMidpointSpend()
         {
-            var inputs = new OptimizationInputs { Template = Template(), SocialSecurity = Defaults, Scenarios = new[] { Flat }, Paths = 5 };
+            var inputs = new OptimizationInputs { Template = Flat(), SocialSecurity = Defaults, Paths = 5 };
 
-            var optimum = SpendingOptimizer.Optimize(inputs).Scenarios[0];
+            var optimum = SpendingOptimizer.Optimize(inputs).Optimum;
 
             Assert.Equal(optimum.ClaimingAges.Max(a => a.SpendAtMidpoint), optimum.Recommended.SpendAtMidpoint);
         }
 
         // --- Isolation guard ---
 
-        private static OptimizationResult RunOptimal(WithdrawalStrategy order, RothConversionTarget target)
+        private static SpendOptimum RunOptimal(WithdrawalStrategy order, RothConversionTarget target)
         {
-            var template = Template();
+            var template = Volatile();
             template.WithdrawalStrategy = order;
             template.RothConversionTarget = target;
             return SpendingOptimizer.Optimize(new OptimizationInputs
             {
                 Template = template,
                 SocialSecurity = new SocialSecurityCurve(2_750, 3_900, 4_800),
-                Scenarios = [Volatile],
                 Paths = 60
-            });
+            }).Optimum;
         }
 
         [Fact]
@@ -197,9 +242,9 @@ namespace MonteCarloSimulation.Optimizer.Tests
         {
             // With two candidates both get a full search, so every claiming age reports the order with the higher
             // 82.5% spend (the second is warm-started, so it's exact to within the search precision).
-            var automatic = RunOptimal(WithdrawalStrategy.Automatic, RothConversionTarget.Bracket12).Scenarios[0];
-            var taxOptimized = RunOptimal(WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12).Scenarios[0];
-            var proRata = RunOptimal(WithdrawalStrategy.ProRata, RothConversionTarget.Bracket12).Scenarios[0];
+            var automatic = RunOptimal(WithdrawalStrategy.Automatic, RothConversionTarget.Bracket12);
+            var taxOptimized = RunOptimal(WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
+            var proRata = RunOptimal(WithdrawalStrategy.ProRata, RothConversionTarget.Bracket12);
 
             for (int i = 0; i < automatic.ClaimingAges.Count; i++)
             {
@@ -215,8 +260,8 @@ namespace MonteCarloSimulation.Optimizer.Tests
         {
             // With all 8 (order, target) pairs, the first candidate (Tax-optimized, 12% line) is searched in full and
             // only beaten by a finalist that sustains more.
-            var automatic = RunOptimal(WithdrawalStrategy.Automatic, RothConversionTarget.Automatic).Scenarios[0];
-            var baseline = RunOptimal(WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12).Scenarios[0];
+            var automatic = RunOptimal(WithdrawalStrategy.Automatic, RothConversionTarget.Automatic);
+            var baseline = RunOptimal(WithdrawalStrategy.TaxOptimized, RothConversionTarget.Bracket12);
 
             for (int i = 0; i < automatic.ClaimingAges.Count; i++)
             {
@@ -230,45 +275,34 @@ namespace MonteCarloSimulation.Optimizer.Tests
         // --- Reporting progress and cancelling ---
 
         [Fact]
-        public void Listener_HearsEveryClaimingAgeAndScenario_AndTheResultIsUnchanged()
+        public void Listener_HearsEveryClaimingAge_AndTheResultIsUnchanged()
         {
-            var inputs = new OptimizationInputs { Template = Template(), SocialSecurity = Defaults, Scenarios = new[] { Volatile, Flat }, Paths = 40 };
+            var inputs = new OptimizationInputs { Template = Mixed(), SocialSecurity = Defaults, Paths = 40 };
             var progress = new List<(int Completed, int Total)>();
-            var scenarios = new List<ScenarioOptimum>();
             var listener = new OptimizationListener
             {
-                ClaimingAgeDone = (completed, total) => { lock (progress) progress.Add((completed, total)); },
-                ScenarioDone = scenario => { lock (scenarios) scenarios.Add(scenario); }
+                ClaimingAgeDone = (completed, total) => { lock (progress) progress.Add((completed, total)); }
             };
 
             var reported = SpendingOptimizer.Optimize(inputs, listener, CancellationToken.None);
             var plain = SpendingOptimizer.Optimize(inputs);
 
-            // Every claiming age of every scenario, each count exactly once, against the right total
-            int total = inputs.Scenarios.Count * SpendingOptimizer.ClaimingAges.Count;
+            // Every claiming age, each count exactly once, against the right total
+            int total = SpendingOptimizer.ClaimingAges.Count;
             Assert.Equal(Enumerable.Range(1, total), progress.Select(p => p.Completed).Order());
             Assert.All(progress, p => Assert.Equal(total, p.Total));
 
-            // Each scenario once, and it's the very result returned
-            Assert.Equal(inputs.Scenarios.Select(s => s.Id).Order(), scenarios.Select(s => s.ScenarioId).Order());
-            foreach (var scenario in reported.Scenarios)
-                Assert.Same(scenario, Assert.Single(scenarios, s => s.ScenarioId == scenario.ScenarioId));
-
             // Reporting doesn't change the answer
-            Assert.Equal(plain.Scenarios.Count, reported.Scenarios.Count);
-            for (int i = 0; i < plain.Scenarios.Count; i++)
-            {
-                Assert.Equal(plain.Scenarios[i].Recommended, reported.Scenarios[i].Recommended);
-                Assert.Equal(plain.Scenarios[i].VerifiedSurvivalRate, reported.Scenarios[i].VerifiedSurvivalRate);
-                Assert.Equal(plain.Scenarios[i].ClaimingAges, reported.Scenarios[i].ClaimingAges);
-            }
+            Assert.Equal(plain.Optimum.Recommended, reported.Optimum.Recommended);
+            Assert.Equal(plain.Optimum.VerifiedSurvivalRate, reported.Optimum.VerifiedSurvivalRate);
+            Assert.Equal(plain.Optimum.ClaimingAges, reported.Optimum.ClaimingAges);
             Assert.Equal(plain.BenefitByAge, reported.BenefitByAge);
         }
 
         [Fact]
         public void Optimize_WithACancelledToken_Throws()
         {
-            var inputs = new OptimizationInputs { Template = Template(), SocialSecurity = Defaults, Scenarios = new[] { Volatile }, Paths = 40 };
+            var inputs = new OptimizationInputs { Template = Volatile(), SocialSecurity = Defaults, Paths = 40 };
 
             Assert.ThrowsAny<OperationCanceledException>(() => SpendingOptimizer.Optimize(inputs, null, new CancellationToken(canceled: true)));
         }
@@ -276,8 +310,8 @@ namespace MonteCarloSimulation.Optimizer.Tests
         [Fact]
         public void Optimize_CancelledMidRun_StopsTheClaimingAgesStillRunning()
         {
-            // Every scenario at full size: far more work than finishes between the cancel and the next path check
-            var inputs = new OptimizationInputs { Template = Template(), SocialSecurity = Defaults };
+            // Every claiming age at full size: far more work than finishes between the cancel and the next path check
+            var inputs = new OptimizationInputs { Template = Mixed(), SocialSecurity = Defaults };
             using var cancel = new CancellationTokenSource();
             int completed = 0;
             var listener = new OptimizationListener
@@ -297,7 +331,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
         [Fact]
         public void ParametersCopy_CopiesEverySettableProperty()
         {
-            var original = Template();
+            var original = Flat();
             // Give every settable property a non-default value, so a property the copy forgets shows up.
             foreach (var property in typeof(SimulationParameters).GetProperties().Where(p => p.CanWrite))
             {

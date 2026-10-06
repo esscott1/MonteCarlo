@@ -2,14 +2,14 @@ using MonteCarloSimulation.Core;
 
 namespace MonteCarloSimulation.Optimizer
 {
-    // Runs Core's simulation one market path at a time, for one investment scenario and one Social Security
-    // claiming age. Path `i` always uses `new Random(i)`, so every spending level sees the same market paths
+    // Runs Core's simulation one market path at a time, for one Social Security claiming age, in the template's
+    // market (its asset mix, or Mean/StdDev). Path `i` always uses `new Random(i)`, so every spending level sees the same market paths
     // (common random numbers) - that's what makes survival monotone in spending and the search stable.
     //
     // It calls Core's own run loop (RunSimulator, the same one MonteCarloEngine.Run uses for each iteration) in its
     // lean mode, skipping the year-by-year report and the multi-run bookkeeping and failure-trace text the engine
     // builds, which this search doesn't need. Each path's returns are drawn once (RunSimulator.SeededReturns) and
-    // can be shared with other simulators for the same scenario. Not thread-safe: each instance owns a private
+    // can be shared with other simulators for the same market. Not thread-safe: each instance owns a private
     // parameter copy and changes its Withdrawal.
     internal sealed class PathSimulator
     {
@@ -23,16 +23,13 @@ namespace MonteCarloSimulation.Optimizer
         private readonly double[][] _paths;
 
         // `order` and `target` are the withdrawal order and conversion target to run: SpendingOptimizer resolves the
-        // template's Automatic choices by trying the candidates. `paths` are the scenario's precomputed market paths
+        // template's Automatic choices by trying the candidates. `paths` are the market's precomputed paths
         // (SeededPaths); without them the simulator draws its own as paths are asked for.
         public PathSimulator(
-            SimulationParameters template, InvestmentScenario scenario, DateOnly socialSecurityStart, double monthlyBenefit,
+            SimulationParameters template, DateOnly socialSecurityStart, double monthlyBenefit,
             WithdrawalStrategy order, RothConversionTarget target, double[][]? paths = null)
         {
             _parameters = ParametersCopy.Of(template);
-            _parameters.Mean = scenario.Mean;
-            _parameters.StdDev = scenario.StdDev;
-            _parameters.ScenarioDescription = scenario.Description;
             _parameters.Iterations = 1;
             _parameters.SocialSecurityStartDate = socialSecurityStart;
             _parameters.SocialSecurityMonthlyAmount = monthlyBenefit;
@@ -56,10 +53,10 @@ namespace MonteCarloSimulation.Optimizer
 
         public double TotalSocialSecurity { get; }
 
-        // Market paths 0..count-1 for a scenario, drawn once and shared (read-only) by every simulator, spend, claiming
-        // age and candidate that runs it. Only the template's retirement window decides how many years each holds.
-        public static double[][] SeededPaths(SimulationParameters template, InvestmentScenario scenario, int count) =>
-            RunSimulator.SeededReturns(scenario.Mean, scenario.StdDev, RetirementTimeline.Build(template).Count, count);
+        // Market paths 0..count-1 in the template's market, drawn once and shared (read-only) by every simulator, spend,
+        // claiming age and candidate that runs it. Only the template's retirement window decides how many years each holds.
+        public static double[][] SeededPaths(SimulationParameters template, int count) =>
+            RunSimulator.SeededReturns(template, RetirementTimeline.Build(template).Count, count);
 
         public bool Survives(double annualWithdrawal, int path) => Probe(annualWithdrawal, path).Survived;
 
@@ -69,7 +66,7 @@ namespace MonteCarloSimulation.Optimizer
             _parameters.Withdrawal = annualWithdrawal;
             var returns = path < _paths.Length
                 ? _paths[path]
-                : RunSimulator.SeededReturns(_parameters.Mean, _parameters.StdDev, _timeline.Count, path, 1)[0];
+                : RunSimulator.SeededReturns(_parameters, _timeline.Count, path, 1)[0];
             return RunSimulator.Survives(_parameters, _timeline, _strategy, returns, _ceiling, out var accounts)
                 ? (true, accounts.AfterTaxValue)
                 : (false, 0);
