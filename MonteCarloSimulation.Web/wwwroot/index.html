@@ -67,13 +67,13 @@
                         <input type="date" name="retirementDate" value="2027-01-01" data-i18n-title="runner.retireOnTitle" title="Withdrawals begin on this date. Enter account balances as you expect them on this date; dollar amounts are in today's dollars." required>
                     </label>
                     <label><span data-i18n="form.birthdate">Birthdate</span>
-                        <input type="date" name="birthdate" value="1970-01-01" required>
+                        <input type="date" name="birthdate" value="1969-07-07" required>
                     </label>
                     <label><span data-i18n="runner.horizon">Horizon (years)</span>
-                        <input type="number" name="years" min="1" max="999" step="1" value="30" style="width: calc(3ch + 1.6rem)" data-i18n-title="runner.yearsTitle" title="How many years the money must last, counted from the Retire On Date." required>
+                        <input type="number" name="years" min="1" max="999" step="1" value="40" style="width: calc(3ch + 1.6rem)" data-i18n-title="runner.yearsTitle" title="How many years the money must last, counted from the Retire On Date." required>
                     </label>
                     <label><span data-i18n="runner.iterations">Iterations / Runs (99 max)</span>
-                        <input type="number" name="iterations" min="1" max="99" step="1" value="10" style="width: calc(3ch + 2rem)" required>
+                        <input type="number" name="iterations" min="1" max="99" step="1" value="20" style="width: calc(3ch + 2rem)" required>
                     </label>
                 </div>
 
@@ -125,7 +125,7 @@
                     <fieldset class="subgroup">
                         <legend data-i18n="form.taxDeferred">Tax Deferred Accts</legend>
                         <label><span data-i18n="form.balance">Balance</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="950,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
                         </label>
                         <label class="checkbox-label">
                             <input type="checkbox" name="enableRothConversions" checked>
@@ -145,14 +145,14 @@
                     <fieldset class="subgroup">
                         <legend data-i18n="form.brokerage">Brokerage Accts</legend>
                         <label><span data-i18n="form.basis">Basis</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageBasis" pattern="[0-9,]*\.?[0-9]*" value="200,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageBasis" pattern="[0-9,]*\.?[0-9]*" value="100,000" style="width: calc(16ch + 1rem)" required>
                         </label>
                         <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="200,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="300,000" style="width: calc(16ch + 1rem)" required>
                         </label>
                         <p class="total-line" id="brokerage-total">Total Brokerage = $400,000</p>
                     </fieldset>
-                    <p class="total-line" id="grand-total">Total money = $1,370,000</p>
+                    <p class="total-line" id="grand-total">Total money = $1,420,000</p>
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-income" aria-labelledby="tab-income" hidden>
@@ -162,7 +162,7 @@
                             <input type="text" inputmode="decimal" class="money-input" name="socialSecurityMonthlyAmount" pattern="[0-9,]*\.?[0-9]*" value="2,750" style="width: calc(16ch + 1rem)" data-i18n-title="runner.ssTitle" title="Monthly benefit in today's dollars (as on your SSA statement)." required>
                         </label>
                         <label><span data-i18n="runner.ssStart">Social Security Start</span>
-                            <input type="date" name="socialSecurityStartDate" value="2032-01-01" data-i18n-title="runner.ssStartTitle" title="Date of your first payment; between ages 62 and 70. Defaults to your 62nd birthday." required>
+                            <input type="date" name="socialSecurityStartDate" value="2031-07-07" data-i18n-title="runner.ssStartTitle" title="Date of your first payment; between ages 62 and 70. Defaults to your 62nd birthday." required>
                         </label>
                         <label><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span>
                             <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" style="width: calc(16ch + 1rem)" required>
