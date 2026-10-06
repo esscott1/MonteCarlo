@@ -748,3 +748,136 @@ details pre {
 .handoff-note + #results {
     margin-top: 1rem;
 }
+
+/* Translations page (translations.html): English and Spanish side by side, the Spanish editable */
+body.translations-page {
+    max-width: 1200px;
+}
+
+.translations-unlock,
+.translations-toolbar,
+.translations-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.translations-unlock .quota-notice,
+.translations-unlock #unlock-result {
+    flex-basis: 100%;
+}
+
+.translations-toolbar input[type="search"] {
+    flex: 1 1 16rem;
+    padding: 0.4rem;
+}
+
+.translations-actions button,
+.secondary-button {
+    padding: 0.45rem 1rem;
+    font-size: 0.95rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+.translation-table td {
+    vertical-align: top;
+}
+
+.translation-table td.translation-key {
+    font-size: 0.8rem;
+    word-break: break-all;
+    width: 14rem;
+}
+
+.translation-key .info-meta {
+    display: block;
+    word-break: normal;
+}
+
+.translation-table td.translation-english {
+    width: 40%;
+}
+
+.translation-table textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    min-height: 2.6rem;
+    resize: vertical;
+}
+
+.translation-table tr.changed td {
+    background: rgba(26, 115, 232, 0.08);
+}
+
+.translation-error {
+    color: #d93025;
+    font-size: 0.85rem;
+    margin: 0.25rem 0 0;
+}
+
+.translations-submit {
+    margin: 1.5rem 0 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 40rem;
+}
+
+.translations-submit h2 {
+    margin: 0;
+}
+
+.translations-submit textarea,
+.translations-submit input {
+    font: inherit;
+    padding: 0.4rem;
+}
+
+.translations-submit button[type="submit"] {
+    align-self: flex-start;
+}
+
+.translations-page button[type="submit"]:disabled {
+    background: #9aa0a6;
+    cursor: default;
+}
+
+/* Shown on a translated page while the Translations page's Preview is on (i18n.js) */
+.i18n-preview-banner {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    background: #1a73e8;
+    color: white;
+    font-size: 0.9rem;
+}
+
+.i18n-preview-banner button {
+    border: 1px solid white;
+    border-radius: 4px;
+    background: none;
+    color: white;
+    padding: 0.2rem 0.75rem;
+    cursor: pointer;
+    font: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+    .translation-error {
+        color: #f28b82;
+    }
+}

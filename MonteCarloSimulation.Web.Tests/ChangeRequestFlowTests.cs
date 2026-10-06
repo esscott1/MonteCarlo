@@ -21,36 +21,6 @@ namespace MonteCarloSimulation.Web.Tests
                 Task.FromResult(new AgentStory($"{summary} {timestamp}", DescriptionPrefix + description, false));
         }
 
-        private sealed class FakeJira(string transitionsJson) : HttpMessageHandler
-        {
-            public List<(HttpMethod Method, string Path, string Body)> Requests { get; } = [];
-
-            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-            {
-                string body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct);
-                string path = request.RequestUri!.AbsolutePath;
-                lock (Requests) Requests.Add((request.Method, path, body));
-
-                if (request.Method == HttpMethod.Post && path.EndsWith("/rest/api/3/issue"))
-                    return Json(HttpStatusCode.Created, """{ "id": "10099", "key": "SCRUM-99" }""");
-                if (request.Method == HttpMethod.Get && path.EndsWith("/transitions"))
-                    return Json(HttpStatusCode.OK, transitionsJson);
-                if (request.Method == HttpMethod.Post && path.EndsWith("/transitions"))
-                    return new HttpResponseMessage(HttpStatusCode.NoContent);
-                return new HttpResponseMessage(HttpStatusCode.NotFound);
-            }
-
-            private static HttpResponseMessage Json(HttpStatusCode status, string json) =>
-                new(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
-        }
-
-        private const string WorkflowTransitions = """
-            { "transitions": [
-                { "id": "11", "name": "To Do", "to": { "name": "To Do" } },
-                { "id": "21", "name": "In Progress", "to": { "name": "In Progress" } },
-                { "id": "31", "name": "In Review", "to": { "name": "In Review" } } ] }
-            """;
-
         private static WebApplicationFactory<Program> App(FakeJira jira) =>
             new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {
@@ -74,7 +44,7 @@ namespace MonteCarloSimulation.Web.Tests
         [Fact]
         public async Task TheStory_IsLabelledAgentTitleChange_AndMovedToInProgress()
         {
-            var jira = new FakeJira(WorkflowTransitions);
+            var jira = new FakeJira(FakeJira.WorkflowTransitions);
             using var app = App(jira);
 
             using var response = await Submit(app);

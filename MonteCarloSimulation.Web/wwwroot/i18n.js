@@ -20,13 +20,49 @@ window.I18n = (function () {
         }
     }
 
+    // The Translations page's Preview: unsaved Spanish edits ({ key: text }) shown in place of es.json's until the
+    // reviewer stops the preview (the banner below) or submits or discards them there
+    const PREVIEW_KEY = 'i18n-preview';
+    function readPreview() {
+        try {
+            const preview = JSON.parse(localStorage.getItem(PREVIEW_KEY) || 'null');
+            return preview && typeof preview === 'object' && Object.keys(preview).length > 0 ? preview : null;
+        } catch {
+            return null;
+        }
+    }
+    const preview = readPreview();
+
     function load(lang) {
         if (!dictionaries[lang]) {
             dictionaries[lang] = fetch(`i18n/${lang}.json`)
                 .then((response) => (response.ok ? response.json() : {}))
-                .catch(() => ({}));
+                .catch(() => ({}))
+                .then((dictionary) => (lang === 'es' && preview ? { ...dictionary, ...preview } : dictionary));
         }
         return dictionaries[lang];
+    }
+
+    function showPreviewBanner() {
+        const count = Object.keys(preview).length;
+        const banner = document.createElement('div');
+        banner.className = 'i18n-preview-banner';
+        banner.setAttribute('role', 'status');
+        banner.lang = 'en';
+        banner.innerHTML = `<span>Previewing ${count} unsubmitted Spanish edit${count === 1 ? '' : 's'} from the Translations page.</span>`;
+        const stop = document.createElement('button');
+        stop.type = 'button';
+        stop.textContent = 'Stop preview';
+        stop.addEventListener('click', () => {
+            try {
+                localStorage.removeItem(PREVIEW_KEY);
+            } catch {
+                // Nothing stored to remove
+            }
+            window.location.reload();
+        });
+        banner.append(stop);
+        document.body.append(banner);
     }
 
     let en = {};
@@ -122,6 +158,7 @@ window.I18n = (function () {
             en = english;
             current = spanish;
             applyStatic();
+            if (preview) showPreviewBanner();
         })
         .finally(() => document.documentElement.classList.remove('i18n-pending'));
 

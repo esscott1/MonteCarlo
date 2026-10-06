@@ -73,7 +73,7 @@ Visitor submits (pencil on the Scenario runner, or the Translations page), behin
 | Label | Handler workflow | Kind | May change | Branch |
 |---|---|---|---|---|
 | `agent-title-change` | `agent-title-change.yml` | Claude (`claude -p`, prompt `.github/agent-prompts/title-change.md`) | page HTML only (`MonteCarloSimulation.Web/wwwroot/*.html`) | `feature/<KEY>-agent-<yyyyMMdd-HHmm>` |
-| `agent-translation-update` | `agent-translation-update.yml` | script (`.github/scripts/apply-translation-update.mjs`) | `MonteCarloSimulation.Web/wwwroot/i18n/es.json` only | `translations/<KEY>-es` |
+| `agent-translation-update` | `agent-translation-update.yml` | script (`.github/scripts/apply-translation-update.mjs`) | `MonteCarloSimulation.Web/wwwroot/i18n/es.json` and `docs/i18n-review.csv` (the review sheet must stay current for CI) | `translations/<KEY>-es` |
 
 **Adding a type later:** one new label, one handler workflow, one guarded job line in the dispatcher, and a row in this table.
 
@@ -246,7 +246,7 @@ The shared steps run inside each handler's job, because GitHub runs every job on
 | 7 | **Eric** | Close PR #24 (superseded by PR B) | When PR B merges |
 | 8 | **Eric + Claude** | ~~End-to-end test: submit a title change; it moves to In Progress, the dispatcher routes it, a PR opens with tests passing, the story moves to In Review; Eric merges~~ **Done: SCRUM-56 (PR #54) and SCRUM-57 (PR #56), both merged 2026-10-06.** | Done |
 | 9 | **Claude** | ~~**PR C**: Spanish part 1~~ **Done: PR #57, merged 2026-10-06** (plus PR #55 and PR #58: CI on the agent's PRs, shown as a commit status). | Done |
-| 10 | **Claude** | **PR D**: Spanish part 2 (Model Info) | After PR C merges |
+| 10 | **Claude** | ~~**PR D**: Spanish part 2 (Model Info)~~ **Done: PR #59, merged 2026-10-06; checked live.** | Done |
 | 11 | **Claude** | **PR E**: Translations page and the `agent-translation-update` handler | After PR D merges |
 | 12 | **Eric** | Share the Translations page and passphrase with the Spanish reviewer; merge their translation PRs | After PR E deploys |
 

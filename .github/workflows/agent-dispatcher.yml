@@ -50,3 +50,20 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
       JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+  translation-update:
+    needs: route
+    if: needs.route.outputs.story_type == 'agent-translation-update'
+    permissions:
+      contents: write
+      pull-requests: write
+      # To start ci.yml on the branch (agent-finish)
+      actions: write
+    uses: ./.github/workflows/agent-translation-update.yml
+    with:
+      issue_key: ${{ github.event.client_payload.issue_key }}
+      summary: ${{ github.event.client_payload.summary }}
+      description: ${{ github.event.client_payload.description }}
+    secrets:
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}

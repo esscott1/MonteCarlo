@@ -9,7 +9,7 @@ import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 // Add a label here only together with its handler workflow and the dispatcher job that calls it.
-export const HANDLERS = ['agent-title-change'];
+export const HANDLERS = ['agent-title-change', 'agent-translation-update'];
 
 // The labels as the dispatcher receives them - toJSON(client_payload.labels): a JSON array (asJsonStringArray), a JSON
 // string of comma-separated labels (join), or null when the rule didn't send any.

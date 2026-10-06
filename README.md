@@ -41,6 +41,8 @@ The one human approval is **merging the pull request**. Jira only records each r
    - runs Claude Code non-interactively (`claude -p`, model `claude-sonnet-5`) with the handler's instructions ([title-change.md](.github/agent-prompts/title-change.md)) and the request. The request reaches the agent as data in its prompt, never as shell; the agent may only edit files, run `dotnet build`/`dotnet test`, and use git's `add`, `status`, `diff` and `commit`. It's told to work only on its branch, never to commit to `master`, and never to push or open pull requests.
 
    The agent changes the page's `<h1>` and `<title>`, builds, tests, and commits as `<issue key> Implement <summary>`. *Uses:* `ANTHROPIC_API_KEY` (GitHub secret).
+
+   For `agent-translation-update` (Spanish corrections from the [Translations page](#reviewing-and-correcting-the-spanish)), [agent-translation-update.yml](.github/workflows/agent-translation-update.yml) uses no AI: on a branch `translations/<issue key>-es`, [apply-translation-update.mjs](.github/scripts/apply-translation-update.mjs) decodes the edits the app encoded in the story (a `translation-update:v1:` block), checks every one again against `es.json`, changes only those keys' lines, regenerates the review sheet, and the workflow commits.
 7. **The workflow checks the work and opens the pull request** ([agent-finish](.github/actions/agent-finish/action.yml)). [check-handler-work.sh](.github/scripts/check-handler-work.sh) refuses to push unless the handler is still on its feature branch, the local `master` didn't move, everything is committed, and every changed file is in the handler's scope (for title changes, `MonteCarloSimulation.Web/wwwroot/*.html`), with nothing under `.github/`. The branch is pushed by an explicit refspec, so the push can only ever create that branch, and the PR is opened against `master`, titled `<issue key> <summary>`. The workflow then comments the PR link on the Jira story and moves the story to **In Review** ([jira-report.sh](.github/scripts/jira-report.sh)); if the run fails, it comments the run's link instead. [ci.yml](.github/workflows/ci.yml) runs the tests on the PR: the workflow starts it on the branch itself, because a PR opened with the built-in `GITHUB_TOKEN` doesn't run other workflows without a manual approval, and the run reports its result on the PR as the **CI / test (started by the agent workflow)** status. *Uses:* `GITHUB_TOKEN` (automatic), and `JIRA_EMAIL` and `JIRA_API_TOKEN` (GitHub secrets).
 8. **A person reviews and merges** — the only approval. Merging to `master` runs the deploy workflow below, which tests and publishes the site. *Uses:* `AZURE_WEBAPP_PUBLISH_PROFILE` (GitHub secret).
 
@@ -49,6 +51,7 @@ The one human approval is **merging the pull request**. Jira only records each r
 | Label | Handler | Kind | May change | Branch |
 |---|---|---|---|---|
 | `agent-title-change` | [agent-title-change.yml](.github/workflows/agent-title-change.yml) | Claude Code, with [title-change.md](.github/agent-prompts/title-change.md) | `MonteCarloSimulation.Web/wwwroot/*.html` | `feature/<key>-agent-<yyyyMMdd-HHmm>` |
+| `agent-translation-update` | [agent-translation-update.yml](.github/workflows/agent-translation-update.yml) | script, no AI ([apply-translation-update.mjs](.github/scripts/apply-translation-update.mjs)) | `MonteCarloSimulation.Web/wwwroot/i18n/es.json`, `docs/i18n-review.csv` | `translations/<key>-es` |
 
 **Adding a type:** the label (in [StoryLabels.cs](MonteCarloSimulation.Web/StoryLabels.cs) if the app creates it), a handler workflow that runs `agent-prepare`, its change, then `agent-finish` with its allowed paths; the label in `HANDLERS` in [resolve-story-type.mjs](.github/scripts/resolve-story-type.mjs); one guarded job in the dispatcher; and a row here.
 
@@ -72,11 +75,29 @@ passphrase box stay in English.
   definitions have Spanish under `lab.label.*` and `lab.def.*` keys, shown only while `en.json`'s English still matches
   the data; household descriptions are translated by template (`lab.household.*`). After republishing the lab with new
   wording, the i18n test names each key to update.
-- **Reviewing the Spanish:** [docs/i18n-review.csv](docs/i18n-review.csv) lists every string side by side (key, where,
-  English, Spanish, and a column for corrections) and opens in Excel or Google Sheets; [docs/i18n-glossary.md](docs/i18n-glossary.md)
-  lists the terms. After changing `es.json`, regenerate the sheet with `node tools/i18n/review-sheet.mjs`.
 - `tools/i18n/i18n.test.mjs` (run by CI) fails if a key is missing or unused, a translation drops a `{placeholder}`, a
   server message has no template, Model Info's lab text has no current translation, or the review sheet is out of date.
+
+### Reviewing and correcting the Spanish
+
+- **The Translations page** ([translations.html](MonteCarloSimulation.Web/wwwroot/translations.html), in the landing
+  page's menu) is where a reviewer corrects the Spanish. It's behind the change-request passphrase (unlocking uses the
+  Observe access check, with the same 5-per-hour limit) and stays in English. It lists all of the site's text: key,
+  where it appears, English, and the Spanish, which is editable. It has search (accents ignored), a part-of-the-site filter
+  and "Changed only".
+  - Edits are kept as a draft in the reviewer's browser and checked as they type. They must keep the same `{placeholders}`
+    and use only `<strong>` and `<em>` (or a tag the current text already has).
+  - **Preview** opens a translated page in Spanish with the unsaved edits applied (`i18n.js` overlays them on `es.json`)
+    and a banner to stop the preview.
+  - **Submit** posts to `POST /api/translations/proposal` (5 per address per rolling hour). The server checks the
+    passphrase and every edit against the live `es.json` ([TranslationProposal.cs](MonteCarloSimulation.Web/TranslationProposal.cs)),
+    creates a Jira story labelled **`agent-translation-update`** with a readable list of the changes and the encoded
+    edits, and moves it to In Progress. From there it follows the [pipeline above](#how-a-change-request-becomes-a-pull-request):
+    the PR applies exactly the submitted text, and merging it puts the corrections live. *Uses:* `ChangeRequest__Passphrase`,
+    `Jira__Email` and `Jira__ApiToken` (Azure); no AI.
+- [docs/i18n-review.csv](docs/i18n-review.csv) has the same list as a spreadsheet (key, where, English, Spanish, and a
+  column for corrections) for Excel or Google Sheets; [docs/i18n-glossary.md](docs/i18n-glossary.md) lists the terms.
+  After changing `es.json` by hand, regenerate the sheet with `node tools/i18n/review-sheet.mjs`.
 
 ## Deployment
 
@@ -101,8 +122,8 @@ No secret is committed to this repo. Each one lives in exactly one of the four p
 |---|---|---|---|---|
 | `Anthropic__ApiKey` | Azure App Service → `montecarlo-otsconsulting` → **Environment variables** | The web app, to compose change-request Jira stories ([ChangeRequestAgent.cs](MonteCarloSimulation.Web/ChangeRequestAgent.cs)) | 2 | An API key from the Anthropic Console (console.anthropic.com → API Keys). **Same key as `ANTHROPIC_API_KEY` below.** |
 | `Jira__Email` | Azure App Service → Environment variables | The web app, to sign in to Jira ([JiraClient.cs](MonteCarloSimulation.Web/JiraClient.cs)) | 2 | The Atlassian account email the stories are created as. Not secret, but paired with the token. |
-| `Jira__ApiToken` | Azure App Service → Environment variables | The web app, to create Jira stories | 2 | An Atlassian API token for that account (id.atlassian.com → Security → API tokens). Atlassian tokens expire. |
-| `ChangeRequest__Passphrase` | Azure App Service → Environment variables | The web app: the change-request form (pencil) and the Observe passphrase | 1 | Chosen by the site owner; shared with whoever may submit change requests. |
+| `Jira__ApiToken` | Azure App Service → Environment variables | The web app, to create Jira stories (change requests and translation updates) | 2 | An Atlassian API token for that account (id.atlassian.com → Security → API tokens). Atlassian tokens expire. |
+| `ChangeRequest__Passphrase` | Azure App Service → Environment variables | The web app: the change-request form (pencil), the Observe passphrase and the Translations page | 1 | Chosen by the site owner; shared with whoever may submit change requests. |
 | GitHub token | Jira → Project settings → Automation → "Trigger AI Agent on In Progress" → the web request's `Authorization` header | Jira, to send the `repository_dispatch` that starts the dispatcher | 4 | A GitHub personal access token allowed to trigger workflows on `esscott1/MonteCarlo`. Personal access tokens expire. |
 | `ANTHROPIC_API_KEY` | GitHub → repo **Settings → Secrets and variables → Actions** | Claude Code in the AI handlers ([agent-title-change.yml](.github/workflows/agent-title-change.yml)) | 6 | Anthropic Console. **Same key as `Anthropic__ApiKey` above.** |
 | `GITHUB_TOKEN` | Created by GitHub for each workflow run; nothing to store | The agent workflows, to push the branch and open the PR | 7 | GitHub Actions, automatically. |
