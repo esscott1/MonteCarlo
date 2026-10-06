@@ -87,16 +87,24 @@ namespace MonteCarloSimulation.Web.Tests
             app.CreateClient().PostAsync("/api/translations/proposal",
                 new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"));
 
-        // A real key from es.json, so the endpoint checks the edit against the file the site serves
+        // A real key from es.json, so the endpoint checks the edit against the file the site serves. The new text is
+        // built from whatever the Spanish is now, so the test keeps passing as translation PRs change it.
         private const string Key = "info.case.stillGoing";
+
+        private static async Task<string> NewSpanish(WebApplicationFactory<Program> app)
+        {
+            using var es = JsonDocument.Parse(await app.CreateClient().GetStringAsync("/i18n/es.json"));
+            return es.RootElement.GetProperty(Key).GetString() + " (prueba)";
+        }
 
         [Fact]
         public async Task AValidProposal_BecomesAStoryLabelledAgentTranslationUpdate_MovedToInProgress()
         {
             var jira = new FakeJira(FakeJira.WorkflowTransitions);
             using var app = App(jira);
+            string spanish = await NewSpanish(app);
 
-            using var response = await Submit(app, new { passphrase = Passphrase, note = "Más natural", edits = new Dictionary<string, string> { [Key] = "Todavía sigue" } });
+            using var response = await Submit(app, new { passphrase = Passphrase, note = "Más natural", edits = new Dictionary<string, string> { [Key] = spanish } });
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -111,7 +119,7 @@ namespace MonteCarloSimulation.Web.Tests
             // The description's last node is the code block the workflow decodes
             var content = fields.GetProperty("description").GetProperty("content").EnumerateArray().ToList();
             Assert.Equal("codeBlock", content[^1].GetProperty("type").GetString());
-            Assert.Equal(TranslationRules.EncodePayload(new Dictionary<string, string> { [Key] = "Todavía sigue" }),
+            Assert.Equal(TranslationRules.EncodePayload(new Dictionary<string, string> { [Key] = spanish }),
                 content[^1].GetProperty("content")[0].GetProperty("text").GetString());
             Assert.Contains(content, node => node.GetProperty("content")[0].GetProperty("text").GetString() == "Reviewer's note: Más natural");
 
@@ -124,7 +132,7 @@ namespace MonteCarloSimulation.Web.Tests
             var jira = new FakeJira(FakeJira.WorkflowTransitions);
             using var app = App(jira);
 
-            using var response = await Submit(app, new { passphrase = "wrong", edits = new Dictionary<string, string> { [Key] = "Todavía sigue" } });
+            using var response = await Submit(app, new { passphrase = "wrong", edits = new Dictionary<string, string> { [Key] = "Cualquier texto" } });
 
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
             Assert.Empty(jira.Requests);
