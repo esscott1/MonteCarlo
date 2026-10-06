@@ -3,16 +3,18 @@ name: CI
 # Runs the full test suite on every pull request, so each PR shows a pass/fail check before it's merged. The deploy
 # workflow runs the same tests again after merge.
 #
-# A pull request opened by a workflow with its built-in GITHUB_TOKEN - as the agent workflows do - doesn't start other
-# workflows (GitHub's rule against runaway chains), so pull_request never fires for those. agent-finish therefore starts
-# this workflow on the agent's branch with workflow_dispatch (the one event that rule allows); its check shows on the PR
-# because it runs on the PR's head commit.
+# A pull request opened by a workflow with its built-in GITHUB_TOKEN - as the agent workflows do - doesn't run this
+# workflow on its own: GitHub either skips pull_request or holds it as "action required" until someone approves it.
+# agent-finish therefore starts this workflow on the agent's branch with workflow_dispatch. A dispatched run isn't listed
+# among a PR's checks, so it reports its result as a commit status on the commit it tested, which the PR does show.
 on:
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+  # For the commit status a dispatched run reports
+  statuses: write
 
 # A new push to the same PR (or a new run on the same branch) cancels the run it supersedes
 concurrency:
@@ -22,7 +24,17 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      STATUS_CONTEXT: CI / test (started by the agent workflow)
     steps:
+      - name: Report a pending status on the commit
+        if: github.event_name == 'workflow_dispatch'
+        run: >-
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state=pending -f context="$STATUS_CONTEXT"
+          -f target_url="$RUN_URL" -f description="Running the tests" --silent
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-dotnet@v4
@@ -40,3 +52,12 @@ jobs:
 
       - name: Test the agent workflow scripts and the translations
         run: node --test ".github/scripts/*.test.mjs" "tools/i18n/*.test.mjs"
+
+      # Runs even when a test step failed or the run was cancelled, so the status never stays pending
+      - name: Report the result on the commit
+        if: always() && github.event_name == 'workflow_dispatch'
+        env:
+          STATE: ${{ job.status == 'success' && 'success' || 'failure' }}
+        run: >-
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state="$STATE" -f context="$STATUS_CONTEXT"
+          -f target_url="$RUN_URL" -f description="Tests: $STATE" --silent
