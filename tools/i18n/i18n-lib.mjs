@@ -9,11 +9,36 @@ import { fileURLToPath } from 'node:url';
 
 export const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const wwwroot = join(repo, 'MonteCarloSimulation.Web', 'wwwroot');
-export const PAGES = ['optimal.html', 'index.html'];
-export const SCRIPTS = ['optimal.js', 'app.js', 'quota.js'];
+export const PAGES = ['optimal.html', 'index.html', 'model-info.html'];
+export const SCRIPTS = ['optimal.js', 'app.js', 'quota.js', 'model-info.js'];
 
 export const readJson = (name) => JSON.parse(readFileSync(join(wwwroot, 'i18n', name), 'utf8'));
 export const readText = (name) => readFileSync(join(wwwroot, name), 'utf8');
+export const readLab = () => JSON.parse(readFileSync(join(wwwroot, 'model-info', 'strategy-lab.json'), 'utf8'));
+
+// Model Info translates the Strategy Lab's English labels under lab.label.<slug> and its definitions under
+// lab.def.<code> (model-info.js: slug, labLabel, labDefinition) - the same slug as here
+export const slug = (english) => english.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+// Every label and definition from the lab's data that Model Info shows: [{ key, english }]
+export function labTexts(s) {
+    const labels = new Set();
+    const addSlice = (text) => text.split(': ').forEach((part) => labels.add(part));
+    s.definitions.forEach((d) => labels.add(d.name));
+    s.slices.forEach((sl) => {
+        labels.add(sl.dimension);
+        sl.bins.forEach((b) => labels.add(b.label));
+    });
+    (s.funding?.slices ?? []).filter((sl) => sl.dimension.startsWith('Retires before')).forEach((sl) => sl.bins.forEach((b) => labels.add(b.label)));
+    s.subsets.forEach((x) => labels.add(x.label));
+    s.directQuestion.forEach((x) => labels.add(x.label));
+    (s.orderChoice ?? []).forEach((x) => { labels.add(x.name); addSlice(x.worstSlice); });
+    (s.conversionChoice?.rows ?? []).forEach((x) => { labels.add(x.name); addSlice(x.worstSlice); });
+    return [
+        ...[...labels].map((english) => ({ key: `lab.label.${slug(english)}`, english })),
+        ...s.definitions.map((d) => ({ key: `lab.def.${d.code}`, english: d.definition })),
+    ];
+}
 
 // Static keys and their English, in page order: [{ key, english, page }]
 export function staticEntries() {

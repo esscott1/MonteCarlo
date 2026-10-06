@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { repo, readJson, readText, staticEntries, placeholders, SCRIPTS } from './i18n-lib.mjs';
+import { repo, readJson, readText, readLab, labTexts, staticEntries, placeholders, SCRIPTS } from './i18n-lib.mjs';
 import { buildSheet, readSheet } from './review-sheet.mjs';
 
 const en = readJson('en.json');
@@ -12,7 +12,7 @@ const statics = staticEntries();
 const staticKeys = new Set(statics.map((s) => s.key));
 
 // Keys the scripts build from a prefix and a value (an enum name, a table column, a scenario id, a server field...)
-const DYNAMIC_PREFIXES = ['order.', 'target.short.', 'target.phrase.', 'funding.', 'optimal.table.', 'runner.table.', 'scenario.', 'field.', 'server.'];
+const DYNAMIC_PREFIXES = ['order.', 'target.short.', 'target.phrase.', 'funding.', 'optimal.table.', 'runner.table.', 'scenario.', 'field.', 'server.', 'lab.'];
 
 function literalScriptKeys() {
     const keys = new Set();
@@ -88,6 +88,32 @@ test('every validation message the server can send has an English template to tr
 
 test('the review sheet (docs/i18n-review.csv) is up to date', () => {
     assert.equal(readSheet(), buildSheet(), 'run node tools/i18n/review-sheet.mjs');
+});
+
+// The Strategy Lab's labels arrive in English as data. Model Info shows the Spanish only while en.json's English still
+// matches the published data, so a republished lab with new wording would quietly fall back to English: catch it here.
+test('every Strategy Lab label and definition Model Info shows has its current English in en.json', () => {
+    const texts = labTexts(readLab());
+    assert.ok(texts.length >= 60, `found only ${texts.length} lab texts; has the lab's JSON changed shape?`);
+    for (const { key, english } of texts) {
+        assert.equal(en[key], english, `${key}: update it in en.json and es.json (the lab's text changed)`);
+    }
+});
+
+// Built the way I18n.translateTemplate matches them: escape the template, then let each {placeholder} match anything
+const templatePattern = (template) => new RegExp(`^${template.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\\?\{(\w+)\\?\}/g, '(.+?)')}$`);
+
+test('every household description in the lab data matches the lab.household.* templates', () => {
+    const lab = readLab();
+    const patterns = Object.entries(en).filter(([key]) => key.startsWith('lab.household.')).map(([, template]) => templatePattern(template));
+    const matches = (piece) => patterns.some((pattern) => pattern.test(piece));
+    const descriptions = [...lab.topRegret.map((r) => r.scenario), ...(lab.caseStudy ? [lab.caseStudy.scenario] : [])];
+    assert.ok(descriptions.length >= 10);
+    for (const description of descriptions) {
+        for (const part of description.split('; ')) {
+            assert.ok(matches(part) || part.split(', ').every(matches), `no template for "${part}" in "${description}"`);
+        }
+    }
 });
 
 test('the Observe passphrase box stays in English', () => {

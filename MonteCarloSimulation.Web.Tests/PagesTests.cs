@@ -77,6 +77,31 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.DoesNotContain("href=\"index.html\"", html);
         }
 
+        // English/Spanish: each translated page has the language button and loads i18n.js before its own script.
+        // The Observe page stays English.
+        [Theory]
+        [InlineData("/", "optimal.js")]
+        [InlineData("/index.html", "app.js")]
+        [InlineData("/model-info.html", "model-info.js")]
+        public async Task TranslatedPages_HaveTheLanguageButton_AndLoadI18nFirst(string path, string pageScript)
+        {
+            string html = await GetAsync(path);
+
+            Assert.Contains(@"<button type=""button"" class=""lang-toggle""", html);
+            int i18nScript = html.IndexOf("<script src=\"i18n.js\"></script>");
+            int ownScript = html.IndexOf($"<script src=\"{pageScript}\"></script>");
+            Assert.True(i18nScript >= 0 && ownScript > i18nScript);
+        }
+
+        [Fact]
+        public async Task ObservePage_StaysInEnglish()
+        {
+            string html = await GetAsync("/observe.html");
+
+            Assert.DoesNotContain("lang-toggle", html);
+            Assert.DoesNotContain("i18n.js", html);
+        }
+
         [Fact]
         public async Task DeniedObserveVisit_ReturnsToTheLandingPage_WhereTheMenuReopensThePassphrase()
         {

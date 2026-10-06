@@ -13,6 +13,8 @@ function scriptArea(key) {
     if (key.startsWith('optimal.')) return 'optimal.js (landing page results)';
     if (key.startsWith('runner.') || key.startsWith('flyout.') || key.startsWith('quota.')) return 'app.js (Scenario runner)';
     if (key.startsWith('server.') || key.startsWith('field.')) return 'server messages and field names';
+    if (key.startsWith('info.')) return 'model-info.js (Model Info)';
+    if (key.startsWith('lab.')) return 'Model Info (Strategy Lab data)';
     return 'shared';
 }
 
