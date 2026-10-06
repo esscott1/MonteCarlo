@@ -1,0 +1,50 @@
+name: Agent dispatcher
+
+# Started by the Jira Automation rule "Trigger AI Agent on In Progress", which sends repository_dispatch
+# "run_claude_agent" for a story whose label begins agent- when it moves to In Progress. The payload carries
+# issue_key, summary, description and labels.
+#
+# The dispatcher doesn't change any code. It routes on the story's exact label (.github/scripts/resolve-story-type.mjs)
+# to the handler workflow for that type of change; a story with no supported label ends here as a no-op. Each handler
+# creates a feature branch, makes the change, and the shared agent-finish step opens a pull request - merging it is the
+# only human approval. Nothing is ever committed to master.
+on:
+  repository_dispatch:
+    types: [run_claude_agent]
+
+permissions:
+  contents: read
+
+jobs:
+  route:
+    runs-on: ubuntu-latest
+    outputs:
+      story_type: ${{ steps.route.outputs.story_type }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Route by label
+        id: route
+        # Payload fields reach the script only as environment variables, never pasted into shell
+        env:
+          ISSUE_KEY: ${{ github.event.client_payload.issue_key }}
+          LABELS_JSON: ${{ toJSON(github.event.client_payload.labels) }}
+        run: node .github/scripts/resolve-story-type.mjs
+
+  # One job per supported label. Add a job here only together with its handler workflow and its label in
+  # resolve-story-type.mjs's HANDLERS.
+  title-change:
+    needs: route
+    if: needs.route.outputs.story_type == 'agent-title-change'
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/agent-title-change.yml
+    with:
+      issue_key: ${{ github.event.client_payload.issue_key }}
+      summary: ${{ github.event.client_payload.summary }}
+      description: ${{ github.event.client_payload.description }}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}

@@ -126,7 +126,19 @@ app.MapPost("/api/change-request", async (
     try
     {
         var story = await agent.ComposeStoryAsync(request.Summary, request.Description, timestamp, ct);
-        var issue = await jira.CreateStoryAsync(story.Summary, story.Description, ct);
+        var issue = await jira.CreateStoryAsync(story.Summary, story.Description, [StoryLabels.TitleChange], ct);
+
+        // Straight to In Progress: that move is what makes the Jira rule dispatch the story to the agent workflows, which
+        // open a pull request. Merging that PR is the only human approval - there's no triage step in Jira. If the move
+        // fails, the story still exists and the visitor still gets its key; moving it by hand starts the agent.
+        try
+        {
+            await jira.TransitionAsync(issue.Key, JiraClient.InProgress, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Created {IssueKey} but couldn't move it to In Progress, so the agent hasn't started.", issue.Key);
+        }
 
         logger.LogInformation("Created Jira story {IssueKey} (server corrected: {Corrected}).", issue.Key, story.ServerCorrected);
         return Results.Ok(new ChangeRequestResponse(
