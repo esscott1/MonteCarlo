@@ -94,6 +94,7 @@
 
   "runner.pageTitle": "Simulador de escenarios",
   "runner.heading": "Simulador de escenarios",
+  "runner.description": "Ponga a prueba su plan en muchos mercados simulados y vea cuánto dura el dinero.",
   "runner.yourInputs": "Sus datos",
   "runner.retireOnTitle": "Los retiros empiezan en esta fecha. Ingrese los saldos de las cuentas como espera que estén en esta fecha; los montos en dólares son en dólares de hoy.",
   "runner.yearsTitle": "Cuántos años debe durar el dinero, contados desde la fecha de jubilación.",
