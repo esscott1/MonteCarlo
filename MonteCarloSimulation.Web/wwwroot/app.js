@@ -768,12 +768,55 @@ form.addEventListener('submit', async (e) => {
         } else {
             const data = await response.json();
             view = { kind: 'results', parameters: data.parameters, output: data.output };
+            chartData = { points: data.output.balanceBands, runs: data.output.result.runs.length };
         }
     } catch (err) {
         view = { kind: 'failed', message: err.message };
     }
     renderView();
+    renderChart();
 });
+
+// The chart beside the inputs: the latest run's balances (90th percentile, median, 10th percentile), or until the
+// first run an example - 30 years from this January, $1M growing to $10M / $3M / staying at $1M. A run that fails
+// validation or the request keeps the last chart.
+const chartBox = document.getElementById('balance-chart');
+let chartData = null;
+
+function exampleBands() {
+    const year = new Date().getFullYear();
+    return Array.from({ length: 31 }, (_, i) => ({
+        date: `${year + i}-01-01`,
+        upper: 1e6 * 10 ** (i / 30),
+        middle: 1e6 * 3 ** (i / 30),
+        lower: 1e6,
+    }));
+}
+
+function renderChart() {
+    const points = chartData ? chartData.points : exampleBands();
+    const end = points[points.length - 1];
+    document.getElementById('chart-note').textContent = chartData
+        ? t('runner.chart.actual', { runs: chartData.runs })
+        : t('runner.chart.example');
+    BalanceChart.render(chartBox, points, {
+        ariaLabel: t('runner.chart.aria', {
+            year: end.date.slice(0, 4),
+            upper: formatCurrency(end.upper),
+            middle: formatCurrency(end.middle),
+            lower: formatCurrency(end.lower),
+        }),
+        names: { upper: t('runner.chart.tipUpper'), middle: t('runner.chart.tipMiddle'), lower: t('runner.chart.tipLower') },
+        formatDate: (iso) => I18n.monthYear(new Date(`${iso}T00:00:00Z`)),
+        formatMoney: formatCurrency,
+    });
+}
+
+function initChart() {
+    // Drawn once the page's text has loaded; redrawn when the inputs section reopens, since it has no width while closed
+    I18n.ready.then(renderChart);
+    document.getElementById('inputs-section').addEventListener('toggle', (e) => { if (e.target.open) renderChart(); });
+}
 
 // "Run in Scenario runner" on the Optimal page: it leaves one scenario's recommendation and the inputs behind it in
 // sessionStorage. Read it once (so a reload doesn't re-run), fill the form, explain where the values came from, and run.
@@ -858,11 +901,13 @@ document.addEventListener('i18n:change', () => {
     updateAllocation();
     renderHandoffNote();
     renderView();
+    renderChart();
 });
 
 I18n.ready.then(applySimulatorHandoff);
 initTabs();
 initAllocation();
+initChart();
 initMoneyInputs();
 initBalanceTotals();
 initSocialSecurityDefault();

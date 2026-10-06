@@ -96,8 +96,11 @@ namespace MonteCarloSimulation.Web.Tests
             foreach (var (name, value) in defaults)
                 Assert.Matches($@"name=""{name}""[^>]*value=""{Regex.Escape(value)}""", investments);
 
-            // The chart placeholder is the inputs' neighbour, and the preset radios are gone
-            Assert.Contains(@"<section class=""graph-tile""", html);
+            // The balance chart is the inputs' neighbour (chart.js draws it, loaded before app.js), and the preset radios are gone
+            var graphTile = Regex.Match(html, @"<section class=""graph-tile""(.*?)</section>", RegexOptions.Singleline).Groups[1].Value;
+            Assert.Contains(@"id=""balance-chart""", graphTile);
+            int chartScript = html.IndexOf("<script src=\"chart.js\"></script>");
+            Assert.True(chartScript >= 0 && html.IndexOf("<script src=\"app.js\"></script>") > chartScript);
             Assert.False(HasId(html, "scenario-options"));
         }
 

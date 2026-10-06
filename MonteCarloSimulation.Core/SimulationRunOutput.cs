@@ -9,6 +9,9 @@ namespace MonteCarloSimulation.Core
         // runner only displays it when no run failed, in which case it is simply the final run.
         public IReadOnlyList<RunYearDetail>? LastSuccessfulRun { get; init; }
 
+        // The runs' balances over time (10th percentile, median, 90th percentile), for the Scenario runner's chart.
+        public required IReadOnlyList<BalanceBandPoint> BalanceBands { get; init; }
+
         // The withdrawal order the runs used: the requested one, or the one Automatic chose for these inputs.
         public WithdrawalStrategy WithdrawalStrategy { get; init; }
 
