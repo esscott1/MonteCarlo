@@ -1,0 +1,89 @@
+name: Agent - title change
+
+# Handler for Jira stories labelled agent-title-change (change requests from the Scenario runner's pencil). Called by
+# agent-dispatcher.yml. Claude Code changes the page's <h1> and <title> and commits to a feature branch; the shared
+# steps around it create that branch, check the result and open the pull request.
+on:
+  workflow_call:
+    inputs:
+      issue_key:
+        required: true
+        type: string
+      summary:
+        required: true
+        type: string
+      description:
+        required: true
+        type: string
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+      JIRA_EMAIL:
+        required: true
+      JIRA_API_TOKEN:
+        required: true
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    # Untrusted request text is lifted into environment variables once, here; no step interpolates it into a script
+    env:
+      ISSUE_KEY: ${{ inputs.issue_key }}
+      SUMMARY: ${{ inputs.summary }}
+      DESCRIPTION: ${{ inputs.description }}
+      STORY_TYPE: agent-title-change
+      CLAUDE_MODEL: claude-sonnet-5
+      JIRA_BASE_URL: https://ericscott411.atlassian.net
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare the feature branch
+        id: prepare
+        uses: ./.github/actions/agent-prepare
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run Claude Code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        # The prompt is the handler's instructions plus the request, written to a file with printf from environment
+        # variables - so the request text is never parsed as shell - and passed to Claude as one argument.
+        # dotnet is limited to build and test; git to add, status, diff and commit (no push, checkout, switch or branch).
+        run: |
+          prompt="$RUNNER_TEMP/prompt.md"
+          cat .github/agent-prompts/title-change.md > "$prompt"
+          printf '\n<request>\nIssue key: %s\nSummary: %s\nDescription: %s\n</request>\n\nModel: %s\n' \
+            "$ISSUE_KEY" "$SUMMARY" "$DESCRIPTION" "$CLAUDE_MODEL" >> "$prompt"
+          claude -p --model "$CLAUDE_MODEL" --permission-mode acceptEdits \
+            --allowed-tools "Bash(git add*) Bash(git status*) Bash(git diff*) Bash(git commit*) Bash(dotnet build*) Bash(dotnet test*) Edit Write" \
+            -- "$(cat "$prompt")"
+
+      - name: Check, push and open the pull request
+        uses: ./.github/actions/agent-finish
+        with:
+          branch: ${{ steps.prepare.outputs.branch }}
+          master-sha: ${{ steps.prepare.outputs.master-sha }}
+          local-master-sha: ${{ steps.prepare.outputs.local-master-sha }}
+          allowed-paths: |
+            MonteCarloSimulation.Web/wwwroot/*.html
+          github-token: ${{ github.token }}
+
+      - name: Report a failed run to Jira
+        if: failure()
+        run: |
+          bash .github/scripts/jira-report.sh comment \
+            "The agent-title-change run failed before opening a pull request: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

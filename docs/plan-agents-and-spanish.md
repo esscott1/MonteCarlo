@@ -241,7 +241,7 @@ The shared steps run inside each handler's job, because GitHub runs every job on
 | 2 | **Eric** | Add `"labels": {{issue.labels.asJsonStringArray}}` to the Jira rule's web request body (see [the payload](#jira-rule-payload-eric-updates-the-rules-web-request-body)) | Any time before step 7; safe to do now |
 | 3 | **Eric** | Check the Jira API token's expiry at id.atlassian.com → Security → API tokens | Before PR B |
 | 4 | **Claude** | ~~**PR 0**: `ci.yml` (with this plan file)~~ **Done: PR #50, merged 2026-10-06.** | Done |
-| 5 | **Claude** | **PR A**: request countdown | After PR 0 merges |
+| 5 | **Claude** | ~~**PR A**: request countdown~~ **Done: PR #51, merged 2026-10-06; tested live.** | Done |
 | 6 | **Claude** | **PR B**: auto In Progress, dispatcher, title handler, master checks, Jira report-back, PR #24 folded in, README; set `JIRA_EMAIL` and `JIRA_API_TOKEN` GitHub secrets | After PR A merges |
 | 7 | **Eric** | Close PR #24 (superseded by PR B) | When PR B merges |
 | 8 | **Eric + Claude** | End-to-end test: submit a title change; it moves to In Progress, the dispatcher routes it, a PR opens with tests passing, the story moves to In Review; Eric merges | After PR B deploys |

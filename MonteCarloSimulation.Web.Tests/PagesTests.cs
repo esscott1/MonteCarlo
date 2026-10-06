@@ -52,8 +52,10 @@ namespace MonteCarloSimulation.Web.Tests
         {
             string html = await GetAsync("/index.html");
 
-            Assert.Equal("Scenario runner", Title(html));
-            Assert.Equal("Scenario runner", Heading(html));
+            // The pencil's change requests exist to rename this page (the agent-title-change handler edits its <h1> and
+            // <title>), so the test checks they're there without pinning their text
+            Assert.False(string.IsNullOrWhiteSpace(Title(html)));
+            Assert.False(string.IsNullOrWhiteSpace(Heading(html)));
             Assert.True(HasId(html, "run-form"));
             Assert.True(HasId(html, "edit-toggle"));
             Assert.True(HasId(html, "edit-flyout"));

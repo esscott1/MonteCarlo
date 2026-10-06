@@ -1,0 +1,68 @@
+name: Agent - check, push and open the pull request
+description: >
+  Shared "after" step of every agent handler. Proves the handler stayed on its feature branch, left master alone and
+  changed only files in its scope; then pushes the branch, opens the pull request against master, and reports the PR to
+  the Jira story (comment, then move to In Review). Expects ISSUE_KEY, SUMMARY, DESCRIPTION, STORY_TYPE and the JIRA_*
+  variables in the environment.
+
+inputs:
+  branch:
+    description: The feature branch agent-prepare created
+    required: true
+  master-sha:
+    description: The master commit the branch started from (agent-prepare's master-sha)
+    required: true
+  local-master-sha:
+    description: Where the local master pointed before the handler ran (agent-prepare's local-master-sha)
+    required: false
+    default: ''
+  allowed-paths:
+    description: Glob patterns (one per line) of the files this handler may change
+    required: true
+  github-token:
+    description: Token for pushing the branch and opening the pull request
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check the handler's work
+      shell: bash
+      env:
+        BRANCH: ${{ inputs.branch }}
+        MASTER_SHA: ${{ inputs.master-sha }}
+        LOCAL_MASTER_SHA: ${{ inputs.local-master-sha }}
+        ALLOWED_PATHS: ${{ inputs.allowed-paths }}
+      run: bash .github/scripts/check-handler-work.sh
+
+    - name: Push the branch and open the pull request
+      id: pr
+      shell: bash
+      env:
+        BRANCH: ${{ inputs.branch }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        # An explicit refspec: the push can only ever create or update this feature branch
+        git push origin "HEAD:refs/heads/$BRANCH"
+
+        body="$RUNNER_TEMP/pr-body.md"
+        {
+          printf 'Automated change for Jira story [%s](%s/browse/%s) (story type `%s`).\n\n' \
+            "$ISSUE_KEY" "$JIRA_BASE_URL" "$ISSUE_KEY" "$STORY_TYPE"
+          printf 'Merging this pull request is the approval: nothing reaches master until a person merges it.\n\n'
+          printf '### Request\n\n'
+          printf '%s\n' "$DESCRIPTION"
+        } > "$body"
+
+        url="$(gh pr create --base master --head "$BRANCH" --title "$ISSUE_KEY $SUMMARY" --body-file "$body")"
+        echo "Opened $url"
+        echo "url=$url" >> "$GITHUB_OUTPUT"
+
+    - name: Report the pull request to Jira
+      shell: bash
+      env:
+        PR_URL: ${{ steps.pr.outputs.url }}
+      run: |
+        bash .github/scripts/jira-report.sh comment "Pull request opened by the $STORY_TYPE agent: $PR_URL"
+        bash .github/scripts/jira-report.sh transition "In Review"

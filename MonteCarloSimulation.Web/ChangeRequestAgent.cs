@@ -49,7 +49,8 @@ namespace MonteCarloSimulation.Web
             _client = new AnthropicClient { ApiKey = config["Anthropic:ApiKey"] };
         }
 
-        public async Task<AgentStory> ComposeStoryAsync(string summary, string description, string timestamp, CancellationToken ct)
+        // Virtual so tests can stand in for the Anthropic call
+        public virtual async Task<AgentStory> ComposeStoryAsync(string summary, string description, string timestamp, CancellationToken ct)
         {
             var tool = new Tool
             {

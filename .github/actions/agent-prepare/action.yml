@@ -1,0 +1,56 @@
+name: Agent - prepare the feature branch
+description: >
+  Shared "before" step of every agent handler. Creates the handler's feature branch from master and records master's
+  commit, so agent-finish can prove master was left alone. Expects ISSUE_KEY in the environment.
+
+inputs:
+  branch:
+    description: Branch to create. Defaults to feature/<ISSUE_KEY>-agent-<yyyyMMdd-HHmm>.
+    required: false
+    default: ''
+
+outputs:
+  branch:
+    description: The feature branch the handler must commit to
+    value: ${{ steps.branch.outputs.branch }}
+  master-sha:
+    description: The master commit the branch starts from
+    value: ${{ steps.branch.outputs.master_sha }}
+  local-master-sha:
+    description: Where the runner's local master branch pointed before the handler ran (empty if there was none)
+    value: ${{ steps.branch.outputs.local_master_sha }}
+
+runs:
+  using: composite
+  steps:
+    - id: branch
+      shell: bash
+      env:
+        REQUESTED_BRANCH: ${{ inputs.branch }}
+      run: |
+        set -euo pipefail
+        # The key becomes part of a branch name and a commit message, so it must be exactly SCRUM-<number>
+        if [[ ! "$ISSUE_KEY" =~ ^SCRUM-[0-9]+$ ]]; then
+          echo "::error::Refusing to run: the issue key is not a valid SCRUM-<number> key."
+          exit 1
+        fi
+
+        branch="${REQUESTED_BRANCH:-feature/${ISSUE_KEY}-agent-$(date -u +'%Y%m%d-%H%M')}"
+        if [[ -z "$branch" || "$branch" == "master" || "$branch" == refs/* ]]; then
+          echo "::error::Refusing to use branch '$branch': handlers only ever work on a new feature branch."
+          exit 1
+        fi
+
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        # The local master (checked out when the run started) is recorded on its own: origin/master can legitimately
+        # move on if someone merges while the run is going, but the handler must never move the local one
+        local_master_sha="$(git rev-parse --verify --quiet refs/heads/master || true)"
+        git fetch --no-tags origin master
+        master_sha="$(git rev-parse origin/master)"
+        git checkout -b "$branch" "$master_sha"
+
+        echo "Working on $branch, from master at $master_sha"
+        echo "branch=$branch" >> "$GITHUB_OUTPUT"
+        echo "master_sha=$master_sha" >> "$GITHUB_OUTPUT"
+        echo "local_master_sha=$local_master_sha" >> "$GITHUB_OUTPUT"
