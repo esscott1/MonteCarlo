@@ -361,6 +361,92 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
+        // --- The Free Scenario runner ---
+
+        [Fact]
+        public async Task Me_ReportsTheSharesAFreeVisitorsAccountTotalsAreSplitBy()
+        {
+            using var app = App();
+
+            var shares = (await MeAsync(Client(app))).GetProperty("freeDefaults");
+
+            Assert.Equal(0.5, shares.GetProperty("brokerageGainShare").GetDouble());
+            Assert.Equal(1.0, shares.GetProperty("rothBasisShare").GetDouble());
+        }
+
+        [Fact]
+        public async Task AFreeVisitorsAccounts_AreSplitByTheFreeShares_WhateverTheRequestSays()
+        {
+            using var app = App();
+            var request = FreeRunRequest();
+            request.InitialRothBasis = 15_000;
+            request.InitialRothUnrealizedGain = 5_000;
+            request.InitialBrokerageBasis = 100_000;
+            request.InitialBrokerageUnrealizedGain = 300_000;
+
+            using var response = await PostAsync(app, "/api/run", request);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var parameters = body.RootElement.GetProperty("parameters");
+            Assert.Equal(20_000, parameters.GetProperty("initialRothBasis").GetDouble());
+            Assert.Equal(0, parameters.GetProperty("initialRothUnrealizedGain").GetDouble());
+            Assert.Equal(200_000, parameters.GetProperty("initialBrokerageBasis").GetDouble());
+            Assert.Equal(200_000, parameters.GetProperty("initialBrokerageUnrealizedGain").GetDouble());
+        }
+
+        [Fact]
+        public async Task APlusVisitorsAccounts_KeepTheirOwnSplit()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+            var request = FreeRunRequest();
+            request.InitialBrokerageBasis = 100_000;
+            request.InitialBrokerageUnrealizedGain = 300_000;
+
+            using var response = await PostAsync(app, "/api/run", request, cookie);
+
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(100_000, body.RootElement.GetProperty("parameters").GetProperty("initialBrokerageBasis").GetDouble());
+        }
+
+        [Fact]
+        public async Task AFreeVisitorsRun_LeavesOutTheTaxDetail_ButKeepsEachYearsTaxTotals()
+        {
+            using var app = App();
+
+            using var response = await PostAsync(app, "/api/run", FreeRunRequest());
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(body.RootElement.GetProperty("taxDetail").GetBoolean());
+            var runs = body.RootElement.GetProperty("output").GetProperty("result").GetProperty("runs").EnumerateArray().ToList();
+            Assert.Equal(3, runs.Count);
+            Assert.All(runs, run => Assert.False(run.TryGetProperty("lifetimeIrmaaSurcharges", out _)));
+            var years = runs.SelectMany(run => run.GetProperty("years").EnumerateArray()).ToList();
+            Assert.NotEmpty(years);
+            Assert.All(years, year =>
+            {
+                Assert.All(FreeRunView.TaxDetailFields, field => Assert.False(year.TryGetProperty(field, out _), field));
+                Assert.All(new[] { "ordinaryTaxAmount", "capitalGainsTaxAmount", "taxRate", "withdrawal", "brokerageWithdrawal", "realizedGains", "balance" },
+                    field => Assert.True(year.TryGetProperty(field, out _), field));
+            });
+        }
+
+        [Fact]
+        public async Task APlusVisitorsRun_HasTheFullTaxDetail()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+
+            using var response = await PostAsync(app, "/api/run", FreeRunRequest(), cookie);
+
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(body.RootElement.TryGetProperty("taxDetail", out _));
+            var year = body.RootElement.GetProperty("output").GetProperty("result").GetProperty("runs")[0].GetProperty("years")[0];
+            Assert.All(FreeRunView.TaxDetailFields, field => Assert.True(year.TryGetProperty(field, out _), field));
+        }
+
         [Fact]
         public async Task TheOptimizer_RefusesAFreeVisitorsLockedInputs_BeforeStreaming()
         {

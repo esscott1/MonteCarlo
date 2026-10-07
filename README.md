@@ -122,6 +122,12 @@ code** instead.
   `FreeDefaults:StandardDeduction`, and the default returns, std. devs and correlation. The pages lock them, and
   `/api/run` and `/api/optimal` refuse anything else with a 403 naming each field
   ([FreeTier.cs](MonteCarloSimulation.Web/FreeTier.cs)).
+- **The Free Scenario runner.** A Free visitor enters one **total** for Roth and one for Brokerage instead of basis and
+  gains. Each total is split by the `FreeDefaults` shares (Brokerage 50% gains / 50% basis, Roth 100% basis), on the
+  page and again on the server, whatever split the request carries. Unlocking Plus shows the basis and gain fields
+  holding that split. A Free run's results leave out each year's tax detail (brackets, room to the next bracket,
+  Medicare IRMAA, Roth conversions and who paid), keeping each year's tax totals
+  ([FreeRunView.cs](MonteCarloSimulation.Web/FreeRunView.cs)).
 - **Badges.** [paywall.js](MonteCarloSimulation.Web/wwwroot/paywall.js) puts a small "✦ Plus" pill beside each locked
   feature. Hovering, focusing or tapping it shows the price and an **Enter access code** link that opens in a new tab
   (`/billing/subscribe?tier=plus`, which goes to the access-code page now and will go to checkout later). Entering a

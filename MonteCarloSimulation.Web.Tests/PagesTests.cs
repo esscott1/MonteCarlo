@@ -262,6 +262,23 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Matches(@"name=""newMoney""[^>]*data-requires=""inheritance"" data-free-value=""0""", html);
         }
 
+        // A Free visitor enters one total per account; it starts at the sum of the basis and gain fields' defaults
+        [Theory]
+        [InlineData("/index.html")]
+        [InlineData("/optimal.html")]
+        public async Task FreeAccountTotals_StartAtTheSumOfTheSplitFields(string path)
+        {
+            string html = await GetAsync(path);
+            string panel = Regex.Match(html, @"id=""panel-money""(.*?)(?=<div class=""tab-panel)", RegexOptions.Singleline).Groups[1].Value;
+            double Value(string name) => double.Parse(
+                Regex.Match(panel, $@"name=""{name}""[^>]*value=""([\d,]+)""").Groups[1].Value.Replace(",", ""), CultureInfo.InvariantCulture);
+
+            Assert.Equal(Value("initialRothBasis") + Value("initialRothUnrealizedGain"), Value("rothTotal"));
+            Assert.Equal(Value("initialBrokerageBasis") + Value("initialBrokerageUnrealizedGain"), Value("brokerageTotal"));
+            Assert.Equal(2, Regex.Matches(panel, @"<label data-free-only=""account-basis-split"" hidden>").Count);
+            Assert.Equal(4, Regex.Matches(panel, @"<label data-requires=""account-basis-split"" data-locked=""hide"">").Count);
+        }
+
         [Fact]
         public async Task PaidBadges_OpenTheAccessCodePageInANewTab()
         {

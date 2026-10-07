@@ -200,6 +200,16 @@ window.Inputs = (() => {
         document.getElementById('brokerage-total').textContent = t('runner.totalBrokerage', { amount: formatCurrency(basis + gain) });
         document.getElementById('grand-total').textContent =
             t('runner.totalMoney', { amount: formatCurrency(taxDeferred + rothBasis + rothGain + basis + gain) });
+
+        // A Free visitor's accounts: how each total is split for taxes
+        const shares = window.Paywall?.me.freeDefaults;
+        if (shares) {
+            const percent = (fraction) => `${Math.round(fraction * 100)}%`;
+            document.getElementById('roth-split-hint').textContent = t('runner.split.roth', { basis: percent(shares.rothBasisShare) });
+            document.getElementById('brokerage-split-hint').textContent = t('runner.split.brokerage', {
+                gains: percent(shares.brokerageGainShare), basis: percent(1 - shares.brokerageGainShare),
+            });
+        }
     }
 
     function initBalanceTotals(form) {
@@ -207,6 +217,48 @@ window.Inputs = (() => {
             .forEach((name) => form.elements[name].addEventListener('input', () => updateBalanceTotals(form)));
         // Once the page's text has loaded, so the totals never show untranslated keys
         I18n.ready.then(() => updateBalanceTotals(form));
+    }
+
+    // --- A Free visitor's accounts: one total each, split by the shares GET /api/me reports (paywall.js), which are
+    // the shares the server splits by too. Plus sees and sends the basis and gain fields themselves. ---
+
+    const ACCOUNTS = [
+        { total: 'rothTotal', basis: 'initialRothBasis', gain: 'initialRothUnrealizedGain', gainShare: (shares) => 1 - shares.rothBasisShare },
+        { total: 'brokerageTotal', basis: 'initialBrokerageBasis', gain: 'initialBrokerageUnrealizedGain', gainShare: (shares) => shares.brokerageGainShare },
+    ];
+
+    const splitsTotals = () => !Paywall.can('account-basis-split') && Paywall.me.freeDefaults;
+    const cents = (value) => Math.round(value * 100) / 100;
+
+    // Each total into the (hidden) basis and gain fields the request is built from
+    function splitTotals(form) {
+        const shares = Paywall.me.freeDefaults;
+        ACCOUNTS.forEach((account) => {
+            const total = parseNumber(form.elements[account.total].value) || 0;
+            const gain = cents(total * account.gainShare(shares));
+            form.elements[account.gain].value = formatWithCommas(gain);
+            form.elements[account.basis].value = formatWithCommas(cents(total - gain));
+        });
+        updateBalanceTotals(form);
+    }
+
+    // Free: show each account's total, whatever split it had (the defaults, a hand-off, a Plus visitor's own), and split
+    // it by the shares. Plus: nothing to do, the basis and gain fields already hold the split.
+    function refreshAccountTotals(form) {
+        if (!splitsTotals()) return;
+        const value = (name) => parseNumber(form.elements[name].value) || 0;
+        ACCOUNTS.forEach((account) => {
+            form.elements[account.total].value = formatWithCommas(cents(value(account.basis) + value(account.gain)));
+        });
+        splitTotals(form);
+    }
+
+    function initAccountTotals(form) {
+        ACCOUNTS.forEach((account) => form.elements[account.total].addEventListener('input', () => {
+            if (splitsTotals()) splitTotals(form);
+        }));
+        Paywall.ready.then(() => refreshAccountTotals(form));
+        document.addEventListener('paywall:change', () => refreshAccountTotals(form));
     }
 
     return {
@@ -222,5 +274,7 @@ window.Inputs = (() => {
         setAssetMix,
         updateBalanceTotals,
         initBalanceTotals,
+        initAccountTotals,
+        refreshAccountTotals,
     };
 })();

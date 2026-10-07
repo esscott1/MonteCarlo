@@ -31,10 +31,20 @@ namespace MonteCarloSimulation.Web
     {
         public static void MapTierAccess(this WebApplication app)
         {
-            app.MapGet("/api/me", async (HttpContext context, FeatureAccess access) =>
+            // What this visitor may use, and how a Free visitor's account totals are split (the pages split them the same way)
+            app.MapGet("/api/me", async (HttpContext context, FeatureAccess access, IOptionsMonitor<FreeDefaultsOptions> freeDefaults) =>
             {
                 context.Response.Headers.CacheControl = "no-store";
-                return Results.Ok(await access.ForAsync(context));
+                var me = await access.ForAsync(context);
+                var free = freeDefaults.CurrentValue;
+                return Results.Ok(new
+                {
+                    me.Gated,
+                    me.Tier,
+                    me.Features,
+                    me.Offers,
+                    FreeDefaults = new { free.BrokerageGainShare, free.RothBasisShare }
+                });
             });
 
             app.MapPost("/api/tier-access", async (

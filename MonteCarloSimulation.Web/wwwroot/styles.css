@@ -1070,6 +1070,19 @@ details pre {
     gap: 0.35rem;
 }
 
+/* Shown or hidden by tier (paywall.js); a label's display: flex would otherwise override the hidden attribute */
+[data-free-only][hidden],
+[data-locked="hide"][hidden] {
+    display: none !important;
+}
+
+/* Above a year table without the tax detail */
+.table-note {
+    margin: 0.3rem 0 0.5rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
 /* An input a Free visitor can't change: shown at its Free value, greyed */
 input.locked {
     background: var(--soft);

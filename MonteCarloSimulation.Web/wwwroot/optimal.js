@@ -306,5 +306,6 @@ Inputs.initTabs(optimalForm, 'optimalTab');
 Inputs.initAllocation(optimalForm);
 Inputs.initMoneyInputs();
 Inputs.initBalanceTotals(optimalForm);
+Inputs.initAccountTotals(optimalForm);
 Inputs.initCollapsibleInputs(optimalForm);
 initRunInSimulator();
