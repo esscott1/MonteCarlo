@@ -136,3 +136,9 @@ No secret is committed to this repo. Each one lives in exactly one of the four p
 **Running locally:** keep the same four web-app values in .NET user secrets (the project's `UserSecretsId` is in [MonteCarloSimulation.Web.csproj](MonteCarloSimulation.Web/MonteCarloSimulation.Web.csproj)), using the colon form, for example `dotnet user-secrets set "Anthropic:ApiKey" "<key>" --project MonteCarloSimulation.Web`.
 
 **Separate from the app:** the Claude Code `jira-commit` skill reaches Jira through the Atlassian MCP connector, signed in through Claude, not through any of the secrets above.
+
+## License
+
+This repository is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). You may read, run and modify the code for noncommercial purposes such as personal study, research and hobby projects. Commercial use, including offering this software or a modified version of it as a paid or hosted service, is not permitted without separate written permission from the copyright holder.
+
+Required Notice: Copyright (c) 2026 Eric Scott (https://montecarlo.otsconsulting.ai)
