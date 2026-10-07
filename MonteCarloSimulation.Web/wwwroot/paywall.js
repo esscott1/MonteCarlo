@@ -4,13 +4,18 @@
 //
 // The site's mode (switched on the Observe page) decides what's offered. Free Only: locked inputs are greyed with no
 // badges and no way to upgrade. Plus Available / Pro Available: each badge and lock names the cheapest tier on offer
-// that includes the feature, styled for that tier (a blue Plus, a deep purple Pro).
+// that includes the feature, styled for that tier (a blue Plus, a deep purple Pro). A visitor on Plus or Pro sees the
+// same spots as "✓ Plus" / "✓ Pro" (a flyout saying "Enabled"), the inputs outlined in their tier's colour, and a Plus
+// visitor sees an "Upgrade to Pro" offer in the header while Pro is on offer.
 //
 // Markup it reads:
-//   <span class="paid-badge" data-feature="custom-returns" hidden></span>   a badge, shown while the feature is locked
+//   <span class="paid-badge" data-feature="custom-returns" hidden></span>   a badge: the offer while the feature is
+//       locked, "✓ {tier}" while the visitor's tier has it
 //   data-requires="custom-returns" on an input                            locked at its Free value while locked:
-//       data-free-value="0" (or "false" for a checkbox), else the value the page loaded with
-//   data-requires="..." data-locked="hide" on any element                 hidden while locked
+//       data-free-value="0" (or "false" for a checkbox), else the value the page loaded with; outlined in the
+//       visitor's tier colour (data-enabled-tier) while their tier has it
+//   data-requires="..." data-locked="hide" on any element                 hidden while locked (and its inputs
+//       outlined while enabled)
 //   data-free-only="..." on any element                                   shown only while locked
 //
 // A badge's link opens the access-code page (/billing/subscribe, which becomes Stripe Checkout later) in a new tab, so
@@ -35,6 +40,21 @@ window.Paywall = (function () {
 
     const SYMBOLS = { plus: '&#10022;', pro: '&#9670;' };
 
+    // The visitor's tier as a class name ("plus", "pro"), or '' on Free
+    const enabledTier = () => (me.tier === 'Free' ? '' : me.tier.toLowerCase());
+
+    // A paid feature the visitor's tier includes: "✓ Plus" / "✓ Pro", whose flyout just says so
+    function enabledHtml() {
+        return `<span class="paid-badge-button enabled ${enabledTier()}" role="button" tabindex="0" aria-expanded="false" aria-label="${escapeHtml(t('paywall.enabledLabel', { tier: me.tier }))}">`
+            + `<span aria-hidden="true">&#10003;</span> ${escapeHtml(me.tier)}</span>`
+            + `<span class="paid-tip paid-tip-short" role="tooltip">${t('paywall.enabled')}</span>`;
+    }
+
+    // What a tier will add that isn't built yet ("Return models · Per-account asset mixes · ..."), in the page's language
+    const slug = (english) => english.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const highlights = (offer) => (offer.highlights ?? [])
+        .map((english) => escapeHtml(I18n.translateData(`paywall.highlight.${slug(english)}`, english))).join(' &middot; ');
+
     function badgeHtml(feature) {
         const [first, ...others] = offersFor(feature);
         if (!first) return '';
@@ -52,11 +72,12 @@ window.Paywall = (function () {
             + `</span>`;
     }
 
-    // Fills and shows the badges under root whose feature is locked; hides the rest
+    // Fills the badges under root: the offer for a locked feature, "✓ {tier}" for one the visitor's tier has; a badge
+    // with neither (Free Only, or nothing on offer with that feature) is hidden
     function decorate(root = document) {
         root.querySelectorAll('.paid-badge[data-feature]').forEach((badge) => {
-            const locked = !can(badge.dataset.feature);
-            const html = locked ? badgeHtml(badge.dataset.feature) : '';
+            const feature = badge.dataset.feature;
+            const html = can(feature) ? (enabledTier() ? enabledHtml() : '') : badgeHtml(feature);
             badge.hidden = html === '';
             if (badge.dataset.rendered !== html) {
                 badge.innerHTML = html;
@@ -90,10 +111,38 @@ window.Paywall = (function () {
             const locked = !can(el.dataset.requires);
             if (el.dataset.locked === 'hide') el.hidden = locked;
             else lockInput(el, locked, lockTier(el.dataset.requires));
+            // Enabled by the visitor's tier: outlined in its colour (the CSS outlines inputs, and inputs inside a group)
+            if (!locked && enabledTier()) el.dataset.enabledTier = enabledTier();
+            else delete el.dataset.enabledTier;
         });
         document.querySelectorAll('[data-free-only]').forEach((el) => { el.hidden = can(el.dataset.freeOnly); });
         decorate();
         renderTierMarker();
+    }
+
+    // A Plus visitor, while Pro is on offer: "◆ Upgrade to Pro" beside the tier marker, whose flyout gives Pro's price,
+    // what it will add, and the link to enter its code
+    function renderUpgrade(header, marker) {
+        const pro = me.tier === 'Plus' ? me.offers.find((offer) => offer.tier === 'Pro') : null;
+        let upgrade = header.querySelector('.upgrade-badge');
+        if (!pro) {
+            upgrade?.remove();
+            return;
+        }
+        if (!upgrade) {
+            upgrade = document.createElement('span');
+            upgrade.className = 'paid-badge upgrade-badge';
+            marker.after(upgrade);
+        }
+        const link = pro.action === 'code' ? t('paywall.enterCode') : t('paywall.subscribe');
+        const adds = highlights(pro);
+        upgrade.innerHTML = `<span class="paid-badge-button pro" role="button" tabindex="0" aria-expanded="false">`
+            + `<span aria-hidden="true">${SYMBOLS.pro}</span> ${escapeHtml(t('paywall.upgradeTo', { tier: pro.tier }))}</span>`
+            + `<span class="paid-tip" role="dialog">`
+            + `<strong>${escapeHtml(pro.tier)}</strong> &middot; ${escapeHtml(pro.priceLabel)}`
+            + (adds ? `<span class="paid-tip-adds">${t('paywall.comingSoon', { tier: escapeHtml(pro.tier), list: adds })}</span>` : '')
+            + `<a href="/billing/subscribe?tier=${encodeURIComponent(pro.tier.toLowerCase())}" target="_blank" rel="noopener">${link}</a>`
+            + `</span>`;
     }
 
     // "Plus" / "Pro" in the header while a paid tier is on, linking to the access-code page (to switch, or go back to Free)
@@ -103,6 +152,7 @@ window.Paywall = (function () {
         let marker = header.querySelector('.tier-marker');
         if (me.tier === 'Free') {
             marker?.remove();
+            header.querySelector('.upgrade-badge')?.remove();
             return;
         }
         if (!marker) {
@@ -116,6 +166,7 @@ window.Paywall = (function () {
         marker.textContent = me.tier;
         marker.classList.toggle('pro', me.tier === 'Pro');
         marker.title = t('paywall.markerTitle', { tier: me.tier });
+        renderUpgrade(header, marker);
     }
 
     async function load() {

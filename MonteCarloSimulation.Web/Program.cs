@@ -106,7 +106,7 @@ app.MapPost("/api/run", async (
     var response = new RunResponse(parameters, output);
     return access.Can(Features.TaxDetail)
         ? Results.Ok(response)
-        : Results.Json(FreeRunView.From(response, jsonOptions.Value.SerializerOptions));
+        : Results.Json(FreeRunView.From(response, jsonOptions.Value.SerializerOptions, freeDefaults.CurrentValue.TaxDetailTeaserYears));
 });
 
 // The Optimal page: the annual spending that survives 80-85% of market paths per investment scenario, and the

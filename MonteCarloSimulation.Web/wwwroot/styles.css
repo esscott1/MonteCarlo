@@ -21,6 +21,10 @@
     /* Pro: its badges, locks and header marker */
     --pro: #6d28d9;
     --pro-text: #ffffff;
+    /* "✓ Plus" / "✓ Pro" pills, and a Free visitor's preview of Plus output */
+    --plus-soft: #dbeafe;
+    --pro-soft: #ede9fe;
+    --teaser: #9aa5b1;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -37,6 +41,9 @@
         --positive: #6ee7b7;
         --pro: #c4b5fd;
         --pro-text: #1e1035;
+        --plus-soft: #1e3a5f;
+        --pro-soft: #3b2a63;
+        --teaser: #6f7d8c;
     }
 }
 
@@ -1161,6 +1168,77 @@ details pre {
 .paid-tip a {
     color: var(--accent);
     font-weight: 600;
+}
+
+/* "✓ Plus" / "✓ Pro": a feature the visitor's tier has - a soft pill, quieter than an offer, whose flyout says "Enabled" */
+.paid-badge-button.enabled,
+.paid-badge-button.enabled:hover,
+.paid-badge-button.enabled:focus-visible,
+.paid-badge.open .paid-badge-button.enabled {
+    border-color: var(--plus-soft);
+    background: var(--plus-soft);
+    color: var(--accent);
+    cursor: default;
+}
+
+.paid-badge-button.enabled.pro,
+.paid-badge-button.enabled.pro:hover,
+.paid-badge-button.enabled.pro:focus-visible,
+.paid-badge.open .paid-badge-button.enabled.pro {
+    border-color: var(--pro-soft);
+    background: var(--pro-soft);
+    color: var(--pro);
+}
+
+.paid-tip.paid-tip-short {
+    width: auto;
+    white-space: nowrap;
+}
+
+/* Inputs the visitor's tier has enabled: outlined in its colour (inputs inside a revealed group too) */
+input[data-enabled-tier="plus"],
+[data-enabled-tier="plus"] input:not([type="radio"]) {
+    outline: 2px solid var(--accent);
+    outline-offset: 0;
+}
+
+input[data-enabled-tier="pro"],
+[data-enabled-tier="pro"] input:not([type="radio"]) {
+    outline: 2px solid var(--pro);
+    outline-offset: 0;
+}
+
+input[type="checkbox"][data-enabled-tier] {
+    outline-offset: 1px;
+}
+
+fieldset[data-enabled-tier="plus"] {
+    border: 2px solid var(--accent);
+    border-radius: 6px;
+}
+
+fieldset[data-enabled-tier="pro"] {
+    border: 2px solid var(--pro);
+    border-radius: 6px;
+}
+
+/* A Free visitor's preview of Plus output (each run's first years of tax detail): lighter, with the Plus badge */
+.run-table td.teaser {
+    color: var(--teaser);
+}
+
+/* The header's "Upgrade to Pro" offer, beside the tier marker; its flyout opens leftwards, inside the page */
+.upgrade-badge {
+    font-size: 0.85rem;
+}
+
+.page-header .paid-tip {
+    left: auto;
+    right: 0;
+}
+
+.upgrade-badge + .lang-toggle {
+    margin-left: 0;
 }
 
 /* A label's text with a badge beside it, on one line (the label itself stacks its text above the input) */

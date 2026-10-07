@@ -186,11 +186,22 @@ function taxTotals(yd) {
     ]);
 }
 
-// Above a year table without the tax detail: what Plus adds, or, once it's unlocked, that a new run shows it
+// Above a year table without the tax detail: that the first years preview it, or, once it's unlocked, that a new run
+// shows every year's
 function taxDetailNote() {
     return Paywall.can('tax-detail')
         ? `<p class="table-note">${t('runner.tax.runAgain')}</p>`
-        : `<p class="table-note">${t('runner.tax.detailLocked')} <span class="paid-badge" data-feature="tax-detail" hidden></span></p>`;
+        : `<p class="table-note">${t('runner.tax.teaserNote', { years: view?.taxDetailYears ?? 0 })}</p>`;
+}
+
+// A year's Taxes cell. Without the tax-detail feature the server keeps each run's first years' detail as a preview of
+// Plus (FreeRunView): those show greyed with the Plus badge, and later years their totals only.
+function taxCell(yd, conversionsEnabled, taxDetail) {
+    if (taxDetail) return `<td>${taxesBreakdown(yd, conversionsEnabled)}</td>`;
+    if (yd.ordinaryBracketRate === undefined) return `<td>${taxTotals(yd)}</td>`;
+    return Paywall.can('tax-detail')
+        ? `<td>${taxesBreakdown(yd, conversionsEnabled)}</td>`
+        : `<td class="teaser">${taxesBreakdown(yd, conversionsEnabled)} <span class="paid-badge" data-feature="tax-detail" hidden></span></td>`;
 }
 
 function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail) {
@@ -199,7 +210,7 @@ function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail) {
         <tr>
             <td>${yearWithAge(yd)}</td>
             <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax, yd.socialSecurityMonths, yd.realizedGains)}</td>
-            <td>${taxDetail ? taxesBreakdown(yd, conversionsEnabled) : taxTotals(yd)}</td>
+            ${taxCell(yd, conversionsEnabled, taxDetail)}
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
             <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>
         </tr>
@@ -209,7 +220,7 @@ function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail) {
     return `${taxDetail ? '' : taxDetailNote()}
         <table class="run-table">
             <thead>
-                <tr>${['year', 'withdrawal', 'taxes', 'return', 'totalBalance'].map((key) => `<th>${t(`runner.table.${key}`)}</th>`).join('')}</tr>
+                <tr>${['year', 'withdrawal', 'taxes', 'return', 'totalBalance'].map((key) => `<th>${t(`runner.table.${key}`)}${key === 'taxes' ? ' <span class="paid-badge" data-feature="tax-detail" hidden></span>' : ''}</th>`).join('')}</tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>
@@ -591,7 +602,7 @@ form.addEventListener('submit', async (e) => {
         } else {
             const data = await response.json();
             // taxDetail is false when the server left out the year-by-year tax detail (FreeRunView)
-            view = { kind: 'results', parameters: data.parameters, output: data.output, taxDetail: data.taxDetail !== false };
+            view = { kind: 'results', parameters: data.parameters, output: data.output, taxDetail: data.taxDetail !== false, taxDetailYears: data.taxDetailYears ?? 0 };
             chartData = { points: data.output.balanceBands, runs: data.output.result.runs.length };
         }
     } catch (err) {

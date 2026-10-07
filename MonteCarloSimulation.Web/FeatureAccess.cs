@@ -17,9 +17,10 @@ namespace MonteCarloSimulation.Web
             clock.GetUtcNow());
     }
 
-    // A tier the pages can offer: its price, how to get it ("code" while access codes stand in for checkout) and the
-    // features it includes, so a paid-feature badge can name the cheapest tier that unlocks it.
-    public sealed record Offer(Tier Tier, string PriceLabel, string Action, IReadOnlyList<string> Features);
+    // A tier the pages can offer: its price, how to get it ("code" while access codes stand in for checkout), the features
+    // it includes (so a paid-feature badge can name the cheapest tier that unlocks it) and what it will add that isn't
+    // built yet.
+    public sealed record Offer(Tier Tier, string PriceLabel, string Action, IReadOnlyList<string> Features, IReadOnlyList<string> Highlights);
 
     // What one visitor may use: the site's mode (SiteModes), their tier and its features, and the tiers on offer.
     // GET /api/me returns this as is.
@@ -45,8 +46,8 @@ namespace MonteCarloSimulation.Web
             var granted = new HashSet<string>(settings.For(tier)?.Features ?? []);
 
             var offers = new List<Offer>();
-            if (plusOffered) offers.Add(new Offer(Tier.Plus, settings.Plus.PriceLabel, "code", settings.Plus.Features));
-            if (proOffered) offers.Add(new Offer(Tier.Pro, settings.Pro.PriceLabel, "code", settings.Pro.Features));
+            if (plusOffered) offers.Add(new Offer(Tier.Plus, settings.Plus.PriceLabel, "code", settings.Plus.Features, settings.Plus.Highlights));
+            if (proOffered) offers.Add(new Offer(Tier.Pro, settings.Pro.PriceLabel, "code", settings.Pro.Features, settings.Pro.Highlights));
 
             return new Access(SiteModes.For(plusOffered, proOffered), tier, Features.All.Where(granted.Contains).ToList(), offers);
         }

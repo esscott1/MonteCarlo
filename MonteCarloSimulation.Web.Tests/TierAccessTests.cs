@@ -18,17 +18,23 @@ namespace MonteCarloSimulation.Web.Tests
         private const string PlusCode = "plus-test-code";
         private const string ProCode = "pro-test-code";
 
-        private static WebApplicationFactory<Program> App(bool tierPlus = true, bool tierPro = true, string plusCode = PlusCode) =>
+        private static WebApplicationFactory<Program> App(
+            bool tierPlus = true, bool tierPro = true, string plusCode = PlusCode, int? teaserYears = null) =>
             new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {
                 builder.UseSetting("SiteFlags:Path", TempSiteFlags.NewPath());
-                builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+                builder.ConfigureAppConfiguration((_, config) =>
                 {
-                    ["FeatureManagement:TierPlus"] = tierPlus.ToString(),
-                    ["FeatureManagement:TierPro"] = tierPro.ToString(),
-                    ["Tiers:Plus:AccessCode"] = plusCode,
-                    ["Tiers:Pro:AccessCode"] = ProCode,
-                }));
+                    var settings = new Dictionary<string, string?>
+                    {
+                        ["FeatureManagement:TierPlus"] = tierPlus.ToString(),
+                        ["FeatureManagement:TierPro"] = tierPro.ToString(),
+                        ["Tiers:Plus:AccessCode"] = plusCode,
+                        ["Tiers:Pro:AccessCode"] = ProCode,
+                    };
+                    if (teaserYears is int years) settings["FreeDefaults:TaxDetailTeaserYears"] = years.ToString();
+                    config.AddInMemoryCollection(settings);
+                });
             });
 
         // Cookies are passed by hand: the access cookie is Secure, and the test server is plain http
@@ -118,6 +124,9 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(new[] { "$3.99/month", "$100/month" }, offers.Select(o => o.GetProperty("priceLabel").GetString()));
             Assert.All(offers, o => Assert.Equal("code", o.GetProperty("action").GetString()));
             Assert.All(offers, o => Assert.Equal(Features.All, Strings(o.GetProperty("features"))));
+            // What Pro will add, shown in its upgrade offer
+            Assert.Empty(Strings(offers[0].GetProperty("highlights")));
+            Assert.Equal(new[] { "Return models", "Per-account asset mixes", "Advisor workspace" }, Strings(offers[1].GetProperty("highlights")));
         }
 
         [Theory]
@@ -443,24 +452,32 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(100_000, body.RootElement.GetProperty("parameters").GetProperty("initialBrokerageBasis").GetDouble());
         }
 
-        [Fact]
-        public async Task AFreeVisitorsRun_LeavesOutTheTaxDetail_ButKeepsEachYearsTaxTotals()
+        [Theory]
+        [InlineData(null, 3)]   // the default
+        [InlineData(1, 1)]
+        public async Task AFreeVisitorsRun_KeepsTheTaxDetailForEachRunsFirstYears_AndOnlyTheTotalsAfter(int? setting, int teaserYears)
         {
-            using var app = App();
+            using var app = App(teaserYears: setting);
 
             using var response = await PostAsync(app, "/api/run", FreeRunRequest());
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             Assert.False(body.RootElement.GetProperty("taxDetail").GetBoolean());
-            var runs = body.RootElement.GetProperty("output").GetProperty("result").GetProperty("runs").EnumerateArray().ToList();
+            Assert.Equal(teaserYears, body.RootElement.GetProperty("taxDetailYears").GetInt32());
+            var output = body.RootElement.GetProperty("output");
+            var runs = output.GetProperty("result").GetProperty("runs").EnumerateArray().ToList();
             Assert.Equal(3, runs.Count);
             Assert.All(runs, run => Assert.False(run.TryGetProperty("lifetimeIrmaaSurcharges", out _)));
+
             var years = runs.SelectMany(run => run.GetProperty("years").EnumerateArray()).ToList();
-            Assert.NotEmpty(years);
+            if (output.TryGetProperty("lastSuccessfulRun", out var last) && last.ValueKind == JsonValueKind.Array)
+                years.AddRange(last.EnumerateArray());
+            Assert.Contains(years, year => year.GetProperty("year").GetInt32() >= teaserYears);
             Assert.All(years, year =>
             {
-                Assert.All(FreeRunView.TaxDetailFields, field => Assert.False(year.TryGetProperty(field, out _), field));
+                bool preview = year.GetProperty("year").GetInt32() < teaserYears;
+                Assert.All(FreeRunView.TaxDetailFields, field => Assert.Equal(preview, year.TryGetProperty(field, out _)));
                 Assert.All(new[] { "ordinaryTaxAmount", "capitalGainsTaxAmount", "taxRate", "withdrawal", "brokerageWithdrawal", "realizedGains", "balance" },
                     field => Assert.True(year.TryGetProperty(field, out _), field));
             });

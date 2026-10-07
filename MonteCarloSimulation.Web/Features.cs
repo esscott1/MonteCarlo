@@ -55,6 +55,9 @@ namespace MonteCarloSimulation.Web
         public string PriceLabel { get; set; } = "";
         public string[] Features { get; set; } = [];
         public string? AccessCode { get; set; }
+        // What the tier will add that isn't built yet, shown in its upgrade offer (English; the pages translate each by
+        // its paywall.highlight.* key while the English matches)
+        public string[] Highlights { get; set; } = [];
     }
 
     public sealed class TiersOptions
@@ -77,6 +80,9 @@ namespace MonteCarloSimulation.Web
         public double StandardDeduction { get; set; } = 16_000;
         public double BrokerageGainShare { get; set; } = 0.5;
         public double RothBasisShare { get; set; } = 1.0;
+        // How many of each run's first years (model years 0, 1, ...) keep the full tax detail for a Free visitor, as a
+        // preview of Plus (FreeRunView)
+        public int TaxDetailTeaserYears { get; set; } = 3;
     }
 
     // The asset classes' returns, std. devs and correlation a Free visitor runs with: the pages' defaults (a test checks).
