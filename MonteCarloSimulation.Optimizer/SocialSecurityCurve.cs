@@ -14,6 +14,16 @@ namespace MonteCarloSimulation.Optimizer
 
         private const double FullEarlyReductionPercent = 30.0;
 
+        // SSA's own adjustments for someone whose full retirement age is 67: 30% less at 62, and 8% a year in delayed
+        // credits to 70 (24% more)
+        public const double SsaShareAt62 = 1 - FullEarlyReductionPercent / 100;
+        public const double SsaShareAt70 = 1.24;
+
+        // The curve from one amount, the benefit at full retirement age (as on an SSA statement), with the 62 and 70
+        // amounts set by SSA's rules rather than entered
+        public static SocialSecurityCurve FromFullRetirementAmount(double at67) =>
+            new(at67 * SsaShareAt62, at67, at67 * SsaShareAt70);
+
         public double MonthlyBenefitAtAge(int age) => MonthlyBenefitAtMonths(age * 12);
 
         public double MonthlyBenefitAtMonths(int claimAgeMonths)

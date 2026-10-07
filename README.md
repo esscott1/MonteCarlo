@@ -128,6 +128,10 @@ code** instead.
   holding that split. A Free run's results leave out each year's tax detail (brackets, room to the next bracket,
   Medicare IRMAA, Roth conversions and who paid), keeping each year's tax totals
   ([FreeRunView.cs](MonteCarloSimulation.Web/FreeRunView.cs)).
+- **The Free Optimizer** runs 167 simulated markets and takes one Social Security amount, the benefit at 67; the
+  amounts at 62 and 70 follow SSA's rules (70% and 124% of it). Its answer is a teaser: the recommended monthly spend
+  as a $500 range ("about $6,000–$6,500 a month"), without the exact amount, the best claiming age, the comparison of
+  every age or the hand-off to the Scenario runner.
 - **Badges.** [paywall.js](MonteCarloSimulation.Web/wwwroot/paywall.js) puts a small "✦ Plus" pill beside each locked
   feature. Hovering, focusing or tapping it shows the price and an **Enter access code** link that opens in a new tab
   (`/billing/subscribe?tier=plus`, which goes to the access-code page now and will go to checkout later). Entering a

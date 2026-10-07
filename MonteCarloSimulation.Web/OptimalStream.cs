@@ -8,8 +8,9 @@ namespace MonteCarloSimulation.Web
     // The Optimal page's results, streamed as they're computed: newline-delimited JSON, one event per line, flushed as
     // each is written. A run is `start`, then `progress` after each claiming age, then `result` (the recommendation and
     // every claiming age) and `done` - or `error` if the computation fails after the stream has started. If the client
-    // disconnects, the request's token stops the optimizer.
-    public sealed class OptimalStream(OptimizationInputs inputs, JsonSerializerOptions jsonOptions) : IResult
+    // disconnects, the request's token stops the optimizer. For a visitor without the full Optimizer, `teaser` (the
+    // recommended monthly spend as a $500 range) replaces `result`.
+    public sealed class OptimalStream(OptimizationInputs inputs, JsonSerializerOptions jsonOptions, bool teaser = false) : IResult
     {
         public const string ContentType = "application/x-ndjson";
 
@@ -36,7 +37,9 @@ namespace MonteCarloSimulation.Web
                 try
                 {
                     var result = SpendingOptimizer.Optimize(inputs, listener, cancellationToken);
-                    events.Writer.TryWrite(new OptimalResultEvent(result.Optimum));
+                    events.Writer.TryWrite(teaser
+                        ? OptimalTeaserEvent.For(result.Optimum.Recommended.SpendAtMidpoint)
+                        : new OptimalResultEvent(result.Optimum));
                     events.Writer.TryWrite(new OptimalDoneEvent());
                     events.Writer.TryComplete();
                 }
@@ -86,6 +89,18 @@ namespace MonteCarloSimulation.Web
     public sealed record OptimalProgressEvent(int Completed, int Total) : OptimalStreamEvent("progress");
 
     public sealed record OptimalResultEvent(SpendOptimum Optimum) : OptimalStreamEvent("result");
+
+    // The Free Optimizer's answer: the recommended (82.5%) spend per month, as the $500 range it falls in
+    public sealed record OptimalTeaserEvent(double MonthlyLow, double MonthlyHigh) : OptimalStreamEvent("teaser")
+    {
+        public const double Step = 500;
+
+        public static OptimalTeaserEvent For(double annualSpend)
+        {
+            double low = Math.Floor(annualSpend / 12 / Step) * Step;
+            return new OptimalTeaserEvent(low, low + Step);
+        }
+    }
 
     public sealed record OptimalDoneEvent() : OptimalStreamEvent("done");
 
