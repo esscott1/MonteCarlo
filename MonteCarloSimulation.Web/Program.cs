@@ -85,6 +85,7 @@ app.MapPost("/api/run", async (
         Withdrawal = request.Withdrawal,
         Birthdate = request.Birthdate,
         RetirementDate = request.RetirementDate,
+        FilingStatus = FilingStatusInput.Of(request),
         InitialTaxableBalance = request.InitialTaxableBalance,
         InitialRothBasis = request.InitialRothBasis,
         InitialRothUnrealizedGain = request.InitialRothUnrealizedGain,

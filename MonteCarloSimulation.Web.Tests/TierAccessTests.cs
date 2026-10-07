@@ -358,6 +358,29 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.False(errors.TryGetProperty("bondReturn", out _));
         }
 
+        // Every tier chooses its filing status; a Free visitor's standard deduction is held to that status's default
+        [Theory]
+        [InlineData("married", 32_000, true)]
+        [InlineData("married", 16_000, false)]
+        [InlineData("single", 32_000, false)]
+        [InlineData(null, 16_000, true)]
+        public async Task AFreeVisitorsStandardDeduction_FollowsTheFilingStatus(string? filingStatus, double deduction, bool allowed)
+        {
+            using var app = App();
+            var request = FreeRunRequest();
+            request.FilingStatus = filingStatus;
+            request.AnnualStandardDeduction = deduction;
+
+            using var response = await PostAsync(app, "/api/run", request);
+
+            if (allowed) Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            else
+            {
+                var errors = await ErrorsAsync(response, HttpStatusCode.Forbidden);
+                Assert.Equal("Changing the standard deduction is a Plus feature.", errors.GetProperty("annualStandardDeduction")[0].GetString());
+            }
+        }
+
         [Fact]
         public async Task InvalidInput_IsStillA400_BeforeAnyTierCheck()
         {

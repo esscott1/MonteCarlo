@@ -357,6 +357,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
                     var t when t == typeof(WithdrawalStrategy) => WithdrawalStrategy.TaxOptimized,
                     var t when t == typeof(ConversionTaxFunding) => ConversionTaxFunding.BridgeAware,
                     var t when t == typeof(RothConversionTarget) => RothConversionTarget.Bracket24,
+                    var t when t == typeof(FilingStatus) => FilingStatus.MarriedJoint,
                     var t when t == typeof(AssetMix) => new AssetMix { StockWeight = 0.7, StockMean = 0.07 },
                     var t => throw new InvalidOperationException($"Add a test value for {t.Name} ({property.Name})")
                 };

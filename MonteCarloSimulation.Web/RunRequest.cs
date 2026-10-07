@@ -9,6 +9,8 @@ namespace MonteCarloSimulation.Web
         public double Withdrawal { get; set; }
         public DateOnly Birthdate { get; set; }
         public DateOnly RetirementDate { get; set; }
+        // "single" (or omitted) or "married": FilingStatusInput
+        public string? FilingStatus { get; set; }
         public double InitialTaxableBalance { get; set; }
         public double InitialRothBasis { get; set; }
         public double InitialRothUnrealizedGain { get; set; }
@@ -45,6 +47,7 @@ namespace MonteCarloSimulation.Web
             if (YearNewMoney < 0) errors["yearNewMoney"] = "Year of new money must be non-negative.";
             if (SocialSecurityMonthlyAmount < 0) errors["socialSecurityMonthlyAmount"] = "Must be non-negative.";
             if (AnnualStandardDeduction < 0) errors["annualStandardDeduction"] = "Must be non-negative.";
+            FilingStatusInput.Validate(this, errors);
             ValidateAssetMix(errors);
             return errors;
         }

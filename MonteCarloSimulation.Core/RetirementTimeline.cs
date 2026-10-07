@@ -13,6 +13,7 @@ namespace MonteCarloSimulation.Core
         double AgeAtStart,
         int SocialSecurityPayments,
         int MedicareMonths,
+        int MedicarePeople,
         TaxYear TaxYear)
     {
         // The 59.5 early-withdrawal gate, judged at the start of the year: turning 59.5 mid-year unlocks
@@ -38,6 +39,7 @@ namespace MonteCarloSimulation.Core
             var retirement = parameters.RetirementDate;
             var end = retirement.AddYears(parameters.Years);
             var years = new List<RetirementYear>();
+            var tables = FederalTaxBrackets.For(parameters.FilingStatus);
 
             for (int calendarYear = retirement.Year; ; calendarYear++)
             {
@@ -52,11 +54,10 @@ namespace MonteCarloSimulation.Core
                 double ageAtStart = (start.DayNumber - parameters.Birthdate.DayNumber) / 365.25;
                 int payments = SocialSecurityPayments(parameters.SocialSecurityStartDate, start, stop);
                 int medicareMonths = MedicareMonths(parameters.Birthdate, start, stop);
-                var taxYear = new TaxYear(
-                    parameters.AnnualStandardDeduction * inflationFactor, inflationFactor,
-                    FederalTaxBrackets.Single2026, FederalTaxBrackets.CapitalGainsSingle2026);
+                var taxYear = TaxYear.For(tables, parameters.AnnualStandardDeduction * inflationFactor, inflationFactor);
 
-                years.Add(new RetirementYear(years.Count, calendarYear, start, stop, fraction, inflationFactor, ageAtStart, payments, medicareMonths, taxYear));
+                years.Add(new RetirementYear(years.Count, calendarYear, start, stop, fraction, inflationFactor, ageAtStart, payments,
+                    medicareMonths, tables.MedicarePeople, taxYear));
             }
 
             return years;
@@ -71,7 +72,8 @@ namespace MonteCarloSimulation.Core
             return factor;
         }
 
-        // Months of Medicare coverage in [from, to): coverage starts on the first day of the 65th-birthday month.
+        // Months of Medicare coverage in [from, to): coverage starts on the first day of the 65th-birthday month. A
+        // married household's spouse is assumed the same age, so both start together (RetirementYear.MedicarePeople).
         // Counted like monthly payments due on the 1st.
         public static int MedicareMonths(DateOnly birthdate, DateOnly from, DateOnly to)
         {

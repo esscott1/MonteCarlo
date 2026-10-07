@@ -11,6 +11,8 @@ namespace MonteCarloSimulation.Web
         public int Years { get; set; }
         public DateOnly Birthdate { get; set; }
         public DateOnly RetirementDate { get; set; }
+        // "single" (or omitted) or "married": FilingStatusInput
+        public string? FilingStatus { get; set; }
         public double InitialTaxableBalance { get; set; }
         public double InitialRothBasis { get; set; }
         public double InitialRothUnrealizedGain { get; set; }
@@ -46,6 +48,7 @@ namespace MonteCarloSimulation.Web
             else if (SocialSecurityAt62 > SocialSecurityAt67 || SocialSecurityAt67 > SocialSecurityAt70)
                 errors["socialSecurity"] = "Social Security amounts should increase with age: 62 <= 67 <= 70.";
             if (AnnualStandardDeduction < 0) errors["annualStandardDeduction"] = "Must be non-negative.";
+            FilingStatusInput.Validate(this, errors);
             if (Paths is int paths && !SpendingOptimizer.PathChoices.Contains(paths))
                 errors["paths"] = $"Simulated markets must be one of {string.Join(", ", SpendingOptimizer.PathChoices)}.";
             ValidateAssetMix(errors);
@@ -70,6 +73,7 @@ namespace MonteCarloSimulation.Web
                     InitialBrokerageUnrealizedGain = InitialBrokerageUnrealizedGain,
                     NewMoney = NewMoney,
                     YearNewMoney = YearNewMoney,
+                    FilingStatus = FilingStatusInput.Of(this),
                     AnnualStandardDeduction = AnnualStandardDeduction,
                     EnableRothConversions = EnableRothConversions,
                     Mean = mix.ExpectedReturn,

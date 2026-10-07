@@ -396,6 +396,11 @@ body.wide {
     flex-basis: 100%;
 }
 
+/* Filing status (Demographics): the two choices, then the married hint, closer together than a subgroup's fields */
+.field-grid fieldset.subgroup.filing-status {
+    gap: 0.35rem;
+}
+
 /* The balance chart (chart.js): green upper, blue middle, orange lower, lighter in dark mode */
 :root {
     --band-upper: #34a853;

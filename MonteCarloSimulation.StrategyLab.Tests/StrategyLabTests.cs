@@ -45,7 +45,7 @@ namespace MonteCarloSimulation.StrategyLab.Tests
             for (int i = 0; i < 3_000; i++)
             {
                 double inflation = 1 + rng.NextDouble();
-                var taxYear = new TaxYear(16_000 * inflation, inflation, FederalTaxBrackets.Single2026, FederalTaxBrackets.CapitalGainsSingle2026);
+                var taxYear = TaxYear.For(FilingStatus.Single, 16_000 * inflation, inflation);
                 bool ageEligible = rng.NextDouble() < 0.7;
                 double taxDeferred = rng.NextDouble() < 0.15 ? 0 : rng.NextDouble() * 2_000_000;
                 double roth = rng.NextDouble() < 0.3 ? 0 : rng.NextDouble() * 400_000;
@@ -126,6 +126,7 @@ namespace MonteCarloSimulation.StrategyLab.Tests
                     var t when t == typeof(WithdrawalStrategy) => WithdrawalStrategy.ProRata,
                     var t when t == typeof(ConversionTaxFunding) => ConversionTaxFunding.BridgeAware,
                     var t when t == typeof(RothConversionTarget) => RothConversionTarget.Bracket24,
+                    var t when t == typeof(FilingStatus) => FilingStatus.MarriedJoint,
                     var t when t == typeof(AssetMix) => new AssetMix { StockWeight = 0.7, StockMean = 0.07 },
                     var t => throw new InvalidOperationException($"Add a test value for {t.Name} ({property.Name})")
                 };

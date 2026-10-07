@@ -73,6 +73,35 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(5, body.RootElement.GetProperty("output").GetProperty("result").GetProperty("runs").GetArrayLength());
         }
 
+        // Omitted (an older page) means single; "married" files jointly. The engine's choice is echoed by name.
+        [Theory]
+        [InlineData(null, "Single")]
+        [InlineData("single", "Single")]
+        [InlineData("married", "MarriedJoint")]
+        [InlineData("Married", "MarriedJoint")]
+        public async Task TheFilingStatus_IsEchoed(string? filingStatus, string expected)
+        {
+            var request = DefaultRequest();
+            request.FilingStatus = filingStatus;
+
+            using var response = await PostAsync(request);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(expected, body.RootElement.GetProperty("parameters").GetProperty("filingStatus").GetString());
+        }
+
+        [Fact]
+        public async Task AnUnknownFilingStatus_IsA400FieldError()
+        {
+            var request = DefaultRequest();
+            request.FilingStatus = "widowed";
+
+            var errors = await ErrorsAsync(await PostAsync(request));
+
+            Assert.Equal(FilingStatusInput.Message, errors.GetProperty("filingStatus")[0].GetString());
+        }
+
         [Fact]
         public async Task TheChartBands_StartAtTheStartingBalance_AndStayInOrder()
         {

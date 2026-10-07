@@ -85,6 +85,29 @@ namespace MonteCarloSimulation.Web.Tests
         }
 
         [Fact]
+        public void TheFilingStatus_IsTheOptimizersHousehold()
+        {
+            var request = DefaultRequest();
+            Assert.Equal(Core.FilingStatus.Single, request.ToInputs().Template.FilingStatus);
+
+            request.FilingStatus = "married";
+            Assert.Equal(Core.FilingStatus.MarriedJoint, request.ToInputs().Template.FilingStatus);
+        }
+
+        [Fact]
+        public async Task AnUnknownFilingStatus_IsA400()
+        {
+            var request = DefaultRequest();
+            request.FilingStatus = "widowed";
+
+            using var response = await PostAsync(request);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(FilingStatusInput.Message, body.RootElement.GetProperty("errors").GetProperty("filingStatus")[0].GetString());
+        }
+
+        [Fact]
         public void TheMix_IsTheMarketTheOptimizerRuns()
         {
             var template = DefaultRequest().ToInputs().Template;

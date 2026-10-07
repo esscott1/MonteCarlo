@@ -275,6 +275,25 @@ namespace MonteCarloSimulation.Web.Tests
                 Assert.Matches($@"name=""{name}""[^>]*value=""{Regex.Escape(value)}""[^>]*data-requires=""custom-returns""", html);
             Assert.Matches(@"name=""enableRothConversions""[^>]*data-requires=""roth-conversions"" data-free-value=""false""", html);
             Assert.Matches(@"name=""newMoney""[^>]*data-requires=""inheritance"" data-free-value=""0""", html);
+            // A married household's default (inputs.js moves the field to it when Married is chosen)
+            Assert.Matches($@"name=""annualStandardDeduction""[^>]*data-married-value=""{free.StandardDeductionMarried.ToString("N0", CultureInfo.InvariantCulture)}""", html);
+        }
+
+        // Single / Married filing jointly sits on the Demographics tab of both pages, for every tier (nothing locks it)
+        [Theory]
+        [InlineData("/index.html")]
+        [InlineData("/optimal.html")]
+        public async Task FilingStatus_IsOnTheDemographicsTab_ForEveryTier(string path)
+        {
+            string html = await GetAsync(path);
+            string demographics = Regex.Match(html, @"id=""panel-demographics""(.*?)(?=<div class=""tab-panel)", RegexOptions.Singleline).Groups[1].Value;
+            string fieldset = Regex.Match(demographics, @"<fieldset class=""subgroup filing-status"">(.*?)</fieldset>", RegexOptions.Singleline).Groups[1].Value;
+
+            Assert.Contains(@"<input type=""radio"" name=""filingStatus"" value=""single"" checked>", fieldset);
+            Assert.Contains(@"<input type=""radio"" name=""filingStatus"" value=""married"">", fieldset);
+            Assert.Contains("data-filing-hint", fieldset);
+            Assert.DoesNotContain("data-requires", fieldset);
+            Assert.DoesNotContain("paid-badge", fieldset);
         }
 
         // A Free visitor enters one total per account; it starts at the sum of the basis and gain fields' defaults
