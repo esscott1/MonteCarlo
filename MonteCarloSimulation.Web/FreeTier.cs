@@ -2,9 +2,11 @@ using MonteCarloSimulation.Optimizer;
 
 namespace MonteCarloSimulation.Web
 {
-    // The inputs both pages send (RunRequest, OptimalRequest) that paid tiers unlock.
+    // The inputs both pages send (RunRequest, OptimalRequest) that paid tiers unlock, and the filing status that sets
+    // a Free visitor's standard deduction.
     public interface IPlanInputs
     {
+        string? FilingStatus { get; }
         bool EnableRothConversions { get; set; }
         double NewMoney { get; set; }
         double AnnualStandardDeduction { get; set; }
@@ -26,7 +28,8 @@ namespace MonteCarloSimulation.Web
                 errors["enableRothConversions"] = "Roth conversions are a Plus feature.";
             if (!access.Can(Features.Inheritance) && request.NewMoney != 0)
                 errors["newMoney"] = "Inheritance is a Plus feature.";
-            if (!access.Can(Features.StandardDeduction) && Math.Abs(request.AnnualStandardDeduction - free.StandardDeduction) > 0.005)
+            if (!access.Can(Features.StandardDeduction)
+                && Math.Abs(request.AnnualStandardDeduction - free.StandardDeductionFor(FilingStatusInput.Of(request))) > 0.005)
                 errors["annualStandardDeduction"] = "Changing the standard deduction is a Plus feature.";
             if (!access.Can(Features.CustomReturns))
             {

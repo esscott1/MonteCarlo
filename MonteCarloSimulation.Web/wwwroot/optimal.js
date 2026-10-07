@@ -60,6 +60,7 @@ function readRequest() {
         socialSecurityAt67: parseNumber(data.get('socialSecurityAt67')),
         socialSecurityAt70: parseNumber(data.get('socialSecurityAt70')),
         annualStandardDeduction: parseNumber(data.get('annualStandardDeduction')),
+        filingStatus: data.get('filingStatus'),
         enableRothConversions: data.get('enableRothConversions') === 'on',
         paths: Number(data.get('paths')),
         ...Inputs.readAssetMix(optimalForm),
@@ -168,7 +169,7 @@ function render() {
         else card = `<p class="chart-note" id="optimal-progress">${progressText(progress.completed, progress.total)}</p>`;
         // The claiming-age comparison and the benefit curve are the full Optimizer's
         detail = `
-            <p class="page-intro">${t('optimal.basedOn', { paths: start.paths })}</p>
+            <p class="page-intro">${t('optimal.basedOn', { paths: start.paths })}${lastRequest?.filingStatus === 'married' ? ` ${t('runner.filingMarried')}` : ''}</p>
             ${optimum ? `<details open><summary>${t('optimal.compareAges')} <span class="paid-badge" data-feature="optimizer-full" hidden></span></summary>${renderClaimingTable(optimum)}</details>` : ''}
             ${teaser ? '' : renderBenefitCurve(start.benefitByAge)}`;
     }
@@ -286,6 +287,7 @@ function simulatorHandoff(optimum) {
         newMoney: q.newMoney,
         yearNewMoney: q.yearNewMoney,
         annualStandardDeduction: q.annualStandardDeduction,
+        filingStatus: q.filingStatus,
         enableRothConversions: q.enableRothConversions,
         assetMix: {
             stockAllocation: q.stockAllocation,
@@ -331,5 +333,6 @@ Inputs.initAllocation(optimalForm);
 Inputs.initMoneyInputs();
 Inputs.initBalanceTotals(optimalForm);
 Inputs.initAccountTotals(optimalForm);
+Inputs.initFilingStatus(optimalForm);
 Inputs.initCollapsibleInputs(optimalForm);
 initRunInSimulator();

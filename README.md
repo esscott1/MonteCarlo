@@ -4,6 +4,11 @@
 
 This application is, at its core, a retirement-readiness calculator that lets people explore their own path to financial freedom by simulating how a portfolio might hold up against years of withdrawals.
 
+Federal tax follows the household's **filing status**, chosen on both pages' Demographics tab (every tier): Single or
+Married filing jointly. Married uses the 2026 joint brackets, long-term gains brackets and Medicare IRMAA tiers
+([FederalTaxBrackets.cs](MonteCarloSimulation.Core/FederalTaxBrackets.cs)) and a $32,000 standard deduction default. It
+models two people the same age with one combined Social Security benefit, both paying Medicare's surcharge.
+
 ## Secondary purpose: illustrating Claude AI and CI/CD concepts
 
 Beyond the retirement simulation itself, this repo doubles as a small, direct illustration of several Claude AI and CI/CD concepts, each implemented as simply as possible rather than abstracted into a reusable framework:
@@ -126,7 +131,7 @@ instead.
   ([Features.cs](MonteCarloSimulation.Web/Features.cs)); the code asks whether a visitor may use a feature, never which
   tier they're on ([FeatureAccess.cs](MonteCarloSimulation.Web/FeatureAccess.cs), `GET /api/me`). A Free visitor's
   locked inputs stay at the pages' defaults: Roth conversions off, no inheritance, the standard deduction at
-  `FreeDefaults:StandardDeduction`, and the default returns, std. devs and correlation. The pages lock them, and
+  `FreeDefaults:StandardDeduction` (`FreeDefaults:StandardDeductionMarried` when married), and the default returns, std. devs and correlation. The pages lock them, and
   `/api/run` and `/api/optimal` refuse anything else with a 403 naming each field
   ([FreeTier.cs](MonteCarloSimulation.Web/FreeTier.cs)).
 - **The Free Scenario runner.** A Free visitor enters one **total** for Roth and one for Brokerage instead of basis and

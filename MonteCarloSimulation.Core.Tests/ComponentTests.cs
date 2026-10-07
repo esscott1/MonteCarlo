@@ -5,7 +5,7 @@ namespace MonteCarloSimulation.Core.Tests
     public class ComponentTests
     {
         private static TaxYear TaxYear(double standardDeduction, double inflationFactor = 1.0) =>
-            new(standardDeduction, inflationFactor, FederalTaxBrackets.Single2026, FederalTaxBrackets.CapitalGainsSingle2026);
+            Core.TaxYear.For(FilingStatus.Single, standardDeduction, inflationFactor);
 
         private static Accounts Accounts(
             double taxable = 0, double rothBasis = 0, double rothGain = 0, double brokerageBasis = 0, double brokerageGain = 0) =>

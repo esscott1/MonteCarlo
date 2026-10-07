@@ -115,7 +115,7 @@ namespace MonteCarloSimulation.Core.Tests
         [InlineData(RothConversionTarget.Bracket24, 217_775)]
         public void TargetCeilings_AreThe2026BracketLines(RothConversionTarget target, double expected)
         {
-            var taxYear = new TaxYear(16_000, 1.0, FederalTaxBrackets.Single2026, FederalTaxBrackets.CapitalGainsSingle2026);
+            var taxYear = TaxYear.For(FilingStatus.Single, 16_000, 1.0);
             Assert.Equal(expected, ConversionTargets.CeilingFor(target)!(taxYear, 0, 0), 6);
             Assert.Null(ConversionTargets.CeilingFor(RothConversionTarget.None));
         }

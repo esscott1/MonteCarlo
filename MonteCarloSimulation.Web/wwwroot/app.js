@@ -292,7 +292,7 @@ function renderSummary(parameters, output) {
         cash: formatAllocation(mix.cashWeight * 100),
         mean: formatPercent(parameters.mean),
         stdDev: formatPercent(parameters.stdDev),
-    })}</p>`;
+    })}</p>${parameters.filingStatus === 'MarriedJoint' ? `<p>${t('runner.filingMarried')}</p>` : ''}`;
 
     if (result.outOfMoneyCount > 0) {
         const survival = 1 - (result.outOfMoneyCount / parameters.iterations);
@@ -582,6 +582,7 @@ form.addEventListener('submit', async (e) => {
         socialSecurityStartDate: formData.get('socialSecurityStartDate'),
         socialSecurityMonthlyAmount: parseNumber(formData.get('socialSecurityMonthlyAmount')),
         annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction')),
+        filingStatus: formData.get('filingStatus'),
         enableRothConversions: form.elements['enableRothConversions'].checked,
         ...Inputs.readAssetMix(form)
     };
@@ -685,6 +686,8 @@ function applySimulatorHandoff() {
     set('socialSecurityStartDate', h.socialSecurityStartDate);
     form.elements['socialSecurityStartDate'].dispatchEvent(new Event('input'));
     setMoney('socialSecurityMonthlyAmount', h.socialSecurityMonthlyAmount);
+    // The status first: it moves the deduction to its default, which the hand-off's own amount then replaces
+    Inputs.setFilingStatus(form, h.filingStatus ?? 'single');
     setMoney('annualStandardDeduction', h.annualStandardDeduction);
     ['initialTaxableBalance', 'initialRothBasis', 'initialRothUnrealizedGain', 'initialBrokerageBasis', 'initialBrokerageUnrealizedGain', 'newMoney']
         .forEach((name) => setMoney(name, h[name]));
@@ -732,6 +735,7 @@ initChart();
 Inputs.initMoneyInputs();
 Inputs.initBalanceTotals(form);
 Inputs.initAccountTotals(form);
+Inputs.initFilingStatus(form);
 initSocialSecurityDefault();
 Inputs.initCollapsibleInputs(form);
 initRunToggles();

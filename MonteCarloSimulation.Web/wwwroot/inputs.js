@@ -261,6 +261,36 @@ window.Inputs = (() => {
         document.addEventListener('paywall:change', () => refreshAccountTotals(form));
     }
 
+    // The filing status (Demographics). Married shows its hint and moves the standard deduction to the married default
+    // (the field's data-married-value) when it still holds the single one, and back, so a Plus visitor's own amount
+    // stays. The field's Free value follows the status, so a Free visitor's locked field holds that status's default.
+    function initFilingStatus(form) {
+        const deduction = form.elements['annualStandardDeduction'];
+        const hint = form.querySelector('[data-filing-hint]');
+        const defaults = { single: deduction.defaultValue, married: deduction.dataset.marriedValue };
+        let current = 'single';
+        const update = () => {
+            const status = form.elements['filingStatus'].value === 'married' ? 'married' : 'single';
+            hint.hidden = status !== 'married';
+            if (status === current) return;
+            if (deduction.classList.contains('locked') || parseNumber(deduction.value) === parseNumber(defaults[current])) {
+                deduction.value = defaults[status];
+                deduction.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            deduction.dataset.freeValue = defaults[status];
+            current = status;
+        };
+        form.querySelectorAll('input[name="filingStatus"]').forEach((radio) => radio.addEventListener('change', update));
+        update(); // a restored form (back button) may already say Married
+    }
+
+    // Checks a filing status ("single" or "married") as if chosen
+    function setFilingStatus(form, status) {
+        const radio = form.querySelector(`input[name="filingStatus"][value="${status === 'married' ? 'married' : 'single'}"]`);
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
     return {
         parseNumber,
         formatWithCommas,
@@ -276,5 +306,7 @@ window.Inputs = (() => {
         initBalanceTotals,
         initAccountTotals,
         refreshAccountTotals,
+        initFilingStatus,
+        setFilingStatus,
     };
 })();

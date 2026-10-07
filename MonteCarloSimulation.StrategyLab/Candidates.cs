@@ -88,7 +88,7 @@ namespace MonteCarloSimulation.StrategyLab
         public static readonly ConversionPolicy BelowIrmaa = new("C5", "To top of 22%, below the first IRMAA tier",
             "Up to the top of the 22% bracket, but stopping where the year's income (ordinary plus gains realized so far) would cross the first Medicare IRMAA tier.",
             (t, _, gains) => Math.Min(ConversionTargets.BracketStart(t, 0.24),
-                FederalTaxBrackets.MedicareIrmaaSingle2026[0].MagiAbove * t.InflationFactor - gains));
+                t.IrmaaTiers[0].MagiAbove * t.InflationFactor - gains));
 
         public static readonly IReadOnlyList<WithdrawalOrder> Orders =
             [ProRata, TaxOptimized, TaxDeferredToBracketFirst, BrokerageFirst, TaxDeferredFirst, Greedy];
@@ -141,7 +141,7 @@ namespace MonteCarloSimulation.StrategyLab
         // deduction and nothing else counted yet; C1's alternative line applies once gains have been realized.
         public static IReadOnlyList<StrategyDefinition> Definitions()
         {
-            var taxYear2026 = new TaxYear(ScenarioGenerator.StandardDeduction, 1.0, FederalTaxBrackets.Single2026, FederalTaxBrackets.CapitalGainsSingle2026);
+            var taxYear2026 = TaxYear.For(FilingStatus.Single, ScenarioGenerator.StandardDeduction, 1.0);
             var orders = Orders.Append(TaxOptimizedNoHarvest)
                 .Select(o => new StrategyDefinition(o.Code, "order", o.Name, o.Definition, null, null));
             var policies = Policies.Select(p => new StrategyDefinition(p.Code, "conversion", p.Name, p.Definition,

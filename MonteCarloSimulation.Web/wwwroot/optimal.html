@@ -43,6 +43,12 @@
                     <label><span data-i18n="form.birthdate">Birthdate</span>
                         <input type="date" name="birthdate" value="1969-07-07" required>
                     </label>
+                    <fieldset class="subgroup filing-status">
+                        <legend data-i18n="form.filingStatus">Filing status</legend>
+                        <label class="checkbox-label"><input type="radio" name="filingStatus" value="single" checked> <span data-i18n="form.single">Single</span></label>
+                        <label class="checkbox-label"><input type="radio" name="filingStatus" value="married"> <span data-i18n="form.married">Married filing jointly</span></label>
+                        <p class="subgroup-hint" data-filing-hint hidden data-i18n="form.marriedHint">Joint brackets, deduction and Medicare tiers, for two people the same age. Enter your household's combined Social Security.</p>
+                    </fieldset>
                     <label><span data-i18n="runner.horizon">Horizon (years)</span>
                         <input type="number" name="years" min="1" max="100" step="1" value="40" style="width: calc(3ch + 1.6rem)" required>
                     </label>
@@ -151,7 +157,7 @@
                             <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt70" pattern="[0-9,]*\.?[0-9]*" value="4,800" style="width: calc(16ch + 1rem)" required>
                         </label>
                         <label><span class="label-row"><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span> <span class="paid-badge" data-feature="standard-deduction" hidden></span></span>
-                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" style="width: calc(16ch + 1rem)" required data-requires="standard-deduction">
+                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" data-married-value="32,000" style="width: calc(16ch + 1rem)" required data-requires="standard-deduction">
                         </label>
                     </fieldset>
                     <fieldset class="subgroup">

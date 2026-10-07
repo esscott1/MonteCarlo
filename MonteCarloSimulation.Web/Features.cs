@@ -73,16 +73,21 @@ namespace MonteCarloSimulation.Web
         };
     }
 
-    // What a Free visitor's locked inputs are held to ("FreeDefaults"). The standard deduction must match the pages'
-    // default (a test checks); a Free visitor enters one total per account, split by these shares.
+    // What a Free visitor's locked inputs are held to ("FreeDefaults"). The standard deductions (single, married filing
+    // jointly) must match the pages' defaults (a test checks); a Free visitor enters one total per account, split by
+    // these shares.
     public sealed class FreeDefaultsOptions
     {
         public double StandardDeduction { get; set; } = 16_000;
+        public double StandardDeductionMarried { get; set; } = 32_000;
         public double BrokerageGainShare { get; set; } = 0.5;
         public double RothBasisShare { get; set; } = 1.0;
         // How many of each run's first years (model years 0, 1, ...) keep the full tax detail for a Free visitor, as a
         // preview of Plus (FreeRunView)
         public int TaxDetailTeaserYears { get; set; } = 3;
+
+        public double StandardDeductionFor(Core.FilingStatus status) =>
+            status == Core.FilingStatus.MarriedJoint ? StandardDeductionMarried : StandardDeduction;
     }
 
     // The asset classes' returns, std. devs and correlation a Free visitor runs with: the pages' defaults (a test checks).

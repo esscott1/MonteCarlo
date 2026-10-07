@@ -45,8 +45,7 @@ namespace MonteCarloSimulation.StrategyLab
             double LogU(double lo, double hi) => Math.Exp(U(Math.Log(lo), Math.Log(hi)));
 
             double inflation = U(1.0, 1.8);
-            var taxYear = new TaxYear(ScenarioGenerator.StandardDeduction * inflation, inflation,
-                FederalTaxBrackets.Single2026, FederalTaxBrackets.CapitalGainsSingle2026);
+            var taxYear = TaxYear.For(FilingStatus.Single, ScenarioGenerator.StandardDeduction * inflation, inflation);
 
             double need = LogU(5_000, 300_000) * inflation;
             double ssTaxable = rng.NextDouble() < 0.4 ? 0 : U(0, 70_000) * inflation * TaxAssumptions.SsTaxableFraction;

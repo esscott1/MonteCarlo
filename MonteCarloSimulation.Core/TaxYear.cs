@@ -1,8 +1,8 @@
 namespace MonteCarloSimulation.Core
 {
-    // One simulated year's federal tax schedule: the (inflated) standard deduction plus the ordinary and long-term
-    // capital gains bracket tables, both scaled by the cumulative inflation factor. All tax math - forward and
-    // inverse, ordinary and capital gains - lives here.
+    // One simulated year's federal tax schedule: the (inflated) standard deduction plus the filing status's ordinary
+    // and long-term capital gains bracket tables (and its Medicare IRMAA tiers), all scaled by the cumulative
+    // inflation factor. All tax math - forward and inverse, ordinary and capital gains - lives here.
     //
     // Income is measured gross (before the deduction). Ordinary income fills the deduction and brackets first;
     // long-term gains stack on top of it, so any deduction ordinary income didn't use shelters gains, and gains
@@ -11,8 +11,16 @@ namespace MonteCarloSimulation.Core
         double StandardDeduction,
         double InflationFactor,
         IReadOnlyList<TaxBracket> Brackets,
-        IReadOnlyList<TaxBracket> GainsBrackets)
+        IReadOnlyList<TaxBracket> GainsBrackets,
+        IReadOnlyList<IrmaaTier> IrmaaTiers)
     {
+        // A filing status's tax year, `standardDeduction` already inflated.
+        public static TaxYear For(FilingTables tables, double standardDeduction, double inflationFactor) =>
+            new(standardDeduction, inflationFactor, tables.Ordinary, tables.CapitalGains, tables.MedicareIrmaa);
+
+        public static TaxYear For(FilingStatus status, double standardDeduction, double inflationFactor) =>
+            For(FederalTaxBrackets.For(status), standardDeduction, inflationFactor);
+
         // Gross ordinary income at which the first bracket at 22% or higher starts - the ceiling that both the
         // tax-optimized Tax Deferred fill and Roth conversions fill up to. Read from the table, not hard-coded.
         // Computed once per tax year: the tax functions run thousands of times per simulated run.

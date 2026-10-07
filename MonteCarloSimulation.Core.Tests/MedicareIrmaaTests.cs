@@ -1,7 +1,8 @@
 namespace MonteCarloSimulation.Core.Tests
 {
-    // Medicare IRMAA: surcharges by MAGI tier (2026 single filer, inflation-scaled), a two-year lookback, only for
-    // months on Medicare, none in the model's first two years, paid on top of spending.
+    // Medicare IRMAA: surcharges by MAGI tier (2026 single filer and married filing jointly, inflation-scaled), a
+    // two-year lookback, only for months on Medicare, none in the model's first two years, paid on top of spending
+    // (by both spouses when married).
     public class MedicareIrmaaTests
     {
         [Theory]
@@ -16,7 +17,21 @@ namespace MonteCarloSimulation.Core.Tests
         [InlineData(125_000, 1.1, (81.20 + 14.50) * 1.1)]
         public void MonthlySurcharge_FollowsThe2026Tiers_ScaledByInflation(double magi, double inflation, double expected)
         {
-            Assert.Equal(expected, MedicareIrmaa.MonthlySurcharge(magi, inflation), 9);
+            Assert.Equal(expected, MedicareIrmaa.MonthlySurcharge(magi, FederalTaxBrackets.MedicareIrmaaSingle2026, inflation), 9);
+        }
+
+        [Theory]
+        [InlineData(150_000, 1.0, 0)]                // above the single tiers' start, below the joint one
+        [InlineData(218_000, 1.0, 0)]                // at the threshold: not above it
+        [InlineData(219_000, 1.0, 81.20 + 14.50)]
+        [InlineData(300_000, 1.0, 202.90 + 37.50)]
+        [InlineData(400_000, 1.0, 324.60 + 60.40)]
+        [InlineData(500_000, 1.0, 446.30 + 83.30)]
+        [InlineData(800_000, 1.0, 487.00 + 91.00)]
+        [InlineData(230_000, 1.1, 0)]                // the threshold inflates to 239,800
+        public void MonthlySurcharge_MarriedFollowsTheJointTiers_PerPerson(double magi, double inflation, double expected)
+        {
+            Assert.Equal(expected, MedicareIrmaa.MonthlySurcharge(magi, FederalTaxBrackets.MedicareIrmaaMarriedJoint2026, inflation), 9);
         }
 
         [Theory]
@@ -62,6 +77,23 @@ namespace MonteCarloSimulation.Core.Tests
             for (int i = 2; i < years.Count; i++)
                 Assert.Equal(MedicareIrmaa.YearSurcharge(years[i - 2].Magi, timeline[i]), years[i].IrmaaSurcharge, 9);
             Assert.Contains(years, y => y.IrmaaSurcharge > 0); // this household is above the first tier
+        }
+
+        [Fact]
+        public void Married_PaysTheJointTiers_ForBothSpouses()
+        {
+            var single = RetirementTimeline.Build(HighIncomeRetiree(66));
+            var marriedParameters = HighIncomeRetiree(66);
+            marriedParameters.FilingStatus = FilingStatus.MarriedJoint;
+            var married = RetirementTimeline.Build(marriedParameters);
+            var year = married[2];
+
+            Assert.Equal(12, year.MedicareMonths);
+            Assert.Equal(2, year.MedicarePeople);
+            Assert.Equal(1, single[2].MedicarePeople);
+            Assert.Equal(0, MedicareIrmaa.YearSurcharge(150_000, year));                   // single's tier 2, below joint's first
+            Assert.Equal((81.20 + 14.50) * year.InflationFactor * 12 * 2, MedicareIrmaa.YearSurcharge(year.InflationFactor * 250_000, year), 6);
+            Assert.Equal((81.20 + 14.50) * year.InflationFactor * 12, MedicareIrmaa.YearSurcharge(single[2].InflationFactor * 120_000, single[2]), 6);
         }
 
         [Fact]

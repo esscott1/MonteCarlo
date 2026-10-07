@@ -27,6 +27,8 @@ namespace MonteCarloSimulation.Core
         public DateOnly SocialSecurityStartDate { get; set; }
         // Monthly Social Security benefit, in today's (2026) dollars.
         public double SocialSecurityMonthlyAmount { get; set; }
+        // Picks the bracket tables and Medicare IRMAA tiers (FederalTaxBrackets.For).
+        public FilingStatus FilingStatus { get; set; } = FilingStatus.Single;
         // Annual standard deduction, in today's (2026) dollars.
         public double AnnualStandardDeduction { get; set; }
         // The user's switch: allow Roth conversions at all. How far to convert is the app's choice (below).
