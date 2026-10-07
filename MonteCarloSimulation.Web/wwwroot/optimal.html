@@ -59,6 +59,10 @@
                         <legend data-i18n="runner.returnsLegend">Ann Returns and Allocations</legend>
                         <table class="asset-table">
                             <thead>
+                                <tr class="badge-row">
+                                    <td colspan="3"></td>
+                                    <td colspan="2" class="ret-badge"><span class="paid-badge" data-feature="custom-returns" hidden></span></td>
+                                </tr>
                                 <tr>
                                     <th scope="col" data-i18n="runner.assetClass">Asset class</th>
                                     <th scope="col" class="alloc" data-i18n="runner.allocationPercent">Allocation %</th>
@@ -92,11 +96,11 @@
                             </tbody>
                         </table>
                         <p class="total-line" id="allocation-total" aria-live="polite">Total = 100%</p>
-                        <label><span data-i18n="runner.correlation">Stock&ndash;bond correlation</span>
+                        <label><span class="label-row"><span data-i18n="runner.correlation">Stock&ndash;bond correlation</span> <span class="paid-badge" data-feature="custom-returns" hidden></span></span>
                             <input type="number" class="percent-input" name="stockBondCorrelation" min="-1" max="1" step="any" value="0.1" data-i18n-title="runner.correlationTitle" title="How closely stock and bond returns move together, from -1 (opposite) to 1 (in step). Cash moves on its own." required data-requires="custom-returns">
                         </label>
                         <p class="total-line" id="blended-line">Blended: 6.50% expected return, 11.58% std. dev.</p>
-                        <p class="subgroup-hint"><span data-free-only="custom-returns" data-i18n="paywall.returnsSet">Returns, std. devs and the correlation are set for you; the allocation is yours.</span><span data-requires="custom-returns" data-locked="hide" hidden data-i18n="paywall.returnsYours">Returns, std. devs and the correlation are yours to change.</span> <span class="paid-badge" data-feature="custom-returns" hidden></span></p>
+                        <p class="subgroup-hint"><span data-free-only="custom-returns" data-i18n="paywall.returnsSet">Returns, std. devs and the correlation are set for you; the allocation is yours.</span><span data-requires="custom-returns" data-locked="hide" hidden data-i18n="paywall.returnsYours">Returns, std. devs and the correlation are yours to change.</span></p>
                     </fieldset>
                 </div>
 
