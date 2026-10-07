@@ -279,6 +279,24 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Matches($@"name=""annualStandardDeduction""[^>]*data-married-value=""{free.StandardDeductionMarried.ToString("N0", CultureInfo.InvariantCulture)}""", html);
         }
 
+        // Inputs.sizeInputs fits each field to its default, so no input on the tabs carries its own width; the boxes that
+        // hold a table, the filing status choice and the grand total span both columns of a tab
+        [Theory]
+        [InlineData("/index.html", "/app.js", "form")]
+        [InlineData("/optimal.html", "/optimal.js", "optimalForm")]
+        public async Task InputTabs_FitTheirFields_InTwoColumns(string path, string script, string form)
+        {
+            string html = await GetAsync(path);
+            string tabs = Regex.Match(html, @"<div class=""tabs-tile"">(.*?)(?=<section class=""graph-tile)", RegexOptions.Singleline).Groups[1].Value;
+
+            Assert.NotEmpty(tabs);
+            Assert.DoesNotMatch(@"<input[^>]*style=""width", tabs);
+            Assert.Contains($"Inputs.sizeInputs({form});", await GetAsync(script));
+            Assert.Matches(@"id=""panel-assets""[^>]*>\s*<fieldset class=""subgroup span-all"">", tabs);
+            Assert.Contains(@"<fieldset class=""subgroup filing-status span-all"">", tabs);
+            Assert.Contains(@"<p class=""total-line span-all"" id=""grand-total"">", tabs);
+        }
+
         // Single / Married filing jointly sits on the Demographics tab of both pages, for every tier (nothing locks it)
         [Theory]
         [InlineData("/index.html")]
@@ -287,7 +305,7 @@ namespace MonteCarloSimulation.Web.Tests
         {
             string html = await GetAsync(path);
             string demographics = Regex.Match(html, @"id=""panel-demographics""(.*?)(?=<div class=""tab-panel)", RegexOptions.Singleline).Groups[1].Value;
-            string fieldset = Regex.Match(demographics, @"<fieldset class=""subgroup filing-status"">(.*?)</fieldset>", RegexOptions.Singleline).Groups[1].Value;
+            string fieldset = Regex.Match(demographics, @"<fieldset class=""subgroup filing-status[^""]*"">(.*?)</fieldset>", RegexOptions.Singleline).Groups[1].Value;
 
             Assert.Contains(@"<input type=""radio"" name=""filingStatus"" value=""single"" checked>", fieldset);
             Assert.Contains(@"<input type=""radio"" name=""filingStatus"" value=""married"">", fieldset);
