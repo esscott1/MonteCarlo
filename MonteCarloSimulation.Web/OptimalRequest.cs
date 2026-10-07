@@ -6,7 +6,7 @@ namespace MonteCarloSimulation.Web
     // Input for the Optimal page: the main page's inputs (the asset mix included) minus the withdrawal (which is solved for), the run count
     // (replaced by Paths, the number of market paths: one of SpendingOptimizer.PathChoices, DefaultPaths when
     // omitted) and the single Social Security amount/date - replaced by the monthly benefit estimates at 62, 67 and 70.
-    public class OptimalRequest : AssetMixRequest
+    public class OptimalRequest : AssetMixRequest, IPlanInputs
     {
         public int Years { get; set; }
         public DateOnly Birthdate { get; set; }

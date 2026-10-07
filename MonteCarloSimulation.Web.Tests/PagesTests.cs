@@ -1,5 +1,8 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace MonteCarloSimulation.Web.Tests
 {
@@ -168,6 +171,7 @@ namespace MonteCarloSimulation.Web.Tests
         [InlineData("/model-info.html")]
         [InlineData("/observe.html")]
         [InlineData("/translations.html")]
+        [InlineData("/access.html")]
         public async Task SubPages_GoBackToTheLandingPage(string path)
         {
             string html = await GetAsync(path);
@@ -183,6 +187,7 @@ namespace MonteCarloSimulation.Web.Tests
         [InlineData("/optimal.html", "optimal.js")]
         [InlineData("/index.html", "app.js")]
         [InlineData("/model-info.html", "model-info.js")]
+        [InlineData("/access.html", "access.js")]
         public async Task TranslatedPages_HaveTheLanguageButton_AndLoadI18nFirst(string path, string pageScript)
         {
             string html = await GetAsync(path);
@@ -210,6 +215,60 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains("window.location.replace('/?observe=denied');", await GetAsync("/observe.js"));
             Assert.Contains("get('observe') === 'denied'", await GetAsync("/menu.js"));
             Assert.DoesNotContain("observe", await GetAsync("/app.js"));
+        }
+
+        // Paid tiers: every input a Free visitor can't change has a badge for its feature beside it, the features are the
+        // server's, and paywall.js loads after i18n.js and the shared inputs code, before the page's own script
+        [Theory]
+        [InlineData("/index.html", "app.js")]
+        [InlineData("/optimal.html", "optimal.js")]
+        public async Task PaidFeatures_EachLockedInputHasABadge_AndPaywallLoadsBeforeThePage(string path, string pageScript)
+        {
+            string html = await GetAsync(path);
+
+            var locked = Regex.Matches(html, @"data-requires=""([\w-]+)""").Select(m => m.Groups[1].Value).Distinct().ToList();
+            var badges = Regex.Matches(html, @"<span class=""paid-badge"" data-feature=""([\w-]+)"" hidden></span>").Select(m => m.Groups[1].Value).ToHashSet();
+            Assert.NotEmpty(locked);
+            Assert.All(locked, feature => Assert.Contains(feature, badges));
+            Assert.All(badges, feature => Assert.Contains(feature, Features.All));
+
+            int i18n = html.IndexOf("<script src=\"i18n.js\"></script>");
+            int inputs = html.IndexOf("<script src=\"inputs.js\"></script>");
+            int paywall = html.IndexOf("<script src=\"paywall.js\"></script>");
+            int page = html.IndexOf($"<script src=\"{pageScript}\"></script>");
+            Assert.True(i18n >= 0 && inputs > i18n && paywall > inputs && page > paywall);
+        }
+
+        // The server holds a Free visitor's locked inputs to these values, and the pages lock them at their defaults
+        [Theory]
+        [InlineData("/index.html")]
+        [InlineData("/optimal.html")]
+        public async Task FreeValues_AreWhatThePagesLockTheInputsAt(string path)
+        {
+            string html = await GetAsync(path);
+            var free = factory.Services.GetRequiredService<IOptions<FreeDefaultsOptions>>().Value;
+            static string Percent(double fraction) => Math.Round(fraction * 100, 6).ToString("0.######", CultureInfo.InvariantCulture);
+
+            Assert.Matches($@"name=""annualStandardDeduction""[^>]*value=""{free.StandardDeduction.ToString("N0", CultureInfo.InvariantCulture)}""[^>]*data-requires=""standard-deduction""", html);
+            foreach (var (name, value) in new[]
+            {
+                ("stockReturn", Percent(AssetMixDefaults.StockReturn)), ("stockStdDev", Percent(AssetMixDefaults.StockStdDev)),
+                ("bondReturn", Percent(AssetMixDefaults.BondReturn)), ("bondStdDev", Percent(AssetMixDefaults.BondStdDev)),
+                ("cashReturn", Percent(AssetMixDefaults.CashReturn)), ("cashStdDev", Percent(AssetMixDefaults.CashStdDev)),
+                ("stockBondCorrelation", AssetMixDefaults.StockBondCorrelation.ToString(CultureInfo.InvariantCulture)),
+            })
+                Assert.Matches($@"name=""{name}""[^>]*value=""{Regex.Escape(value)}""[^>]*data-requires=""custom-returns""", html);
+            Assert.Matches(@"name=""enableRothConversions""[^>]*data-requires=""roth-conversions"" data-free-value=""false""", html);
+            Assert.Matches(@"name=""newMoney""[^>]*data-requires=""inheritance"" data-free-value=""0""", html);
+        }
+
+        [Fact]
+        public async Task PaidBadges_OpenTheAccessCodePageInANewTab()
+        {
+            string script = await GetAsync("/paywall.js");
+
+            Assert.Contains("href=\"/billing/subscribe?tier=", script);
+            Assert.Contains("target=\"_blank\" rel=\"noopener\"", script);
         }
 
         [Fact]

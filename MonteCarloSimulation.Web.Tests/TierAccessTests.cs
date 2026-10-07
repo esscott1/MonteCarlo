@@ -1,0 +1,451 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+
+namespace MonteCarloSimulation.Web.Tests
+{
+    // Paid tiers behind access codes: GET /api/me says what a visitor may use, a tier's code earns a signed cookie, the
+    // release flags switch tiers on and off, and /api/run and /api/optimal refuse a Free visitor's locked inputs. With the
+    // Subscriptions flag off (the default), nothing is gated: the other endpoint tests run that way.
+    public class TierAccessTests
+    {
+        private const string PlusCode = "plus-test-code";
+        private const string ProCode = "pro-test-code";
+
+        private static WebApplicationFactory<Program> App(
+            bool subscriptions = true, bool tierPlus = true, bool tierPro = true, string plusCode = PlusCode) =>
+            new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+                builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["FeatureManagement:Subscriptions"] = subscriptions.ToString(),
+                    ["FeatureManagement:TierPlus"] = tierPlus.ToString(),
+                    ["FeatureManagement:TierPro"] = tierPro.ToString(),
+                    ["Tiers:Plus:AccessCode"] = plusCode,
+                    ["Tiers:Pro:AccessCode"] = ProCode,
+                })));
+
+        // Cookies are passed by hand: the access cookie is Secure, and the test server is plain http
+        private static HttpClient Client(WebApplicationFactory<Program> app) =>
+            app.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false, AllowAutoRedirect = false });
+
+        private static StringContent Json(object body) =>
+            new(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+
+        private static Task<HttpResponseMessage> EnterCodeAsync(HttpClient client, string tier, string code) =>
+            client.PostAsync("/api/tier-access", Json(new { tier, code }));
+
+        // The cookie a correct code sets, as a Cookie header value ("tier-access=...")
+        private static async Task<string> UnlockAsync(HttpClient client, string tier, string code)
+        {
+            using var response = await EnterCodeAsync(client, tier, code);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return response.Headers.GetValues("Set-Cookie").Single().Split(';')[0];
+        }
+
+        private static async Task<JsonElement> MeAsync(HttpClient client, string? cookie = null)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/me");
+            if (cookie is not null) request.Headers.Add("Cookie", cookie);
+            using var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
+        }
+
+        private static async Task<JsonElement> ErrorsAsync(HttpResponseMessage response, HttpStatusCode status)
+        {
+            Assert.Equal(status, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            return body.RootElement.GetProperty("errors").Clone();
+        }
+
+        private static string[] Strings(JsonElement array) => array.EnumerateArray().Select(e => e.GetString()!).ToArray();
+
+        // --- What a visitor may use ---
+
+        [Fact]
+        public async Task WithSubscriptionsOff_NothingIsGated_AndNothingIsOffered()
+        {
+            using var app = App(subscriptions: false);
+
+            var me = await MeAsync(Client(app));
+
+            Assert.False(me.GetProperty("gated").GetBoolean());
+            Assert.Equal(Features.All, Strings(me.GetProperty("features")));
+            Assert.Equal(0, me.GetProperty("offers").GetArrayLength());
+        }
+
+        [Fact]
+        public async Task AFreeVisitor_HasNoPaidFeatures_AndIsOfferedPlusThenPro()
+        {
+            using var app = App();
+
+            var me = await MeAsync(Client(app));
+
+            Assert.True(me.GetProperty("gated").GetBoolean());
+            Assert.Equal("Free", me.GetProperty("tier").GetString());
+            Assert.Empty(Strings(me.GetProperty("features")));
+            var offers = me.GetProperty("offers").EnumerateArray().ToList();
+            Assert.Equal(new[] { "Plus", "Pro" }, offers.Select(o => o.GetProperty("tier").GetString()));
+            Assert.Equal(new[] { "$3.99/month", "$100/month" }, offers.Select(o => o.GetProperty("priceLabel").GetString()));
+            Assert.All(offers, o => Assert.Equal("code", o.GetProperty("action").GetString()));
+            Assert.All(offers, o => Assert.Equal(Features.All, Strings(o.GetProperty("features"))));
+        }
+
+        [Theory]
+        [InlineData("plus", PlusCode, "Plus")]
+        [InlineData("Pro", ProCode, "Pro")]
+        public async Task ATiersCode_SetsASecureCookie_ThatUnlocksItsFeatures(string tier, string code, string expected)
+        {
+            using var app = App();
+            var client = Client(app);
+
+            using var response = await EnterCodeAsync(client, tier, code);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            string setCookie = response.Headers.GetValues("Set-Cookie").Single();
+            string attributes = setCookie.ToLowerInvariant();
+            Assert.StartsWith(TierAccessToken.CookieName + "=", setCookie);
+            Assert.Contains("httponly", attributes);
+            Assert.Contains("secure", attributes);
+            Assert.Contains("samesite=lax", attributes);
+            Assert.Contains("expires=", attributes);
+
+            var me = await MeAsync(client, setCookie.Split(';')[0]);
+            Assert.Equal(expected, me.GetProperty("tier").GetString());
+            Assert.Equal(Features.All, Strings(me.GetProperty("features")));
+        }
+
+        [Fact]
+        public async Task AWrongCode_IsAFieldError_AndSetsNoCookie()
+        {
+            using var app = App();
+
+            using var response = await EnterCodeAsync(Client(app), "plus", "not-the-code");
+
+            Assert.False(response.Headers.Contains("Set-Cookie"));
+            var errors = await ErrorsAsync(response, HttpStatusCode.BadRequest);
+            Assert.Equal("Incorrect access code.", errors.GetProperty("code")[0].GetString());
+        }
+
+        [Fact]
+        public async Task AnEmptyCode_AsksForOne()
+        {
+            using var app = App();
+
+            var errors = await ErrorsAsync(await EnterCodeAsync(Client(app), "plus", " "), HttpStatusCode.BadRequest);
+
+            Assert.Equal("Enter the access code.", errors.GetProperty("code")[0].GetString());
+        }
+
+        [Theory]
+        [InlineData("free")]
+        [InlineData("gold")]
+        [InlineData("1")]
+        [InlineData("")]
+        public async Task ATierThatIsntSold_IsRefused(string tier)
+        {
+            using var app = App();
+
+            var errors = await ErrorsAsync(await EnterCodeAsync(Client(app), tier, PlusCode), HttpStatusCode.BadRequest);
+
+            Assert.Equal("That tier isn't available.", errors.GetProperty("tier")[0].GetString());
+        }
+
+        [Fact]
+        public async Task WithProSwitchedOff_ProIsntOffered_ItsCodeIsRefused_AndAnEarlierProCookieCountsAsFree()
+        {
+            string proCookie;
+            using (var before = App())
+                proCookie = await UnlockAsync(Client(before), "pro", ProCode);
+
+            using var app = App(tierPro: false);
+            var client = Client(app);
+
+            var errors = await ErrorsAsync(await EnterCodeAsync(client, "pro", ProCode), HttpStatusCode.BadRequest);
+            Assert.True(errors.TryGetProperty("tier", out _));
+
+            var me = await MeAsync(client, proCookie);
+            Assert.Equal("Free", me.GetProperty("tier").GetString());
+            Assert.Equal(new[] { "Plus" }, me.GetProperty("offers").EnumerateArray().Select(o => o.GetProperty("tier").GetString()));
+        }
+
+        [Fact]
+        public async Task WithPlusSwitchedOff_ItsFeaturesAreFreeToEveryone()
+        {
+            using var app = App(tierPlus: false, tierPro: false);
+
+            var me = await MeAsync(Client(app));
+
+            Assert.Equal("Free", me.GetProperty("tier").GetString());
+            Assert.Equal(Features.All, Strings(me.GetProperty("features")));
+            Assert.Equal(0, me.GetProperty("offers").GetArrayLength());
+        }
+
+        [Fact]
+        public async Task ChangingATiersCode_SignsOutEveryoneWhoUsedTheOldOne()
+        {
+            string cookie;
+            using (var before = App())
+                cookie = await UnlockAsync(Client(before), "plus", PlusCode);
+
+            using var app = App(plusCode: "a-new-plus-code");
+
+            Assert.Equal("Free", (await MeAsync(Client(app), cookie)).GetProperty("tier").GetString());
+        }
+
+        [Fact]
+        public async Task UsingTheFreeVersion_ClearsTheCookie()
+        {
+            using var app = App();
+
+            using var response = await Client(app).DeleteAsync("/api/tier-access");
+
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            string setCookie = response.Headers.GetValues("Set-Cookie").Single();
+            Assert.StartsWith(TierAccessToken.CookieName + "=;", setCookie);
+            Assert.Contains("expires=Thu, 01 Jan 1970", setCookie);
+        }
+
+        [Fact]
+        public async Task CodeAttempts_AreLimitedTo20AnHourPerAddress()
+        {
+            using var app = App();
+            var client = Client(app);
+
+            for (int i = 0; i < 20; i++)
+            {
+                using var attempt = await EnterCodeAsync(client, "plus", "wrong");
+                Assert.Equal(HttpStatusCode.BadRequest, attempt.StatusCode);
+            }
+            using var refused = await EnterCodeAsync(client, "plus", PlusCode);
+
+            Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
+            Assert.False(refused.Headers.Contains("Set-Cookie"));
+        }
+
+        [Theory]
+        [InlineData("/billing/subscribe?tier=Plus", "/access.html?tier=plus")]
+        [InlineData("/billing/subscribe?tier=pro", "/access.html?tier=pro")]
+        [InlineData("/billing/subscribe?tier=free", "/access.html")]
+        [InlineData("/billing/subscribe", "/access.html")]
+        public async Task TheBadgesSubscribeLink_GoesToTheAccessCodePage(string path, string location)
+        {
+            using var app = App();
+
+            using var response = await Client(app).GetAsync(path);
+
+            Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+            Assert.Equal(location, response.Headers.Location?.OriginalString);
+        }
+
+        // --- The locked inputs ---
+
+        // The Scenario runner's defaults, but with a Free visitor's values for the locked inputs
+        private static RunRequest FreeRunRequest() => new()
+        {
+            Years = 30,
+            Iterations = 3,
+            Withdrawal = 60_000,
+            Birthdate = new DateOnly(1969, 7, 7),
+            RetirementDate = new DateOnly(2027, 1, 1),
+            InitialTaxableBalance = 1_000_000,
+            InitialRothBasis = 20_000,
+            InitialRothUnrealizedGain = 0,
+            InitialBrokerageBasis = 200_000,
+            InitialBrokerageUnrealizedGain = 200_000,
+            NewMoney = 0,
+            YearNewMoney = 10,
+            SocialSecurityStartDate = new DateOnly(2031, 7, 7),
+            SocialSecurityMonthlyAmount = 2_750,
+            AnnualStandardDeduction = 16_000,
+            EnableRothConversions = false,
+            StockAllocation = 0.5,
+            BondAllocation = 0.4,
+            CashAllocation = 0.1,
+            StockReturn = 0.08,
+            StockStdDev = 0.19,
+            BondReturn = 0.045,
+            BondStdDev = 0.04,
+            CashReturn = 0.035,
+            CashStdDev = 0.01,
+            StockBondCorrelation = 0.1
+        };
+
+        private static async Task<HttpResponseMessage> PostAsync<T>(WebApplicationFactory<Program> app, string path, T request, string? cookie = null)
+        {
+            var options = app.Services.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions;
+            using var message = new HttpRequestMessage(HttpMethod.Post, path)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(request, options), Encoding.UTF8, "application/json")
+            };
+            if (cookie is not null) message.Headers.Add("Cookie", cookie);
+            return await Client(app).SendAsync(message);
+        }
+
+        [Fact]
+        public async Task AFreeVisitor_RunsWithTheFreeValues()
+        {
+            using var app = App();
+
+            using var response = await PostAsync(app, "/api/run", FreeRunRequest());
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task AFreeVisitor_SendingLockedInputs_GetsA403NamingEachOne()
+        {
+            using var app = App();
+            var request = FreeRunRequest();
+            request.EnableRothConversions = true;
+            request.NewMoney = 500_000;
+            request.AnnualStandardDeduction = 20_000;
+            request.StockReturn = 0.09;
+            request.StockBondCorrelation = 0.3;
+
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/run", request), HttpStatusCode.Forbidden);
+
+            Assert.Equal("Roth conversions are a Plus feature.", errors.GetProperty("enableRothConversions")[0].GetString());
+            Assert.Equal("Inheritance is a Plus feature.", errors.GetProperty("newMoney")[0].GetString());
+            Assert.Equal("Changing the standard deduction is a Plus feature.", errors.GetProperty("annualStandardDeduction")[0].GetString());
+            Assert.Equal(FreeTier.CustomReturnsMessage, errors.GetProperty("stockReturn")[0].GetString());
+            Assert.Equal(FreeTier.CustomReturnsMessage, errors.GetProperty("stockBondCorrelation")[0].GetString());
+            Assert.False(errors.TryGetProperty("bondReturn", out _));
+        }
+
+        [Fact]
+        public async Task InvalidInput_IsStillA400_BeforeAnyTierCheck()
+        {
+            using var app = App();
+            var request = FreeRunRequest();
+            request.Years = 0;
+            request.EnableRothConversions = true;
+
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/run", request), HttpStatusCode.BadRequest);
+
+            Assert.True(errors.TryGetProperty("years", out _));
+        }
+
+        [Fact]
+        public async Task APlusVisitor_MayChangeEveryInput()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+            var request = FreeRunRequest();
+            request.EnableRothConversions = true;
+            request.NewMoney = 500_000;
+            request.AnnualStandardDeduction = 20_000;
+            request.StockReturn = 0.09;
+
+            using var response = await PostAsync(app, "/api/run", request, cookie);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task WithSubscriptionsOff_AnyoneMayChangeEveryInput()
+        {
+            using var app = App(subscriptions: false);
+            var request = FreeRunRequest();
+            request.EnableRothConversions = true;
+            request.NewMoney = 500_000;
+            request.StockReturn = 0.09;
+
+            using var response = await PostAsync(app, "/api/run", request);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task TheOptimizer_RefusesAFreeVisitorsLockedInputs_BeforeStreaming()
+        {
+            using var app = App();
+            var request = new OptimalRequest
+            {
+                Years = 30,
+                Birthdate = new DateOnly(1969, 7, 7),
+                RetirementDate = new DateOnly(2027, 1, 1),
+                InitialTaxableBalance = 1_000_000,
+                InitialBrokerageBasis = 200_000,
+                InitialBrokerageUnrealizedGain = 200_000,
+                SocialSecurityAt62 = 2_730,
+                SocialSecurityAt67 = 3_900,
+                SocialSecurityAt70 = 4_836,
+                AnnualStandardDeduction = 16_000,
+                EnableRothConversions = true,
+                NewMoney = 1_000_000,
+                YearNewMoney = 10,
+                StockAllocation = 0.6,
+                BondAllocation = 0.3,
+                CashAllocation = 0.1,
+                StockReturn = 0.08,
+                StockStdDev = 0.19,
+                BondReturn = 0.045,
+                BondStdDev = 0.04,
+                CashReturn = 0.035,
+                CashStdDev = 0.01,
+                StockBondCorrelation = 0.1,
+            };
+
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/optimal", request), HttpStatusCode.Forbidden);
+
+            Assert.True(errors.TryGetProperty("enableRothConversions", out _));
+            Assert.True(errors.TryGetProperty("newMoney", out _));
+        }
+    }
+
+    // The access cookie's token on its own: stateless, signed with the tier's code, good for 30 days.
+    public class TierAccessTokenTests
+    {
+        private static readonly DateTimeOffset Now = new(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
+
+        private static string? Codes(Tier tier) => tier switch { Tier.Plus => "plus", Tier.Pro => "pro", _ => null };
+
+        [Theory]
+        [InlineData(Tier.Plus)]
+        [InlineData(Tier.Pro)]
+        public void ATokenGrantsItsTier_For30Days(Tier tier)
+        {
+            string token = TierAccessToken.Issue(tier, Codes(tier)!, Now);
+
+            Assert.Equal(tier, TierAccessToken.Read(token, Codes, Now));
+            Assert.Equal(tier, TierAccessToken.Read(token, Codes, Now.AddDays(30)));
+            Assert.Equal(Tier.Free, TierAccessToken.Read(token, Codes, Now.AddDays(30).AddSeconds(1)));
+        }
+
+        [Fact]
+        public void EditingTheTier_BreaksTheSignature()
+        {
+            string token = TierAccessToken.Issue(Tier.Plus, "same", Now);
+
+            Assert.Equal(Tier.Free, TierAccessToken.Read("Pro" + token["Plus".Length..], _ => "same", Now));
+        }
+
+        [Fact]
+        public void ANewCode_InvalidatesTokensIssuedWithTheOldOne()
+        {
+            string token = TierAccessToken.Issue(Tier.Plus, "old", Now);
+
+            Assert.Equal(Tier.Free, TierAccessToken.Read(token, _ => "new", Now));
+            Assert.Equal(Tier.Free, TierAccessToken.Read(token, _ => null, Now));
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("Plus")]
+        [InlineData("Plus.notanumber.abc")]
+        [InlineData("Plus.99999999999.not-base64!")]
+        [InlineData("Free.99999999999.AAAA")]
+        [InlineData("1.99999999999.AAAA")]
+        public void AMalformedToken_IsFree(string? token)
+        {
+            Assert.Equal(Tier.Free, TierAccessToken.Read(token, Codes, Now));
+        }
+    }
+}

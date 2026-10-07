@@ -533,6 +533,8 @@ function initEditFlyout() {
 
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    // A Free visitor's locked inputs hold their Free values once /api/me has answered (paywall.js)
+    await Paywall.ready;
 
     const formData = new FormData(form);
     const payload = {

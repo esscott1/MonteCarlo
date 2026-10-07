@@ -99,6 +99,44 @@ and Translations pages and the passphrase box stay in English.
   column for corrections) for Excel or Google Sheets; [docs/i18n-glossary.md](docs/i18n-glossary.md) lists the terms.
   After changing `es.json` by hand, regenerate the sheet with `node tools/i18n/review-sheet.mjs`.
 
+## Free, Plus and Pro
+
+The app is getting paid tiers: **Free**, **Plus** ($3.99 a month) and **Pro** ($100 a month: everything in Plus, plus
+features still to be built). Until sign-in and payments are added, each paid tier is unlocked with a secret **access
+code** instead.
+
+- **Switches.** Three release flags, read by `Microsoft.FeatureManagement` from `FeatureManagement` in
+  [appsettings.json](MonteCarloSimulation.Web/appsettings.json) (in Azure, App Service settings such as
+  `FeatureManagement__Subscriptions`):
+
+  | Flag | Default | On means |
+  |---|---|---|
+  | `Subscriptions` | off | Paid features are gated. Off, the app is exactly as it was before tiers. |
+  | `TierPlus` | on | Plus is offered and its features are locked for Free visitors. Off, they're free to everyone. |
+  | `TierPro` | off | Pro is offered and its code works. |
+
+- **What each tier gets** is a list of feature ids under `Tiers` in appsettings.json
+  ([Features.cs](MonteCarloSimulation.Web/Features.cs)); the code asks whether a visitor may use a feature, never which
+  tier they're on ([FeatureAccess.cs](MonteCarloSimulation.Web/FeatureAccess.cs), `GET /api/me`). A Free visitor's
+  locked inputs stay at the pages' defaults: Roth conversions off, no inheritance, the standard deduction at
+  `FreeDefaults:StandardDeduction`, and the default returns, std. devs and correlation. The pages lock them, and
+  `/api/run` and `/api/optimal` refuse anything else with a 403 naming each field
+  ([FreeTier.cs](MonteCarloSimulation.Web/FreeTier.cs)).
+- **Badges.** [paywall.js](MonteCarloSimulation.Web/wwwroot/paywall.js) puts a small "✦ Plus" pill beside each locked
+  feature. Hovering, focusing or tapping it shows the price and an **Enter access code** link that opens in a new tab
+  (`/billing/subscribe?tier=plus`, which goes to the access-code page now and will go to checkout later). Entering a
+  code there unlocks the original tab in place, without losing anything typed.
+- **Access codes.** [access.html](MonteCarloSimulation.Web/wwwroot/access.html) sends the code to `POST /api/tier-access`,
+  which sets a 30-day cookie signed with that tier's code ([TierAccessToken.cs](MonteCarloSimulation.Web/TierAccessToken.cs)),
+  so changing a code signs out everyone who used the old one. Attempts are limited to 20 an hour per address. "Use the
+  Free version" clears the cookie.
+- **Trying it locally:** set the codes in user secrets (see [Keys and secrets](#keys-and-secrets)), then run
+  `dotnet run --project MonteCarloSimulation.Web --launch-profile tiers`, which turns on `Subscriptions` and `TierPro`
+  for that run only. A normal `dotnet run` stays ungated.
+- **Trying it on the live site:** add the two code settings and set `FeatureManagement__Subscriptions` to `true` in the
+  Web App's environment variables (saving restarts the app). While it's on, **every visitor without a code gets the
+  Free version** and has no way to buy Plus yet, so set it back to `false` after testing.
+
 ## Deployment
 
 Every pull request runs the full test suite through [.github/workflows/ci.yml](.github/workflows/ci.yml), so it shows a pass/fail check before it's merged. That includes the pull requests opened by the change-request agent.
@@ -124,6 +162,7 @@ No secret is committed to this repo. Each one lives in exactly one of the four p
 | `Jira__Email` | Azure App Service → Environment variables | The web app, to sign in to Jira ([JiraClient.cs](MonteCarloSimulation.Web/JiraClient.cs)) | 2 | The Atlassian account email the stories are created as. Not secret, but paired with the token. |
 | `Jira__ApiToken` | Azure App Service → Environment variables | The web app, to create Jira stories (change requests and translation updates) | 2 | An Atlassian API token for that account (id.atlassian.com → Security → API tokens). Atlassian tokens expire. |
 | `ChangeRequest__Passphrase` | Azure App Service → Environment variables | The web app: the change-request form (pencil), the Observe passphrase and the Translations page | 1 | Chosen by the site owner; shared with whoever may submit change requests. |
+| `Tiers__Plus__AccessCode`, `Tiers__Pro__AccessCode` | Azure App Service → Environment variables | The web app: the access codes that unlock Plus and Pro ([Free, Plus and Pro](#free-plus-and-pro)) | — | Chosen by the site owner; shared with testers. Changing one signs out everyone who used the old code. |
 | GitHub token | Jira → Project settings → Automation → "Trigger AI Agent on In Progress" → the web request's `Authorization` header | Jira, to send the `repository_dispatch` that starts the dispatcher | 4 | A GitHub personal access token allowed to trigger workflows on `esscott1/MonteCarlo`. Personal access tokens expire. |
 | `ANTHROPIC_API_KEY` | GitHub → repo **Settings → Secrets and variables → Actions** | Claude Code in the AI handlers ([agent-title-change.yml](.github/workflows/agent-title-change.yml)) | 6 | Anthropic Console. **Same key as `Anthropic__ApiKey` above.** |
 | `GITHUB_TOKEN` | Created by GitHub for each workflow run; nothing to store | The agent workflows, to push the branch and open the PR | 7 | GitHub Actions, automatically. |
@@ -133,7 +172,7 @@ No secret is committed to this repo. Each one lives in exactly one of the four p
 
 **How the web app finds its settings:** the app reads configuration keys like `Anthropic:ApiKey`. On Azure's Linux App Service, the colon becomes a double underscore in the environment variable's name, so that key is set as `Anthropic__ApiKey`. Non-secret Jira settings (`BaseUrl`, `ProjectKey`, `IssueType`) are committed in [appsettings.json](MonteCarloSimulation.Web/appsettings.json). If `Anthropic__ApiKey` or `Jira__ApiToken` is missing, the change-request form answers "Change requests are not configured on this server". If either is set but invalid or expired, it answers "The change request could not be completed".
 
-**Running locally:** keep the same four web-app values in .NET user secrets (the project's `UserSecretsId` is in [MonteCarloSimulation.Web.csproj](MonteCarloSimulation.Web/MonteCarloSimulation.Web.csproj)), using the colon form, for example `dotnet user-secrets set "Anthropic:ApiKey" "<key>" --project MonteCarloSimulation.Web`.
+**Running locally:** keep the same web-app values in .NET user secrets (the project's `UserSecretsId` is in [MonteCarloSimulation.Web.csproj](MonteCarloSimulation.Web/MonteCarloSimulation.Web.csproj)), using the colon form, for example `dotnet user-secrets set "Anthropic:ApiKey" "<key>" --project MonteCarloSimulation.Web`.
 
 **Separate from the app:** the Claude Code `jira-commit` skill reaches Jira through the Atlassian MCP connector, signed in through Claude, not through any of the secrets above.
 

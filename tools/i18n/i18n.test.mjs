@@ -72,7 +72,7 @@ test('every validation message the server can send has an English template to tr
     const templates = Object.entries(en).filter(([key]) => key.startsWith('server.')).map(([, text]) => text);
     const asPattern = (text) => text.replace(/\{\w+\}/g, '{}');
     const known = new Set(templates.map(asPattern));
-    const sources = ['RunRequest.cs', 'OptimalRequest.cs', 'AssetMixRequest.cs', 'ChangeRequest.cs'];
+    const sources = ['RunRequest.cs', 'OptimalRequest.cs', 'AssetMixRequest.cs', 'ChangeRequest.cs', 'TierAccess.cs', 'FreeTier.cs'];
     let count = 0;
     for (const source of sources) {
         const code = readFileSync(join(repo, 'MonteCarloSimulation.Web', source), 'utf8');

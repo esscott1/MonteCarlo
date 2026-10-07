@@ -8,7 +8,7 @@
 // Rows are built the way tools/i18n/review-sheet.mjs builds the review sheet: static page text first (from the pages'
 // data-i18n attributes), then the keys in en.json.
 (function () {
-    const PAGES = ['optimal.html', 'index.html', 'model-info.html'];
+    const PAGES = ['optimal.html', 'index.html', 'model-info.html', 'access.html'];
     const ATTRIBUTES = ['title', 'placeholder', 'aria-label'];
     const DRAFT_KEY = 'translationDraft';
     const PREVIEW_KEY = 'i18n-preview';
@@ -83,6 +83,8 @@
         if (key.startsWith('optimal.')) return 'optimal.js (landing page results)';
         if (key.startsWith('runner.') || key.startsWith('flyout.') || key.startsWith('quota.')) return 'app.js (Scenario runner)';
         if (key.startsWith('server.') || key.startsWith('field.')) return 'server messages and field names';
+        if (key.startsWith('paywall.')) return 'paywall.js (paid-feature badges)';
+        if (key.startsWith('access.')) return 'access.js (access-code page)';
         if (key.startsWith('info.')) return 'model-info.js (Model Info)';
         if (key.startsWith('lab.')) return 'Model Info (Strategy Lab data)';
         return 'shared';

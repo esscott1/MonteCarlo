@@ -2,6 +2,7 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.Options;
+using Microsoft.FeatureManagement;
 using MonteCarloSimulation.Core;
 using MonteCarloSimulation.Optimizer;
 using MonteCarloSimulation.Web;
@@ -24,6 +25,17 @@ builder.Services.AddKeyedSingleton(Quotas.ObserveAccess, (services, _) =>
     new RequestQuota(5, TimeSpan.FromHours(1), services.GetRequiredService<TimeProvider>()));
 builder.Services.AddKeyedSingleton(Quotas.Translations, (services, _) =>
     new RequestQuota(5, TimeSpan.FromHours(1), services.GetRequiredService<TimeProvider>()));
+// Access codes allow more: a team testing from one office shares an address, and every attempt counts, right or wrong
+builder.Services.AddKeyedSingleton(Quotas.TierAccess, (services, _) =>
+    new RequestQuota(20, TimeSpan.FromHours(1), services.GetRequiredService<TimeProvider>()));
+
+// Paid tiers: the release flags ("FeatureManagement"), each tier's features, price and access code ("Tiers"), and what
+// a Free visitor's locked inputs are held to ("FreeDefaults"). With the Subscriptions flag off nothing is gated.
+builder.Services.AddFeatureManagement();
+builder.Services.Configure<TiersOptions>(builder.Configuration.GetSection("Tiers"));
+builder.Services.Configure<FreeDefaultsOptions>(builder.Configuration.GetSection("FreeDefaults"));
+builder.Services.AddSingleton<IEntitlements, AccessCodeEntitlements>();
+builder.Services.AddSingleton<FeatureAccess>();
 
 // The Observe token check runs on every Observe page load and needs no countdown, so it keeps the built-in limiter.
 // Partitioned by caller IP and applied as middleware, so it rejects abusive traffic before the endpoint runs.
@@ -47,11 +59,15 @@ app.UseDefaultFiles(defaultFiles);
 app.UseStaticFiles();
 app.UseRateLimiter();
 
-app.MapPost("/api/run", (RunRequest request) =>
+app.MapPost("/api/run", async (RunRequest request, HttpContext context, FeatureAccess features, IOptionsMonitor<FreeDefaultsOptions> freeDefaults) =>
 {
     var validationErrors = request.Validate();
     if (validationErrors.Count > 0)
         return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
+
+    var access = await features.ForAsync(context);
+    var locked = FreeTier.LockedInputs(request, access, freeDefaults.CurrentValue);
+    if (locked.Count > 0) return FreeTier.Refused(locked);
 
     var assetMix = request.ToAssetMix();
     var parameters = new SimulationParameters
@@ -85,11 +101,20 @@ app.MapPost("/api/run", (RunRequest request) =>
 // The Optimal page: the annual spending that survives 80-85% of market paths per investment scenario, and the
 // Social Security claiming age that allows the most. CPU-heavy (seconds), fully separate from /api/run, so results
 // stream back as they're computed (OptimalStream); invalid input still gets a 400 before anything streams.
-app.MapPost("/api/optimal", (OptimalRequest request, IOptions<JsonOptions> jsonOptions) =>
+app.MapPost("/api/optimal", async (
+    OptimalRequest request,
+    HttpContext context,
+    FeatureAccess features,
+    IOptionsMonitor<FreeDefaultsOptions> freeDefaults,
+    IOptions<JsonOptions> jsonOptions) =>
 {
     var validationErrors = request.Validate();
     if (validationErrors.Count > 0)
         return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
+
+    var access = await features.ForAsync(context);
+    var locked = FreeTier.LockedInputs(request, access, freeDefaults.CurrentValue);
+    if (locked.Count > 0) return FreeTier.Refused(locked);
 
     return new OptimalStream(request.ToInputs(), jsonOptions.Value.SerializerOptions);
 });
@@ -243,6 +268,8 @@ app.MapGet("/api/observe-access/verify", (HttpContext ctx, IConfiguration config
         : Results.StatusCode(StatusCodes.Status401Unauthorized);
 }).RequireRateLimiting("observe-verify");
 
+app.MapTierAccess();
+
 app.Run();
 
 record RunResponse(SimulationParameters Parameters, SimulationRunOutput Output);
@@ -251,10 +278,11 @@ record ChangeRequestResponse(string IssueKey, string IssueUrl, string Summary, s
 
 record ObserveAccessRequest(string Passphrase);
 
-// Service keys of the two RequestQuota singletons
+// Service keys of the RequestQuota singletons
 static class Quotas
 {
     public const string ChangeRequest = "change-request";
     public const string ObserveAccess = "observe-access";
     public const string Translations = "translations";
+    public const string TierAccess = "tier-access";
 }

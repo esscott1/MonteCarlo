@@ -2,7 +2,7 @@ using MonteCarloSimulation.Core;
 
 namespace MonteCarloSimulation.Web
 {
-    public class RunRequest : AssetMixRequest
+    public class RunRequest : AssetMixRequest, IPlanInputs
     {
         public int Years { get; set; }
         public int Iterations { get; set; }

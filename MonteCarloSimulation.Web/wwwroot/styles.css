@@ -992,6 +992,172 @@ details pre {
     display: block;
 }
 
+/* Paid tiers (paywall.js): a small pill beside each locked feature, with a hover/focus/tap flyout giving the price and a
+   link that opens the access-code page in a new tab */
+.paid-badge {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 0.75rem;
+    font-weight: normal;
+    line-height: 1;
+}
+
+.paid-badge[hidden] {
+    display: none;
+}
+
+.paid-badge-button {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    color: var(--accent);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.paid-badge-button:hover,
+.paid-badge-button:focus-visible,
+.paid-badge.open .paid-badge-button {
+    background: var(--accent);
+    color: var(--button-text);
+}
+
+.paid-tip {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 1.6em;
+    z-index: 20;
+    width: 17rem;
+    max-width: 70vw;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    color: var(--text);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    white-space: normal;
+    text-align: left;
+}
+
+.paid-badge:hover .paid-tip,
+.paid-badge:focus-within .paid-tip,
+.paid-badge.open .paid-tip {
+    display: block;
+}
+
+.paid-tip-adds {
+    display: block;
+    margin: 0.35rem 0;
+    color: var(--muted);
+}
+
+.paid-tip a {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+/* An input a Free visitor can't change: shown at its Free value, greyed */
+input.locked {
+    background: var(--soft);
+    color: var(--muted);
+    cursor: not-allowed;
+}
+
+/* "Plus" / "Pro" in the header while a paid tier is on, beside the language button */
+.tier-marker {
+    margin-left: auto;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--button-text);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.tier-marker + .lang-toggle {
+    margin-left: 0;
+}
+
+/* The access-code page (access.html) */
+.access-form {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.9rem;
+    max-width: 26rem;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+}
+
+.access-form[hidden] {
+    display: none;
+}
+
+.access-tiers {
+    border: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.access-tiers legend {
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.access-tiers .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.access-code {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.access-code input {
+    padding: 0.4rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+#access-result {
+    margin-top: 1rem;
+    max-width: 28rem;
+}
+
+.secondary-button {
+    padding: 0.5rem 1.2rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.secondary-button:hover,
+.secondary-button:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
 /* Model Info page */
 .info-section {
     margin: 2rem 0;

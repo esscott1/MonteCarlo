@@ -1,0 +1,95 @@
+namespace MonteCarloSimulation.Web
+{
+    // The paid features. Code asks whether a visitor may use one of these, never which tier they're on: a tier is just
+    // the list of features configured for it under "Tiers" in appsettings.json.
+    public static class Features
+    {
+        public const string AccountBasisSplit = "account-basis-split";
+        public const string RothConversions = "roth-conversions";
+        public const string CustomReturns = "custom-returns";
+        public const string StandardDeduction = "standard-deduction";
+        public const string Inheritance = "inheritance";
+        public const string TaxDetail = "tax-detail";
+        public const string OptimizerFull = "optimizer-full";
+
+        public static IReadOnlyList<string> All { get; } =
+            [AccountBasisSplit, RothConversions, CustomReturns, StandardDeduction, Inheritance, TaxDetail, OptimizerFull];
+    }
+
+    public enum Tier { Free, Plus, Pro }
+
+    public static class TierNames
+    {
+        // "plus", "Pro"...: a tier's name in any case, never a number
+        public static bool TryParse(string? name, out Tier tier)
+        {
+            foreach (var candidate in Enum.GetValues<Tier>())
+            {
+                if (string.Equals(candidate.ToString(), name, StringComparison.OrdinalIgnoreCase))
+                {
+                    tier = candidate;
+                    return true;
+                }
+            }
+            tier = Tier.Free;
+            return false;
+        }
+    }
+
+    // The release flags, read by Microsoft.FeatureManagement from the "FeatureManagement" section (or App Service
+    // settings such as FeatureManagement__Subscriptions). Their names have no dots, so they work as setting names.
+    public static class Flags
+    {
+        // The master switch: off, nothing is gated and the app is exactly as it was before paid tiers
+        public const string Subscriptions = "Subscriptions";
+        // Plus is offered and its features are gated; off, its features are free to everyone
+        public const string TierPlus = "TierPlus";
+        // Pro is offered; off, a Pro code is refused
+        public const string TierPro = "TierPro";
+
+        public static string For(Tier tier) => tier == Tier.Pro ? TierPro : TierPlus;
+    }
+
+    // One paid tier's settings ("Tiers:Plus", "Tiers:Pro"). AccessCode is a secret: it comes from user-secrets locally and
+    // from App Service settings (Tiers__Plus__AccessCode) in Azure, never from appsettings.json.
+    public sealed class TierSettings
+    {
+        public string PriceLabel { get; set; } = "";
+        public string[] Features { get; set; } = [];
+        public string? AccessCode { get; set; }
+    }
+
+    public sealed class TiersOptions
+    {
+        public TierSettings Plus { get; set; } = new();
+        public TierSettings Pro { get; set; } = new();
+
+        public TierSettings? For(Tier tier) => tier switch
+        {
+            Tier.Plus => Plus,
+            Tier.Pro => Pro,
+            _ => null
+        };
+    }
+
+    // What a Free visitor's locked inputs are held to ("FreeDefaults"). The standard deduction must match the pages'
+    // default (a test checks); a Free visitor enters one total per account, split by these shares.
+    public sealed class FreeDefaultsOptions
+    {
+        public double StandardDeduction { get; set; } = 16_000;
+        public double BrokerageGainShare { get; set; } = 0.5;
+        public double RothBasisShare { get; set; } = 1.0;
+    }
+
+    // The asset classes' returns, std. devs and correlation a Free visitor runs with: the pages' defaults (a test checks).
+    public static class AssetMixDefaults
+    {
+        public const double StockReturn = 0.08;
+        public const double StockStdDev = 0.19;
+        public const double BondReturn = 0.045;
+        public const double BondStdDev = 0.04;
+        public const double CashReturn = 0.035;
+        public const double CashStdDev = 0.01;
+        public const double StockBondCorrelation = 0.1;
+    }
+}
