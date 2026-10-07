@@ -279,6 +279,48 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Matches($@"name=""annualStandardDeduction""[^>]*data-married-value=""{free.StandardDeductionMarried.ToString("N0", CultureInfo.InvariantCulture)}""", html);
         }
 
+        // Light/dark: every page applies a saved choice from <head> (theme.js, right after the stylesheet, before it draws),
+        // and the pages with a language button have the toggle right after it
+        [Theory]
+        [InlineData("/splash.html", true)]
+        [InlineData("/index.html", true)]
+        [InlineData("/optimal.html", true)]
+        [InlineData("/model-info.html", true)]
+        [InlineData("/access.html", true)]
+        [InlineData("/observe.html", false)]
+        [InlineData("/translations.html", false)]
+        public async Task EveryPage_FollowsTheChosenTheme(string path, bool hasToggle)
+        {
+            string html = await GetAsync(path);
+            string head = Regex.Match(html, @"<head>(.*?)</head>", RegexOptions.Singleline).Groups[1].Value;
+
+            Assert.Matches(@"<link rel=""stylesheet"" href=""styles.css"" />\s*<script src=""theme.js""></script>", head);
+            if (hasToggle)
+                Assert.Matches(@"<button type=""button"" class=""lang-toggle""[^>]*>[^<]*</button>\s*<button type=""button"" class=""theme-toggle""", html);
+            else
+                Assert.DoesNotContain("theme-toggle", html);
+        }
+
+        // The dark colours apply twice - under the computer's dark setting unless the toggle chose light, and when it
+        // chose dark - so each pair must declare exactly the same colours
+        [Fact]
+        public async Task DarkColours_AreTheSameForTheSettingAndTheToggle()
+        {
+            string css = await GetAsync("/styles.css");
+            static string[] Declarations(string body) => body.Split(';').Select(d => Regex.Replace(d, @"\s+", " ").Trim()).Where(d => d.Length > 0).ToArray();
+
+            var setting = Regex.Matches(css, @"@media \(prefers-color-scheme: dark\) \{\s*:root(\S*) \{([^}]*)\}\s*\}");
+            var toggle = Regex.Matches(css, @"\n:root\[data-theme=""dark""\] \{([^}]*)\}");
+
+            Assert.Equal(2, setting.Count);
+            Assert.Equal(setting.Count, toggle.Count);
+            for (int i = 0; i < setting.Count; i++)
+            {
+                Assert.Equal(@":not([data-theme=""light""])", setting[i].Groups[1].Value);
+                Assert.Equal(Declarations(setting[i].Groups[2].Value), Declarations(toggle[i].Groups[1].Value));
+            }
+        }
+
         // Inputs.sizeInputs fits each field to its default, so no input on the tabs carries its own width; the boxes that
         // hold a table, the filing status choice and the grand total span both columns of a tab
         [Theory]

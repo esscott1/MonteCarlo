@@ -3,6 +3,10 @@
   "common.requestFailedWith": "Request failed: {message}",
   "common.somethingWrong": "Something went wrong. Please try again.",
   "common.why": "why",
+  "theme.dark": "Dark",
+  "theme.light": "Light",
+  "theme.toDark": "Switch to dark mode",
+  "theme.toLight": "Switch to light mode",
 
   "order.TaxOptimized": "Tax-optimized",
   "order.ProRata": "Pro-rata",
