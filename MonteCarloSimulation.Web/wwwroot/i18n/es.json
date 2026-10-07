@@ -186,7 +186,7 @@
   "runner.tax.irmaa": "{amount} de recargo IRMAA de Medicare (por los ingresos de {year})",
   "runner.tax.capGainsTotal": "{amount} de impuesto sobre ganancias de capital",
   "runner.tax.ordinaryTotal": "{amount} de impuesto ordinario",
-  "runner.tax.detailLocked": "Los tramos de cada año, el margen hasta el siguiente tramo, el IRMAA de Medicare, las conversiones a Roth y quién pagó el impuesto:",
+  "runner.tax.teaserNote": "Los primeros {years} años de cada ejecución muestran el detalle de impuestos de Plus como avance; los años siguientes muestran solo los totales.",
   "runner.tax.runAgain": "Vuelva a ejecutar para ver los tramos de cada año, el IRMAA de Medicare, las conversiones a Roth y quién pagó el impuesto.",
   "runner.table.year": "Año",
   "runner.table.withdrawal": "Retiro",
@@ -596,5 +596,13 @@
   "access.tierLegend": "Nivel",
   "access.code": "Código de acceso",
   "access.submit": "Desbloquear",
-  "access.useFree": "Usar la versión gratuita"
+  "access.useFree": "Usar la versión gratuita",
+  "paywall.enabled": "Habilitado",
+  "paywall.enabledLabel": "{tier} habilitado",
+  "paywall.upgradeTo": "Mejorar a {tier}",
+  "paywall.comingSoon": "{tier} añade: {list}, próximamente.",
+  "paywall.highlight.return_models": "Modelos de rendimiento",
+  "paywall.highlight.per_account_asset_mixes": "Combinaciones de activos por cuenta",
+  "paywall.highlight.advisor_workspace": "Espacio de trabajo para asesores",
+  "paywall.returnsYours": "Los rendimientos, las desviaciones estándar y la correlación los puede cambiar usted."
 }

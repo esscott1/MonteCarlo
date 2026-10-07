@@ -169,13 +169,14 @@ function render() {
         // The claiming-age comparison and the benefit curve are the full Optimizer's
         detail = `
             <p class="page-intro">${t('optimal.basedOn', { paths: start.paths })}</p>
-            ${optimum ? `<details open><summary>${t('optimal.compareAges')}</summary>${renderClaimingTable(optimum)}</details>` : ''}
+            ${optimum ? `<details open><summary>${t('optimal.compareAges')} <span class="paid-badge" data-feature="optimizer-full" hidden></span></summary>${renderClaimingTable(optimum)}</details>` : ''}
             ${teaser ? '' : renderBenefitCurve(start.benefitByAge)}`;
     }
     cardPlaceholder.hidden = card !== '';
     optimalCard.innerHTML = card;
     optimalResults.innerHTML = detail;
     Paywall.decorate(optimalCard);
+    Paywall.decorate(optimalResults);
 }
 
 function renderProgress(progress) {

@@ -132,9 +132,10 @@ instead.
 - **The Free Scenario runner.** A Free visitor enters one **total** for Roth and one for Brokerage instead of basis and
   gains. Each total is split by the `FreeDefaults` shares (Brokerage 50% gains / 50% basis, Roth 100% basis), on the
   page and again on the server, whatever split the request carries. Unlocking Plus shows the basis and gain fields
-  holding that split. A Free run's results leave out each year's tax detail (brackets, room to the next bracket,
-  Medicare IRMAA, Roth conversions and who paid), keeping each year's tax totals
-  ([FreeRunView.cs](MonteCarloSimulation.Web/FreeRunView.cs)).
+  holding that split. A Free run's year tables show the Plus tax detail (brackets, room to the next bracket, Medicare
+  IRMAA, Roth conversions and who paid) for each run's first 3 years only, as a preview in lighter grey with the Plus
+  badge, and each year's tax totals after that ([FreeRunView.cs](MonteCarloSimulation.Web/FreeRunView.cs);
+  `FreeDefaults:TaxDetailTeaserYears`).
 - **The Free Optimizer** runs 167 simulated markets and takes one Social Security amount, the benefit at 67; the
   amounts at 62 and 70 follow SSA's rules (70% and 124% of it). Its answer is a teaser: the recommended monthly spend
   as a $500 range ("about $6,000–$6,500 a month"), without the exact amount, the best claiming age, the comparison of
@@ -143,7 +144,10 @@ instead.
   "✦ Plus" in blue, or "◆ Pro" in deep purple when Pro is the cheapest tier on offer with it (Pro's locked inputs get a
   purple edge too). Hovering, focusing or tapping it shows the price and an **Enter access code** link that opens in a
   new tab (`/billing/subscribe?tier=`, which goes to the access-code page now and will go to checkout later). Entering a
-  code there unlocks the original tab in place, without losing anything typed.
+  code there unlocks the original tab in place, without losing anything typed. Once a visitor's tier has a feature, the
+  same spot shows "✓ Plus" or "✓ Pro" (its flyout just says "Enabled") and the inputs are outlined in that tier's
+  colour. A Plus visitor also sees "◆ Upgrade to Pro" in the header while Pro is on offer: Pro's price, what it will add
+  (`Tiers:Pro:Highlights`), and the link to enter its code.
 - **Access codes.** [access.html](MonteCarloSimulation.Web/wwwroot/access.html) lists the tiers on offer and sends the
   code to `POST /api/tier-access`, which sets a browser-session cookie holding a token signed with that tier's code and
   good for 12 hours at most ([TierAccessToken.cs](MonteCarloSimulation.Web/TierAccessToken.cs)), so changing a code

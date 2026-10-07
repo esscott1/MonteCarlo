@@ -94,7 +94,7 @@
   "runner.tax.irmaa": "{amount} Medicare IRMAA surcharge (from {year} income)",
   "runner.tax.capGainsTotal": "{amount} cap gains paid",
   "runner.tax.ordinaryTotal": "{amount} ord tax paid",
-  "runner.tax.detailLocked": "Each year's brackets, room to the next bracket, Medicare IRMAA, Roth conversions and who paid the tax:",
+  "runner.tax.teaserNote": "The first {years} years of each run show the Plus tax detail as a preview; later years show tax totals only.",
   "runner.tax.runAgain": "Run again to see each year's brackets, Medicare IRMAA, Roth conversions and who paid the tax.",
   "runner.table.year": "Year",
   "runner.table.withdrawal": "Withdrawal",
@@ -485,5 +485,12 @@
   "access.success": "{tier} is on in this browser. Switch back to your other tab: it unlocks by itself, and nothing you entered is lost.",
   "access.backToFree": "You're back on the Free version. Your other tab locks the paid features again.",
   "access.quota.blocked": "You've used all {limit} access code attempts for this hour from this network. You can try again at {clock} ({relative}).",
-  "access.quota.remaining": "{remaining} of {limit} attempts left this hour."
+  "access.quota.remaining": "{remaining} of {limit} attempts left this hour.",
+  "paywall.enabled": "Enabled",
+  "paywall.enabledLabel": "{tier} enabled",
+  "paywall.upgradeTo": "Upgrade to {tier}",
+  "paywall.comingSoon": "{tier} adds: {list}, coming soon.",
+  "paywall.highlight.return_models": "Return models",
+  "paywall.highlight.per_account_asset_mixes": "Per-account asset mixes",
+  "paywall.highlight.advisor_workspace": "Advisor workspace"
 }

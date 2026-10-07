@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { repo, readJson, readText, readLab, labTexts, staticEntries, placeholders, SCRIPTS } from './i18n-lib.mjs';
+import { repo, readJson, readText, readLab, labTexts, staticEntries, placeholders, slug, SCRIPTS } from './i18n-lib.mjs';
 import { buildSheet, readSheet } from './review-sheet.mjs';
 
 const en = readJson('en.json');
@@ -12,7 +12,7 @@ const statics = staticEntries();
 const staticKeys = new Set(statics.map((s) => s.key));
 
 // Keys the scripts build from a prefix and a value (an enum name, a table column, a scenario id, a server field...)
-const DYNAMIC_PREFIXES = ['order.', 'target.short.', 'target.phrase.', 'funding.', 'optimal.table.', 'runner.table.', 'scenario.', 'field.', 'server.', 'lab.'];
+const DYNAMIC_PREFIXES = ['order.', 'target.short.', 'target.phrase.', 'funding.', 'optimal.table.', 'runner.table.', 'scenario.', 'field.', 'server.', 'lab.', 'paywall.highlight.'];
 
 function literalScriptKeys() {
     const keys = new Set();
@@ -113,6 +113,18 @@ test('every household description in the lab data matches the lab.household.* te
         for (const part of description.split('; ')) {
             assert.ok(matches(part) || part.split(', ').every(matches), `no template for "${part}" in "${description}"`);
         }
+    }
+});
+
+// A tier's highlights (what it will add, shown in its upgrade offer) are English in appsettings.json; paywall.js shows
+// the Spanish under paywall.highlight.<slug> only while en.json's English still matches
+test('every tier highlight in appsettings.json has its current English in en.json', () => {
+    const settings = JSON.parse(readFileSync(join(repo, 'MonteCarloSimulation.Web', 'appsettings.json'), 'utf8').replace(/^﻿/, ''));
+    const highlights = Object.values(settings.Tiers).flatMap((tier) => tier.Highlights ?? []);
+    assert.ok(highlights.length > 0, 'no tier highlights found; has appsettings.json changed shape?');
+    for (const english of highlights) {
+        const key = `paywall.highlight.${slug(english)}`;
+        assert.equal(en[key], english, `${key}: add it to en.json and es.json`);
     }
 });
 

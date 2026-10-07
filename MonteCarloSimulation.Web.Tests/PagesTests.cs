@@ -294,6 +294,27 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(4, Regex.Matches(panel, @"<label data-requires=""account-basis-split"" data-locked=""hide"">").Count);
         }
 
+        // A paid feature's badge must stay visible once the visitor's tier has it ("✓ Plus"), so it can't sit only inside
+        // Free-only text: the returns note shows either wording beside one badge, and the Optimizer's Recommendation and
+        // Simulated markets headings carry the full Optimizer's
+        [Fact]
+        public async Task EnabledBadges_HaveSpotsThatStayVisible()
+        {
+            string runner = await GetAsync("/index.html");
+            string optimal = await GetAsync("/optimal.html");
+
+            foreach (var html in new[] { runner, optimal })
+            {
+                var note = Regex.Match(html, @"<p class=""subgroup-hint"">(.*?)</p>").Groups[1].Value;
+                Assert.Contains(@"data-free-only=""custom-returns""", note);
+                Assert.Contains(@"data-requires=""custom-returns"" data-locked=""hide""", note);
+                Assert.Contains(@"<span class=""paid-badge"" data-feature=""custom-returns"" hidden></span>", note);
+            }
+            Assert.Matches(@"<h2 id=""recommendation-title""[^>]*>.*?<span class=""paid-badge"" data-feature=""optimizer-full"" hidden></span></h2>", optimal);
+            Assert.Matches(@"<legend><span data-i18n=""optimal.markets"">[^<]*</span> <span class=""paid-badge"" data-feature=""optimizer-full"" hidden></span></legend>", optimal);
+            Assert.Contains("data-feature=\"tax-detail\"", await GetAsync("/app.js"));
+        }
+
         [Fact]
         public async Task PaidBadges_OpenTheAccessCodePageInANewTab()
         {
