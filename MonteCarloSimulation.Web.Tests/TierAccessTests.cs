@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using MonteCarloSimulation.Optimizer;
 
 namespace MonteCarloSimulation.Web.Tests
 {
@@ -359,6 +360,181 @@ namespace MonteCarloSimulation.Web.Tests
             using var response = await PostAsync(app, "/api/run", request);
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        // --- The Free Scenario runner ---
+
+        [Fact]
+        public async Task Me_ReportsTheSharesAFreeVisitorsAccountTotalsAreSplitBy()
+        {
+            using var app = App();
+
+            var shares = (await MeAsync(Client(app))).GetProperty("freeDefaults");
+
+            Assert.Equal(0.5, shares.GetProperty("brokerageGainShare").GetDouble());
+            Assert.Equal(1.0, shares.GetProperty("rothBasisShare").GetDouble());
+        }
+
+        [Fact]
+        public async Task AFreeVisitorsAccounts_AreSplitByTheFreeShares_WhateverTheRequestSays()
+        {
+            using var app = App();
+            var request = FreeRunRequest();
+            request.InitialRothBasis = 15_000;
+            request.InitialRothUnrealizedGain = 5_000;
+            request.InitialBrokerageBasis = 100_000;
+            request.InitialBrokerageUnrealizedGain = 300_000;
+
+            using var response = await PostAsync(app, "/api/run", request);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var parameters = body.RootElement.GetProperty("parameters");
+            Assert.Equal(20_000, parameters.GetProperty("initialRothBasis").GetDouble());
+            Assert.Equal(0, parameters.GetProperty("initialRothUnrealizedGain").GetDouble());
+            Assert.Equal(200_000, parameters.GetProperty("initialBrokerageBasis").GetDouble());
+            Assert.Equal(200_000, parameters.GetProperty("initialBrokerageUnrealizedGain").GetDouble());
+        }
+
+        [Fact]
+        public async Task APlusVisitorsAccounts_KeepTheirOwnSplit()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+            var request = FreeRunRequest();
+            request.InitialBrokerageBasis = 100_000;
+            request.InitialBrokerageUnrealizedGain = 300_000;
+
+            using var response = await PostAsync(app, "/api/run", request, cookie);
+
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(100_000, body.RootElement.GetProperty("parameters").GetProperty("initialBrokerageBasis").GetDouble());
+        }
+
+        [Fact]
+        public async Task AFreeVisitorsRun_LeavesOutTheTaxDetail_ButKeepsEachYearsTaxTotals()
+        {
+            using var app = App();
+
+            using var response = await PostAsync(app, "/api/run", FreeRunRequest());
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(body.RootElement.GetProperty("taxDetail").GetBoolean());
+            var runs = body.RootElement.GetProperty("output").GetProperty("result").GetProperty("runs").EnumerateArray().ToList();
+            Assert.Equal(3, runs.Count);
+            Assert.All(runs, run => Assert.False(run.TryGetProperty("lifetimeIrmaaSurcharges", out _)));
+            var years = runs.SelectMany(run => run.GetProperty("years").EnumerateArray()).ToList();
+            Assert.NotEmpty(years);
+            Assert.All(years, year =>
+            {
+                Assert.All(FreeRunView.TaxDetailFields, field => Assert.False(year.TryGetProperty(field, out _), field));
+                Assert.All(new[] { "ordinaryTaxAmount", "capitalGainsTaxAmount", "taxRate", "withdrawal", "brokerageWithdrawal", "realizedGains", "balance" },
+                    field => Assert.True(year.TryGetProperty(field, out _), field));
+            });
+        }
+
+        [Fact]
+        public async Task APlusVisitorsRun_HasTheFullTaxDetail()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+
+            using var response = await PostAsync(app, "/api/run", FreeRunRequest(), cookie);
+
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.False(body.RootElement.TryGetProperty("taxDetail", out _));
+            var year = body.RootElement.GetProperty("output").GetProperty("result").GetProperty("runs")[0].GetProperty("years")[0];
+            Assert.All(FreeRunView.TaxDetailFields, field => Assert.True(year.TryGetProperty(field, out _), field));
+        }
+
+        // --- The Free Optimizer ---
+
+        // The Optimal page's request with a Free visitor's values, its accounts already split by the Free shares
+        private static OptimalRequest FreeOptimalRequest() => new()
+        {
+            Years = 30,
+            Birthdate = new DateOnly(1969, 7, 7),
+            RetirementDate = new DateOnly(2027, 1, 1),
+            InitialTaxableBalance = 1_000_000,
+            InitialRothBasis = 20_000,
+            InitialBrokerageBasis = 200_000,
+            InitialBrokerageUnrealizedGain = 200_000,
+            SocialSecurityAt62 = 2_750,
+            SocialSecurityAt67 = 3_900,
+            SocialSecurityAt70 = 4_800,
+            AnnualStandardDeduction = 16_000,
+            StockAllocation = 0.6,
+            BondAllocation = 0.3,
+            CashAllocation = 0.1,
+            StockReturn = 0.08,
+            StockStdDev = 0.19,
+            BondReturn = 0.045,
+            BondStdDev = 0.04,
+            CashReturn = 0.035,
+            CashStdDev = 0.01,
+            StockBondCorrelation = 0.1,
+            Paths = 500,
+        };
+
+        private static async Task<List<JsonElement>> EventsAsync(HttpResponseMessage response)
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return (await response.Content.ReadAsStringAsync()).Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => JsonDocument.Parse(line).RootElement.Clone()).ToList();
+        }
+
+        [Fact]
+        public async Task AFreeVisitorsOptimizer_Streams_ATeaser_From167Markets_AndSocialSecurityAt67AloneWithSsaRules()
+        {
+            using var app = App();
+
+            var events = await EventsAsync(await PostAsync(app, "/api/optimal", FreeOptimalRequest()));
+
+            var types = events.Select(e => e.GetProperty("type").GetString()).ToList();
+            Assert.Equal("start", types[0]);
+            Assert.Equal(new[] { "teaser", "done" }, types.TakeLast(2));
+            Assert.DoesNotContain("result", types);
+            Assert.Equal(167, events[0].GetProperty("paths").GetInt32());
+
+            // What the server ran: the entered 62 and 70 amounts replaced by SSA's 70% and 124% of the amount at 67
+            var expected = FreeOptimalRequest();
+            expected.SocialSecurityAt62 = 3_900 * SocialSecurityCurve.SsaShareAt62;
+            expected.SocialSecurityAt70 = 3_900 * SocialSecurityCurve.SsaShareAt70;
+            expected.Paths = 167;
+            var optimum = SpendingOptimizer.Optimize(expected.ToInputs()).Optimum;
+            var teaser = OptimalTeaserEvent.For(optimum.Recommended.SpendAtMidpoint);
+            Assert.Equal(teaser.MonthlyLow, events[^2].GetProperty("monthlyLow").GetDouble());
+            Assert.Equal(teaser.MonthlyHigh, events[^2].GetProperty("monthlyHigh").GetDouble());
+            Assert.True(teaser.MonthlyLow <= optimum.Recommended.SpendAtMidpoint / 12 && optimum.Recommended.SpendAtMidpoint / 12 < teaser.MonthlyHigh);
+        }
+
+        [Fact]
+        public async Task APlusVisitorsOptimizer_StreamsTheFullResult_WithTheirOwnMarketsAndAmounts()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+            var request = FreeOptimalRequest();
+            request.Paths = 167;
+
+            var events = await EventsAsync(await PostAsync(app, "/api/optimal", request, cookie));
+
+            Assert.Equal("result", events[^2].GetProperty("type").GetString());
+            Assert.Equal(JsonSerializer.Serialize(SpendingOptimizer.Optimize(request.ToInputs()).Optimum,
+                    app.Services.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions),
+                events[^2].GetProperty("optimum").GetRawText());
+        }
+
+        [Theory]
+        [InlineData(72_900, 6_000, 6_500)]   // $6,075 a month
+        [InlineData(72_000, 6_000, 6_500)]   // exactly $6,000
+        [InlineData(5_000, 0, 500)]
+        public void TheTeaser_IsTheMonthlySpendsRangeOf500(double annual, double low, double high)
+        {
+            var teaser = OptimalTeaserEvent.For(annual);
+
+            Assert.Equal(low, teaser.MonthlyLow);
+            Assert.Equal(high, teaser.MonthlyHigh);
         }
 
         [Fact]

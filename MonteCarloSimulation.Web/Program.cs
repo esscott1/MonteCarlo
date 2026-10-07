@@ -59,7 +59,12 @@ app.UseDefaultFiles(defaultFiles);
 app.UseStaticFiles();
 app.UseRateLimiter();
 
-app.MapPost("/api/run", async (RunRequest request, HttpContext context, FeatureAccess features, IOptionsMonitor<FreeDefaultsOptions> freeDefaults) =>
+app.MapPost("/api/run", async (
+    RunRequest request,
+    HttpContext context,
+    FeatureAccess features,
+    IOptionsMonitor<FreeDefaultsOptions> freeDefaults,
+    IOptions<JsonOptions> jsonOptions) =>
 {
     var validationErrors = request.Validate();
     if (validationErrors.Count > 0)
@@ -68,6 +73,7 @@ app.MapPost("/api/run", async (RunRequest request, HttpContext context, FeatureA
     var access = await features.ForAsync(context);
     var locked = FreeTier.LockedInputs(request, access, freeDefaults.CurrentValue);
     if (locked.Count > 0) return FreeTier.Refused(locked);
+    FreeTier.SplitAccounts(request, access, freeDefaults.CurrentValue);
 
     var assetMix = request.ToAssetMix();
     var parameters = new SimulationParameters
@@ -95,7 +101,10 @@ app.MapPost("/api/run", async (RunRequest request, HttpContext context, FeatureA
     };
 
     var output = MonteCarloEngine.Run(parameters);
-    return Results.Ok(new RunResponse(parameters, output));
+    var response = new RunResponse(parameters, output);
+    return access.Can(Features.TaxDetail)
+        ? Results.Ok(response)
+        : Results.Json(FreeRunView.From(response, jsonOptions.Value.SerializerOptions));
 });
 
 // The Optimal page: the annual spending that survives 80-85% of market paths per investment scenario, and the
@@ -108,15 +117,18 @@ app.MapPost("/api/optimal", async (
     IOptionsMonitor<FreeDefaultsOptions> freeDefaults,
     IOptions<JsonOptions> jsonOptions) =>
 {
+    var access = await features.ForAsync(context);
+    FreeTier.LimitOptimizer(request, access);
+
     var validationErrors = request.Validate();
     if (validationErrors.Count > 0)
         return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
 
-    var access = await features.ForAsync(context);
     var locked = FreeTier.LockedInputs(request, access, freeDefaults.CurrentValue);
     if (locked.Count > 0) return FreeTier.Refused(locked);
+    FreeTier.SplitAccounts(request, access, freeDefaults.CurrentValue);
 
-    return new OptimalStream(request.ToInputs(), jsonOptions.Value.SerializerOptions);
+    return new OptimalStream(request.ToInputs(), jsonOptions.Value.SerializerOptions, teaser: !access.Can(Features.OptimizerFull));
 });
 
 // Checks run cheapest-first: shape, then passphrase, and only then the paid agent call.

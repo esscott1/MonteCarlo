@@ -64,6 +64,18 @@ namespace MonteCarloSimulation.Optimizer.Tests
             Assert.Equal(byAge.OrderBy(b => b), byAge); // monotone when the anchors are
         }
 
+        [Fact]
+        public void FromFullRetirementAmount_FollowsSsaRules_70PercentAt62And124PercentAt70()
+        {
+            var curve = SocialSecurityCurve.FromFullRetirementAmount(3_900);
+
+            Assert.Equal(2_730, curve.MonthlyBenefitAtAge(62), 9);
+            Assert.Equal(3_900, curve.MonthlyBenefitAtAge(67), 9);
+            Assert.Equal(4_836, curve.MonthlyBenefitAtAge(70), 9);
+            // 64 is 36 months early: 20% less
+            Assert.Equal(3_900 * 0.8, curve.MonthlyBenefitAtAge(64), 9);
+        }
+
         // --- Reading survival levels off break-evens ---
 
         [Fact]

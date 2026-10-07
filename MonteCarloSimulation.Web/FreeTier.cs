@@ -1,3 +1,5 @@
+using MonteCarloSimulation.Optimizer;
+
 namespace MonteCarloSimulation.Web
 {
     // The inputs both pages send (RunRequest, OptimalRequest) that paid tiers unlock.
@@ -6,6 +8,10 @@ namespace MonteCarloSimulation.Web
         bool EnableRothConversions { get; set; }
         double NewMoney { get; set; }
         double AnnualStandardDeduction { get; set; }
+        double InitialRothBasis { get; set; }
+        double InitialRothUnrealizedGain { get; set; }
+        double InitialBrokerageBasis { get; set; }
+        double InitialBrokerageUnrealizedGain { get; set; }
     }
 
     // What a visitor without a paid feature may send. The pages hold a Free visitor's locked inputs at these values, so
@@ -42,6 +48,32 @@ namespace MonteCarloSimulation.Web
         }
 
         public const string CustomReturnsMessage = "Changing returns, std. devs and the correlation is a Plus feature.";
+
+        // A Free visitor enters one total per account, so whatever split the request carries, the server splits each total
+        // by the FreeDefaults shares: Brokerage into unrealized gain and basis, Roth into basis (contributions) and gain.
+        public static void SplitAccounts(IPlanInputs request, Access access, FreeDefaultsOptions free)
+        {
+            if (access.Can(Features.AccountBasisSplit)) return;
+
+            double roth = request.InitialRothBasis + request.InitialRothUnrealizedGain;
+            request.InitialRothBasis = roth * Math.Clamp(free.RothBasisShare, 0, 1);
+            request.InitialRothUnrealizedGain = roth - request.InitialRothBasis;
+
+            double brokerage = request.InitialBrokerageBasis + request.InitialBrokerageUnrealizedGain;
+            request.InitialBrokerageUnrealizedGain = brokerage * Math.Clamp(free.BrokerageGainShare, 0, 1);
+            request.InitialBrokerageBasis = brokerage - request.InitialBrokerageUnrealizedGain;
+        }
+
+        // The Free Optimizer: one Social Security amount, at 67 (the 62 and 70 amounts follow SSA's rules, whatever the
+        // request says), and the fewest simulated markets. Applied before validation, so the derived amounts are checked.
+        public static void LimitOptimizer(OptimalRequest request, Access access)
+        {
+            if (access.Can(Features.OptimizerFull)) return;
+            var curve = SocialSecurityCurve.FromFullRetirementAmount(request.SocialSecurityAt67);
+            request.SocialSecurityAt62 = curve.At62;
+            request.SocialSecurityAt70 = curve.At70;
+            request.Paths = SpendingOptimizer.PathChoices[^1];
+        }
 
         // A refusal: the same problem shape as a validation error, so the pages show it the same way
         public static IResult Refused(Dictionary<string, string> errors) => Results.ValidationProblem(

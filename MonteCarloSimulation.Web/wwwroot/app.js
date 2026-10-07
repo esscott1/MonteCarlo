@@ -178,20 +178,35 @@ function taxesBreakdown(yd, conversionsEnabled) {
     return bulletList(items);
 }
 
-function renderRunDetailTable(yearDetails, conversionsEnabled) {
+// Without the tax-detail feature the server sends only each year's tax totals (FreeRunView)
+function taxTotals(yd) {
+    return bulletList([
+        t('runner.tax.capGainsTotal', { amount: formatCurrency(yd.capitalGainsTaxAmount) }),
+        t('runner.tax.ordinaryTotal', { amount: formatCurrency(yd.ordinaryTaxAmount) }),
+    ]);
+}
+
+// Above a year table without the tax detail: what Plus adds, or, once it's unlocked, that a new run shows it
+function taxDetailNote() {
+    return Paywall.can('tax-detail')
+        ? `<p class="table-note">${t('runner.tax.runAgain')}</p>`
+        : `<p class="table-note">${t('runner.tax.detailLocked')} <span class="paid-badge" data-feature="tax-detail" hidden></span></p>`;
+}
+
+function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail) {
     const rows = yearDetails.map((yd) => {
         return `
         <tr>
             <td>${yearWithAge(yd)}</td>
             <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax, yd.socialSecurityMonths, yd.realizedGains)}</td>
-            <td>${taxesBreakdown(yd, conversionsEnabled)}</td>
+            <td>${taxDetail ? taxesBreakdown(yd, conversionsEnabled) : taxTotals(yd)}</td>
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
             <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>
         </tr>
     `;
     }).join('');
 
-    return `
+    return `${taxDetail ? '' : taxDetailNote()}
         <table class="run-table">
             <thead>
                 <tr>${['year', 'withdrawal', 'taxes', 'return', 'totalBalance'].map((key) => `<th>${t(`runner.table.${key}`)}</th>`).join('')}</tr>
@@ -201,7 +216,7 @@ function renderRunDetailTable(yearDetails, conversionsEnabled) {
     `;
 }
 
-function renderPerRunTable(result, conversionsEnabled) {
+function renderPerRunTable(result, conversionsEnabled, taxDetail) {
     const rows = result.runs.map((run, i) => {
         const failureNote = run.failed
             ? `<span class="failure">${t('runner.run.failed', { year: run.failureYear })}</span>`
@@ -218,7 +233,7 @@ function renderPerRunTable(result, conversionsEnabled) {
                 <td>${failureNote}</td>
             </tr>
             <tr class="run-detail-row" hidden>
-                <td colspan="8">${renderRunDetailTable(run.years, conversionsEnabled)}</td>
+                <td colspan="8">${renderRunDetailTable(run.years, conversionsEnabled, taxDetail)}</td>
             </tr>
         `;
     }).join('');
@@ -252,7 +267,8 @@ function renderSummary(parameters, output) {
     const variance = output.allRates.reduce((a, b) => a + Math.pow(b - totalAvgRate, 2), 0) / output.allRates.length;
     const stdDev = Math.sqrt(variance);
     const avgLifetimeTax = result.runs.reduce((a, run) => a + run.lifetimeTaxesPaid, 0) / result.runs.length;
-    const avgLifetimeIrmaa = result.runs.reduce((a, run) => a + run.lifetimeIrmaaSurcharges, 0) / result.runs.length;
+    // Not sent without the tax-detail feature
+    const avgLifetimeIrmaa = result.runs.reduce((a, run) => a + (run.lifetimeIrmaaSurcharges ?? 0), 0) / result.runs.length;
     const irmaaLine = avgLifetimeIrmaa > 0.5 ? `<p>${t('runner.irmaaLine', { amount: formatCurrency(avgLifetimeIrmaa) })}</p>` : '';
     const lifetimeTaxLine = `<p>${t('runner.lifetimeTax', {
         amount: formatCurrency(avgLifetimeTax),
@@ -315,7 +331,7 @@ function failureTrace(runs) {
     ].join('\n')).join('\n\n')).join('\n\n\n');
 }
 
-function renderDetail(output, conversionsEnabled) {
+function renderDetail(output, conversionsEnabled, taxDetail) {
     if (output.result.outOfMoneyCount > 0) {
         return `
             <details>
@@ -330,7 +346,7 @@ function renderDetail(output, conversionsEnabled) {
     return `
         <details>
             <summary>${t('runner.detail.lastSuccess')}</summary>
-            ${renderRunDetailTable(output.lastSuccessfulRun.slice(1), conversionsEnabled)}
+            ${renderRunDetailTable(output.lastSuccessfulRun.slice(1), conversionsEnabled, taxDetail)}
         </details>
     `;
 }
@@ -346,11 +362,12 @@ function renderView() {
     } else if (view.kind === 'failed') {
         results.innerHTML = `<div class="error-box"><p>${t('common.requestFailedWith', { message: escapeHtml(view.message) })}</p></div>`;
     } else {
-        const { parameters, output } = view;
+        const { parameters, output, taxDetail } = view;
         results.innerHTML =
             renderSummary(parameters, output) +
-            renderPerRunTable(output.result, parameters.enableRothConversions) +
-            renderDetail(output, parameters.enableRothConversions);
+            renderPerRunTable(output.result, parameters.enableRothConversions, taxDetail) +
+            renderDetail(output, parameters.enableRothConversions, taxDetail);
+        Paywall.decorate(results);
     }
 }
 
@@ -573,7 +590,8 @@ form.addEventListener('submit', async (e) => {
             view = { kind: 'errors', errors: problem.errors || {} };
         } else {
             const data = await response.json();
-            view = { kind: 'results', parameters: data.parameters, output: data.output };
+            // taxDetail is false when the server left out the year-by-year tax detail (FreeRunView)
+            view = { kind: 'results', parameters: data.parameters, output: data.output, taxDetail: data.taxDetail !== false };
             chartData = { points: data.output.balanceBands, runs: data.output.result.runs.length };
         }
     } catch (err) {
@@ -663,6 +681,7 @@ function applySimulatorHandoff() {
     form.elements['enableRothConversions'].checked = h.enableRothConversions;
     Inputs.setAssetMix(form, h.assetMix);
     updateBalanceTotals();
+    Inputs.refreshAccountTotals(form);
 
     handoff = h;
     renderHandoffNote();
@@ -683,6 +702,9 @@ function renderHandoffNote() {
         </div>`);
 }
 
+// Access changed in another tab (paywall.js): the results' notes about the tax detail follow
+document.addEventListener('paywall:change', renderView);
+
 // Switching language redraws everything the page shows; nothing re-runs
 document.addEventListener('i18n:change', () => {
     updateBalanceTotals();
@@ -698,6 +720,7 @@ Inputs.initAllocation(form);
 initChart();
 Inputs.initMoneyInputs();
 Inputs.initBalanceTotals(form);
+Inputs.initAccountTotals(form);
 initSocialSecurityDefault();
 Inputs.initCollapsibleInputs(form);
 initRunToggles();

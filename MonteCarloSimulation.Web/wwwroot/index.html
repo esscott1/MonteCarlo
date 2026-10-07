@@ -140,24 +140,32 @@
                         </label>
                     </fieldset>
                     <fieldset class="subgroup">
-                        <legend data-i18n="form.roth">Roth Accts</legend>
-                        <label><span data-i18n="form.basis">Basis</span>
+                        <legend><span data-i18n="form.roth">Roth Accts</span> <span class="paid-badge" data-feature="account-basis-split" hidden></span></legend>
+                        <label data-free-only="account-basis-split" hidden><span data-i18n="form.total">Total</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="rothTotal" pattern="[0-9,]*\.?[0-9]*" value="20,000" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <p class="subgroup-hint" id="roth-split-hint" data-free-only="account-basis-split" hidden></p>
+                        <label data-requires="account-basis-split" data-locked="hide"><span data-i18n="form.basis">Basis</span>
                             <input type="text" inputmode="decimal" class="money-input" name="initialRothBasis" pattern="[0-9,]*\.?[0-9]*" value="15,000" style="width: calc(16ch + 1rem)" required>
                         </label>
-                        <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
+                        <label data-requires="account-basis-split" data-locked="hide"><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
                             <input type="text" inputmode="decimal" class="money-input" name="initialRothUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="5,000" style="width: calc(16ch + 1rem)" required>
                         </label>
-                        <p class="total-line" id="roth-total">Total Roth = $20,000</p>
+                        <p class="total-line" id="roth-total" data-requires="account-basis-split" data-locked="hide">Total Roth = $20,000</p>
                     </fieldset>
                     <fieldset class="subgroup">
-                        <legend data-i18n="form.brokerage">Brokerage Accts</legend>
-                        <label><span data-i18n="form.basis">Basis</span>
+                        <legend><span data-i18n="form.brokerage">Brokerage Accts</span> <span class="paid-badge" data-feature="account-basis-split" hidden></span></legend>
+                        <label data-free-only="account-basis-split" hidden><span data-i18n="form.total">Total</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="brokerageTotal" pattern="[0-9,]*\.?[0-9]*" value="400,000" style="width: calc(16ch + 1rem)" required>
+                        </label>
+                        <p class="subgroup-hint" id="brokerage-split-hint" data-free-only="account-basis-split" hidden></p>
+                        <label data-requires="account-basis-split" data-locked="hide"><span data-i18n="form.basis">Basis</span>
                             <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageBasis" pattern="[0-9,]*\.?[0-9]*" value="100,000" style="width: calc(16ch + 1rem)" required>
                         </label>
-                        <label><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
+                        <label data-requires="account-basis-split" data-locked="hide"><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
                             <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="300,000" style="width: calc(16ch + 1rem)" required>
                         </label>
-                        <p class="total-line" id="brokerage-total">Total Brokerage = $400,000</p>
+                        <p class="total-line" id="brokerage-total" data-requires="account-basis-split" data-locked="hide">Total Brokerage = $400,000</p>
                     </fieldset>
                     <p class="total-line" id="grand-total">Total money = $1,420,000</p>
                 </div>
