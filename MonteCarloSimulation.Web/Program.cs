@@ -117,16 +117,18 @@ app.MapPost("/api/optimal", async (
     IOptionsMonitor<FreeDefaultsOptions> freeDefaults,
     IOptions<JsonOptions> jsonOptions) =>
 {
+    var access = await features.ForAsync(context);
+    FreeTier.LimitOptimizer(request, access);
+
     var validationErrors = request.Validate();
     if (validationErrors.Count > 0)
         return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
 
-    var access = await features.ForAsync(context);
     var locked = FreeTier.LockedInputs(request, access, freeDefaults.CurrentValue);
     if (locked.Count > 0) return FreeTier.Refused(locked);
     FreeTier.SplitAccounts(request, access, freeDefaults.CurrentValue);
 
-    return new OptimalStream(request.ToInputs(), jsonOptions.Value.SerializerOptions);
+    return new OptimalStream(request.ToInputs(), jsonOptions.Value.SerializerOptions, teaser: !access.Can(Features.OptimizerFull));
 });
 
 // Checks run cheapest-first: shape, then passphrase, and only then the paid agent call.

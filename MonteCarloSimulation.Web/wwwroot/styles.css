@@ -1076,6 +1076,11 @@ details pre {
     display: none !important;
 }
 
+/* The Free Optimizer's fixed market count, where the choice would be */
+.submit-row .markets-free {
+    align-self: center;
+}
+
 /* Above a year table without the tax detail */
 .table-note {
     margin: 0.3rem 0 0.5rem;

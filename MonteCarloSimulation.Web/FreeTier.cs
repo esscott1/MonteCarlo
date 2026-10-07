@@ -1,3 +1,5 @@
+using MonteCarloSimulation.Optimizer;
+
 namespace MonteCarloSimulation.Web
 {
     // The inputs both pages send (RunRequest, OptimalRequest) that paid tiers unlock.
@@ -60,6 +62,17 @@ namespace MonteCarloSimulation.Web
             double brokerage = request.InitialBrokerageBasis + request.InitialBrokerageUnrealizedGain;
             request.InitialBrokerageUnrealizedGain = brokerage * Math.Clamp(free.BrokerageGainShare, 0, 1);
             request.InitialBrokerageBasis = brokerage - request.InitialBrokerageUnrealizedGain;
+        }
+
+        // The Free Optimizer: one Social Security amount, at 67 (the 62 and 70 amounts follow SSA's rules, whatever the
+        // request says), and the fewest simulated markets. Applied before validation, so the derived amounts are checked.
+        public static void LimitOptimizer(OptimalRequest request, Access access)
+        {
+            if (access.Can(Features.OptimizerFull)) return;
+            var curve = SocialSecurityCurve.FromFullRetirementAmount(request.SocialSecurityAt67);
+            request.SocialSecurityAt62 = curve.At62;
+            request.SocialSecurityAt70 = curve.At70;
+            request.Paths = SpendingOptimizer.PathChoices[^1];
         }
 
         // A refusal: the same problem shape as a validation error, so the pages show it the same way

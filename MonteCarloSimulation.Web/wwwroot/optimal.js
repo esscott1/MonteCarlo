@@ -100,6 +100,19 @@ function renderClaimingTable(optimum) {
         </div>`;
 }
 
+// The Free Optimizer's card: the recommended spend as a $500 range, and what the full Optimizer adds - or, once it's
+// unlocked in another tab, that running again shows it
+function renderTeaser(teaser) {
+    const more = Paywall.can('optimizer-full')
+        ? `<p><em>${t('optimal.teaserRunAgain')}</em></p>`
+        : `<p>${t('optimal.teaserMore')} <span class="paid-badge" data-feature="optimizer-full" hidden></span></p>`;
+    return `
+        <div class="summary-box ok">
+            <p>${t('optimal.teaser', { low: formatCurrency(teaser.monthlyLow), high: formatCurrency(teaser.monthlyHigh) })}</p>
+            ${more}
+        </div>`;
+}
+
 // The recommendation card in the tile beside the inputs
 function renderCard(optimum) {
     const r = optimum.recommended;
@@ -148,18 +161,21 @@ function render() {
     } else if (view?.kind === 'failed') {
         detail = `<div class="error-box"><p>${t('common.somethingWrong')}</p></div>`;
     } else if (view?.kind === 'stream') {
-        const { start, progress, optimum, stopped } = view;
+        const { start, progress, optimum, teaser, stopped } = view;
         if (optimum) card = renderCard(optimum);
+        else if (teaser) card = renderTeaser(teaser);
         else if (stopped) card = `<div class="error-box"><p>${t('optimal.streamStopped')}</p></div>`;
         else card = `<p class="chart-note" id="optimal-progress">${progressText(progress.completed, progress.total)}</p>`;
+        // The claiming-age comparison and the benefit curve are the full Optimizer's
         detail = `
             <p class="page-intro">${t('optimal.basedOn', { paths: start.paths })}</p>
             ${optimum ? `<details open><summary>${t('optimal.compareAges')}</summary>${renderClaimingTable(optimum)}</details>` : ''}
-            ${renderBenefitCurve(start.benefitByAge)}`;
+            ${teaser ? '' : renderBenefitCurve(start.benefitByAge)}`;
     }
     cardPlaceholder.hidden = card !== '';
     optimalCard.innerHTML = card;
     optimalResults.innerHTML = detail;
+    Paywall.decorate(optimalCard);
 }
 
 function renderProgress(progress) {
@@ -218,7 +234,7 @@ optimalForm.addEventListener('submit', async (e) => {
                 case 'start':
                     started = true;
                     lastRequest = request;
-                    view = { kind: 'stream', start: event, progress: { completed: 0, total: event.totalClaimingAges }, optimum: null, done: false, stopped: false };
+                    view = { kind: 'stream', start: event, progress: { completed: 0, total: event.totalClaimingAges }, optimum: null, teaser: null, done: false, stopped: false };
                     render();
                     break;
                 case 'progress':
@@ -228,13 +244,17 @@ optimalForm.addEventListener('submit', async (e) => {
                     view.optimum = event.optimum;
                     render();
                     break;
+                case 'teaser':
+                    view.teaser = event;
+                    render();
+                    break;
                 case 'done':
                     finished = true;
                     view.done = true;
                     break;
             }
         });
-        if (!finished || !view.optimum) stop();
+        if (!finished || !(view.optimum || view.teaser)) stop();
     } catch (err) {
         stop();
     } finally {
@@ -294,6 +314,9 @@ function initRunInSimulator() {
         window.location.href = 'index.html';
     });
 }
+
+// Access changed in another tab (paywall.js): the teaser card's note follows
+document.addEventListener('paywall:change', render);
 
 // Switching language redraws what's on screen; nothing re-runs
 document.addEventListener('i18n:change', () => {

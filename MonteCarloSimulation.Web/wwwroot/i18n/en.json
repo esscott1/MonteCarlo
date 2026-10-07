@@ -45,6 +45,9 @@
   "optimal.calculating": "Calculating&hellip;",
   "optimal.basedOn": "Based on {paths} simulated market paths for your asset mix. \"Survival\" means the money lasts the full horizon.",
   "optimal.streamStopped": "The calculation stopped before it finished. Please try again.",
+  "optimal.teaser": "You could spend about <strong>{low}–{high} a month</strong> and still have the money last in 80–85% of simulated markets.",
+  "optimal.teaserMore": "The exact amount, the best age to start Social Security and a comparison of every age:",
+  "optimal.teaserRunAgain": "Select Find optimal again to see the exact amount and the best age to start Social Security.",
   "optimal.handoffFailed": "Couldn't pass the values to the Scenario runner in this browser.",
 
   "runner.totalRoth": "Total Roth = {amount}",
