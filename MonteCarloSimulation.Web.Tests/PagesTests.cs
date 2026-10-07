@@ -374,8 +374,9 @@ namespace MonteCarloSimulation.Web.Tests
         }
 
         // A paid feature's badge must stay visible once the visitor's tier has it ("✓ Plus"), so it can't sit only inside
-        // Free-only text: the returns note shows either wording beside one badge, and the Optimizer's Recommendation and
-        // Simulated markets headings carry the full Optimizer's
+        // Free-only text: the returns and std. devs carry one over their two columns and the correlation one beside its
+        // label (the returns note just says which), and the Optimizer's Recommendation and Simulated markets headings
+        // carry the full Optimizer's
         [Fact]
         public async Task EnabledBadges_HaveSpotsThatStayVisible()
         {
@@ -384,10 +385,11 @@ namespace MonteCarloSimulation.Web.Tests
 
             foreach (var html in new[] { runner, optimal })
             {
-                var note = Regex.Match(html, @"<p class=""subgroup-hint"">(.*?)</p>").Groups[1].Value;
-                Assert.Contains(@"data-free-only=""custom-returns""", note);
+                var note = Regex.Match(html, @"<p class=""subgroup-hint""><span data-free-only=""custom-returns""(.*?)</p>").Groups[0].Value;
                 Assert.Contains(@"data-requires=""custom-returns"" data-locked=""hide""", note);
-                Assert.Contains(@"<span class=""paid-badge"" data-feature=""custom-returns"" hidden></span>", note);
+                Assert.DoesNotContain("paid-badge", note);
+                Assert.Matches(@"<tr class=""badge-row"">\s*<td colspan=""3""></td>\s*<td colspan=""2"" class=""ret-badge""><span class=""paid-badge"" data-feature=""custom-returns"" hidden></span></td>", html);
+                Assert.Matches(@"<span data-i18n=""runner.correlation"">[^<]*</span> <span class=""paid-badge"" data-feature=""custom-returns"" hidden></span>", html);
             }
             Assert.Matches(@"<h2 id=""recommendation-title""[^>]*>.*?<span class=""paid-badge"" data-feature=""optimizer-full"" hidden></span></h2>", optimal);
             Assert.Matches(@"<legend><span data-i18n=""optimal.markets"">[^<]*</span> <span class=""paid-badge"" data-feature=""optimizer-full"" hidden></span></legend>", optimal);

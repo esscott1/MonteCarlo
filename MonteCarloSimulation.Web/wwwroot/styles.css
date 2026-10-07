@@ -351,6 +351,15 @@ body.wide {
     color: var(--muted);
 }
 
+/* The returns and std. devs' paid badge, centred over their two columns */
+.asset-table .badge-row td {
+    padding: 0 0 0.2rem;
+}
+
+.asset-table .ret-badge {
+    text-align: center;
+}
+
 /* Asset Classes: a box around the allocation column and another around the return and std. dev. columns, with a gap
    between them */
 .asset-table .alloc,
@@ -1216,6 +1225,12 @@ details pre {
 .paid-badge:focus-within .paid-tip,
 .paid-badge.open .paid-tip {
     display: block;
+}
+
+/* A flyout that wouldn't fit rightward (paywall.js placeTip) */
+.paid-tip.leftward {
+    left: auto;
+    right: 0;
 }
 
 .paid-tip-adds {

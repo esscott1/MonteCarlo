@@ -223,7 +223,21 @@ window.Paywall = (function () {
         const badge = button.parentElement;
         closeAll(badge);
         button.setAttribute('aria-expanded', String(badge.classList.toggle('open')));
+        placeTip(badge);
     }
+
+    // A flyout opens rightward from its badge, unless that would run past the window's right edge (a badge on the right
+    // of a phone's screen): then it opens leftward from the badge's right edge. Measured while it shows.
+    function placeTip(badge) {
+        const tip = badge.querySelector(':scope > .paid-tip');
+        if (!tip) return;
+        tip.classList.remove('leftward');
+        if (tip.getBoundingClientRect().right > document.documentElement.clientWidth - 4) tip.classList.add('leftward');
+    }
+    ['mouseover', 'focusin'].forEach((type) => document.addEventListener(type, (e) => {
+        const badge = e.target.closest?.('.paid-badge');
+        if (badge) placeTip(badge);
+    }));
 
     // Tapping a badge toggles its flyout (hover and keyboard focus show it too, in CSS); a tap elsewhere or Escape closes
     // it. Inside a <label>, preventing the click's default stops it also ticking the checkbox or focusing the input.
