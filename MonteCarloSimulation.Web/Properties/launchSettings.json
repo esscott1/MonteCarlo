@@ -10,6 +10,17 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
+    "tiers": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:5091",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "FeatureManagement__Subscriptions": "true",
+        "FeatureManagement__TierPro": "true"
+      }
+    },
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="access.pageTitle">Access code</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- A visitor who chose Spanish sees nothing until i18n.js has applied it, so English never flashes -->
+    <style>html.i18n-pending body { visibility: hidden; }</style>
+    <script>try { if (localStorage.getItem('lang') === 'es') document.documentElement.classList.add('i18n-pending'); } catch { }</script>
+</head>
+<body>
+    <div class="page-header">
+        <a href="/" class="icon-button" aria-label="Back to home" data-i18n-aria-label="nav.backHome">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M19 12H5" />
+                <path d="M12 19l-7-7 7-7" />
+            </svg>
+        </a>
+        <h1 data-i18n="access.heading">Access code</h1>
+
+        <button type="button" class="lang-toggle" lang="es" aria-label="Ver en español">Español</button>
+        <p class="page-description" data-i18n="access.description">Paid features are being tested with access codes before payments are switched on.</p>
+    </div>
+
+    <p id="access-status" class="page-intro" aria-live="polite"></p>
+
+    <form id="access-form" class="access-form" hidden>
+        <fieldset class="access-tiers">
+            <legend data-i18n="access.tierLegend">Tier</legend>
+            <div id="access-tiers"></div>
+        </fieldset>
+        <label class="access-code"><span data-i18n="access.code">Access code</span>
+            <input type="password" name="code" autocomplete="off" required>
+        </label>
+        <div class="access-actions">
+            <button type="submit" data-i18n="access.submit">Unlock</button>
+        </div>
+        <p class="quota-notice" id="access-quota" aria-live="polite" hidden></p>
+    </form>
+
+    <div id="access-result" aria-live="polite"></div>
+
+    <p id="access-free" hidden>
+        <button type="button" id="use-free" class="secondary-button" data-i18n="access.useFree">Use the Free version</button>
+    </p>
+
+    <script src="i18n.js"></script>
+    <script src="quota.js"></script>
+    <script src="access.js"></script>
+</body>
+</html>

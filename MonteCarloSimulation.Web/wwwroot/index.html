@@ -96,30 +96,31 @@
                                     <th scope="row" data-i18n="runner.stocks">Stocks</th>
                                     <td class="alloc"><input type="number" class="percent-input" name="stockAllocation" min="0" max="100" step="any" value="60" aria-label="Stocks allocation %" data-i18n-aria-label="runner.stocksAllocationLabel" required></td>
                                     <td class="gap"></td>
-                                    <td class="ret ret-first"><input type="number" class="percent-input" name="stockReturn" min="-100" max="100" step="any" value="8" aria-label="Stocks return %" data-i18n-aria-label="runner.stocksReturnLabel" required></td>
-                                    <td class="ret ret-last"><input type="number" class="percent-input" name="stockStdDev" min="0" max="100" step="any" value="19" aria-label="Stocks std. dev. %" data-i18n-aria-label="runner.stocksStdDevLabel" required></td>
+                                    <td class="ret ret-first"><input type="number" class="percent-input" name="stockReturn" min="-100" max="100" step="any" value="8" aria-label="Stocks return %" data-i18n-aria-label="runner.stocksReturnLabel" required data-requires="custom-returns"></td>
+                                    <td class="ret ret-last"><input type="number" class="percent-input" name="stockStdDev" min="0" max="100" step="any" value="19" aria-label="Stocks std. dev. %" data-i18n-aria-label="runner.stocksStdDevLabel" required data-requires="custom-returns"></td>
                                 </tr>
                                 <tr>
                                     <th scope="row" data-i18n="runner.bonds">Bonds</th>
                                     <td class="alloc"><input type="number" class="percent-input" name="bondAllocation" min="0" max="100" step="any" value="30" aria-label="Bonds allocation %" data-i18n-aria-label="runner.bondsAllocationLabel" required></td>
                                     <td class="gap"></td>
-                                    <td class="ret ret-first"><input type="number" class="percent-input" name="bondReturn" min="-100" max="100" step="any" value="4.5" aria-label="Bonds return %" data-i18n-aria-label="runner.bondsReturnLabel" required></td>
-                                    <td class="ret ret-last"><input type="number" class="percent-input" name="bondStdDev" min="0" max="100" step="any" value="4" aria-label="Bonds std. dev. %" data-i18n-aria-label="runner.bondsStdDevLabel" required></td>
+                                    <td class="ret ret-first"><input type="number" class="percent-input" name="bondReturn" min="-100" max="100" step="any" value="4.5" aria-label="Bonds return %" data-i18n-aria-label="runner.bondsReturnLabel" required data-requires="custom-returns"></td>
+                                    <td class="ret ret-last"><input type="number" class="percent-input" name="bondStdDev" min="0" max="100" step="any" value="4" aria-label="Bonds std. dev. %" data-i18n-aria-label="runner.bondsStdDevLabel" required data-requires="custom-returns"></td>
                                 </tr>
                                 <tr>
                                     <th scope="row" data-i18n="runner.cash">Cash</th>
                                     <td class="alloc"><input type="number" class="percent-input" name="cashAllocation" min="0" max="100" step="any" value="10" aria-label="Cash allocation %" data-i18n-aria-label="runner.cashAllocationLabel" required></td>
                                     <td class="gap"></td>
-                                    <td class="ret ret-first"><input type="number" class="percent-input" name="cashReturn" min="-100" max="100" step="any" value="3.5" aria-label="Cash return %" data-i18n-aria-label="runner.cashReturnLabel" required></td>
-                                    <td class="ret ret-last"><input type="number" class="percent-input" name="cashStdDev" min="0" max="100" step="any" value="1" aria-label="Cash std. dev. %" data-i18n-aria-label="runner.cashStdDevLabel" required></td>
+                                    <td class="ret ret-first"><input type="number" class="percent-input" name="cashReturn" min="-100" max="100" step="any" value="3.5" aria-label="Cash return %" data-i18n-aria-label="runner.cashReturnLabel" required data-requires="custom-returns"></td>
+                                    <td class="ret ret-last"><input type="number" class="percent-input" name="cashStdDev" min="0" max="100" step="any" value="1" aria-label="Cash std. dev. %" data-i18n-aria-label="runner.cashStdDevLabel" required data-requires="custom-returns"></td>
                                 </tr>
                             </tbody>
                         </table>
                         <p class="total-line" id="allocation-total" aria-live="polite">Total = 100%</p>
                         <label><span data-i18n="runner.correlation">Stock&ndash;bond correlation</span>
-                            <input type="number" class="percent-input" name="stockBondCorrelation" min="-1" max="1" step="any" value="0.1" data-i18n-title="runner.correlationTitle" title="How closely stock and bond returns move together, from -1 (opposite) to 1 (in step). Cash moves on its own." required>
+                            <input type="number" class="percent-input" name="stockBondCorrelation" min="-1" max="1" step="any" value="0.1" data-i18n-title="runner.correlationTitle" title="How closely stock and bond returns move together, from -1 (opposite) to 1 (in step). Cash moves on its own." required data-requires="custom-returns">
                         </label>
                         <p class="total-line" id="blended-line">Blended: 6.50% expected return, 11.58% std. dev.</p>
+                        <p class="subgroup-hint" data-free-only="custom-returns" hidden><span data-i18n="paywall.returnsSet">Returns, std. devs and the correlation are set for you; the allocation is yours.</span> <span class="paid-badge" data-feature="custom-returns" hidden></span></p>
                     </fieldset>
                 </div>
 
@@ -133,8 +134,9 @@
                             <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
                         </label>
                         <label class="checkbox-label">
-                            <input type="checkbox" name="enableRothConversions" checked>
+                            <input type="checkbox" name="enableRothConversions" checked data-requires="roth-conversions" data-free-value="false">
                             <span data-i18n="form.allowRoth">Allow Roth conversions</span>
+                            <span class="paid-badge" data-feature="roth-conversions" hidden></span>
                         </label>
                     </fieldset>
                     <fieldset class="subgroup">
@@ -169,17 +171,17 @@
                         <label><span data-i18n="runner.ssStart">Social Security Start</span>
                             <input type="date" name="socialSecurityStartDate" value="2031-07-07" data-i18n-title="runner.ssStartTitle" title="Date of your first payment; between ages 62 and 70. Defaults to your 62nd birthday." required>
                         </label>
-                        <label><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" style="width: calc(16ch + 1rem)" required>
+                        <label><span class="label-row"><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span> <span class="paid-badge" data-feature="standard-deduction" hidden></span></span>
+                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" style="width: calc(16ch + 1rem)" required data-requires="standard-deduction">
                         </label>
                     </fieldset>
                     <fieldset class="subgroup">
-                        <legend data-i18n="form.inheritance">Inheritance</legend>
+                        <legend><span data-i18n="form.inheritance">Inheritance</span> <span class="paid-badge" data-feature="inheritance" hidden></span></legend>
                         <label><span data-i18n="form.newMoney">New Money</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required data-requires="inheritance" data-free-value="0">
                         </label>
                         <label><span data-i18n="runner.whenYears">When (years from now)</span>
-                            <input type="number" name="yearNewMoney" min="0" step="1" value="10" style="width: calc(16ch + 1.6rem)" required>
+                            <input type="number" name="yearNewMoney" min="0" step="1" value="10" style="width: calc(16ch + 1.6rem)" required data-requires="inheritance">
                         </label>
                     </fieldset>
                 </div>
@@ -206,6 +208,7 @@
     <script src="i18n.js"></script>
     <script src="quota.js"></script>
     <script src="inputs.js"></script>
+    <script src="paywall.js"></script>
     <script src="chart.js"></script>
     <script src="app.js"></script>
 </body>
