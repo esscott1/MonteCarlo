@@ -39,7 +39,7 @@ namespace MonteCarloSimulation.Web
                 var free = freeDefaults.CurrentValue;
                 return Results.Ok(new
                 {
-                    me.Gated,
+                    me.Mode,
                     me.Tier,
                     me.Features,
                     me.Offers,
@@ -64,11 +64,11 @@ namespace MonteCarloSimulation.Web
                     return Results.ValidationProblem(errors.ToDictionary(e => e.Key, e => new[] { e.Value }));
                 }
 
-                var now = clock.GetUtcNow();
+                // A session cookie (no expiry date), gone when the browser closes; the token inside expires in 12 hours
                 context.Response.Cookies.Append(
                     TierAccessToken.CookieName,
-                    TierAccessToken.Issue(tier, tiers.CurrentValue.For(tier)!.AccessCode!, now),
-                    CookieOptions(now.Add(TierAccessToken.Lifetime)));
+                    TierAccessToken.Issue(tier, tiers.CurrentValue.For(tier)!.AccessCode!, clock.GetUtcNow()),
+                    CookieOptions(null));
                 logger.LogInformation("Access code accepted for {Tier}.", tier);
                 return Results.Ok(new { tier });
             }).AddEndpointFilter(new QuotaFilter(

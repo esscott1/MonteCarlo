@@ -478,7 +478,7 @@
   "paywall.badgeLabel": "{tier} feature: price and how to unlock it",
   "paywall.markerTitle": "{tier} is on in this browser. Select to switch tiers or go back to Free.",
   "access.unavailable": "Couldn't check your access. Please reload the page.",
-  "access.notGated": "Paid tiers aren't switched on here, so every feature is already available.",
+  "access.freeOnly": "Upgrades aren't available right now: the site is offering the Free version only.",
   "access.statusFree": "You're using the Free version.",
   "access.statusTier": "{tier} is on in this browser.",
   "access.tierOption": "{tier} · {price}",

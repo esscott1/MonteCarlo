@@ -10,7 +10,7 @@ namespace MonteCarloSimulation.Web.Tests
 {
     // POST /api/run's asset mix: the Scenario runner sends a stocks/bonds/cash allocation (fractions that must total 1),
     // each class's return and std. dev., and the stock-bond correlation. The server checks them and echoes the mix back.
-    public class RunEndpointTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+    public class RunEndpointTests(PlusAppFactory factory) : IClassFixture<PlusAppFactory>
     {
         // The Scenario runner's default inputs (withdrawal annual, mix as fractions)
         private static RunRequest DefaultRequest() => new()

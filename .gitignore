@@ -401,3 +401,6 @@ FodyWeavers.xsd
 
 # Strategy Lab run outputs (CSV/JSON; regenerate with the lab)
 MonteCarloSimulation.StrategyLab/output/
+
+# The web app's local Plus/Pro switches, flipped on the Observe page (SiteFlags)
+MonteCarloSimulation.Web/App_Data/

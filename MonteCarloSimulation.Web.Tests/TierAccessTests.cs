@@ -10,25 +10,26 @@ using MonteCarloSimulation.Optimizer;
 
 namespace MonteCarloSimulation.Web.Tests
 {
-    // Paid tiers behind access codes: GET /api/me says what a visitor may use, a tier's code earns a signed cookie, the
-    // release flags switch tiers on and off, and /api/run and /api/optimal refuse a Free visitor's locked inputs. With the
-    // Subscriptions flag off (the default), nothing is gated: the other endpoint tests run that way.
+    // Paid tiers behind access codes: GET /api/me says what a visitor may use, a tier's code earns a signed session cookie,
+    // the site's Plus and Pro switches decide what's offered (both off: Free Only), and /api/run and /api/optimal refuse a
+    // Free visitor's locked inputs. The switches here are their defaults (each test's own, in config), never flipped.
     public class TierAccessTests
     {
         private const string PlusCode = "plus-test-code";
         private const string ProCode = "pro-test-code";
 
-        private static WebApplicationFactory<Program> App(
-            bool subscriptions = true, bool tierPlus = true, bool tierPro = true, string plusCode = PlusCode) =>
+        private static WebApplicationFactory<Program> App(bool tierPlus = true, bool tierPro = true, string plusCode = PlusCode) =>
             new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+            {
+                builder.UseSetting("SiteFlags:Path", TempSiteFlags.NewPath());
                 builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["FeatureManagement:Subscriptions"] = subscriptions.ToString(),
                     ["FeatureManagement:TierPlus"] = tierPlus.ToString(),
                     ["FeatureManagement:TierPro"] = tierPro.ToString(),
                     ["Tiers:Plus:AccessCode"] = plusCode,
                     ["Tiers:Pro:AccessCode"] = ProCode,
-                })));
+                }));
+            });
 
         // Cookies are passed by hand: the access cookie is Secure, and the test server is plain http
         private static HttpClient Client(WebApplicationFactory<Program> app) =>
@@ -69,15 +70,37 @@ namespace MonteCarloSimulation.Web.Tests
         // --- What a visitor may use ---
 
         [Fact]
-        public async Task WithSubscriptionsOff_NothingIsGated_AndNothingIsOffered()
+        public async Task FreeOnly_OffersNothing_RefusesEveryCode_AndLeavesEveryoneOnFree()
         {
-            using var app = App(subscriptions: false);
+            string plusCookie;
+            using (var before = App())
+                plusCookie = await UnlockAsync(Client(before), "plus", PlusCode);
+
+            using var app = App(tierPlus: false, tierPro: false);
+            var client = Client(app);
+
+            var me = await MeAsync(client, plusCookie);
+            Assert.Equal(SiteModes.FreeOnly, me.GetProperty("mode").GetString());
+            Assert.Equal("Free", me.GetProperty("tier").GetString());
+            Assert.Empty(Strings(me.GetProperty("features")));
+            Assert.Equal(0, me.GetProperty("offers").GetArrayLength());
+            foreach (var (tier, code) in new[] { ("plus", PlusCode), ("pro", ProCode) })
+            {
+                var errors = await ErrorsAsync(await EnterCodeAsync(client, tier, code), HttpStatusCode.BadRequest);
+                Assert.True(errors.TryGetProperty("tier", out _));
+            }
+        }
+
+        [Fact]
+        public async Task ByDefault_TheSiteIsPlusAvailable()
+        {
+            using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+                builder.UseSetting("SiteFlags:Path", TempSiteFlags.NewPath()));
 
             var me = await MeAsync(Client(app));
 
-            Assert.False(me.GetProperty("gated").GetBoolean());
-            Assert.Equal(Features.All, Strings(me.GetProperty("features")));
-            Assert.Equal(0, me.GetProperty("offers").GetArrayLength());
+            Assert.Equal(SiteModes.PlusAvailable, me.GetProperty("mode").GetString());
+            Assert.Equal(new[] { "Plus" }, me.GetProperty("offers").EnumerateArray().Select(o => o.GetProperty("tier").GetString()));
         }
 
         [Fact]
@@ -87,7 +110,7 @@ namespace MonteCarloSimulation.Web.Tests
 
             var me = await MeAsync(Client(app));
 
-            Assert.True(me.GetProperty("gated").GetBoolean());
+            Assert.Equal(SiteModes.PlusAndProAvailable, me.GetProperty("mode").GetString());
             Assert.Equal("Free", me.GetProperty("tier").GetString());
             Assert.Empty(Strings(me.GetProperty("features")));
             var offers = me.GetProperty("offers").EnumerateArray().ToList();
@@ -100,7 +123,7 @@ namespace MonteCarloSimulation.Web.Tests
         [Theory]
         [InlineData("plus", PlusCode, "Plus")]
         [InlineData("Pro", ProCode, "Pro")]
-        public async Task ATiersCode_SetsASecureCookie_ThatUnlocksItsFeatures(string tier, string code, string expected)
+        public async Task ATiersCode_SetsASecureSessionCookie_ThatUnlocksItsFeatures(string tier, string code, string expected)
         {
             using var app = App();
             var client = Client(app);
@@ -114,7 +137,9 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains("httponly", attributes);
             Assert.Contains("secure", attributes);
             Assert.Contains("samesite=lax", attributes);
-            Assert.Contains("expires=", attributes);
+            // A session cookie: no expiry date, so it's gone when the browser closes (the token inside lasts 12 hours)
+            Assert.DoesNotContain("expires=", attributes);
+            Assert.DoesNotContain("max-age=", attributes);
 
             var me = await MeAsync(client, setCookie.Split(';')[0]);
             Assert.Equal(expected, me.GetProperty("tier").GetString());
@@ -176,15 +201,20 @@ namespace MonteCarloSimulation.Web.Tests
         }
 
         [Fact]
-        public async Task WithPlusSwitchedOff_ItsFeaturesAreFreeToEveryone()
+        public async Task ProAvailable_OffersOnlyPro_RefusesThePlusCode_AndThePlusFeaturesCarryPro()
         {
-            using var app = App(tierPlus: false, tierPro: false);
+            using var app = App(tierPlus: false);
+            var client = Client(app);
 
-            var me = await MeAsync(Client(app));
+            var me = await MeAsync(client);
+            Assert.Equal(SiteModes.ProAvailable, me.GetProperty("mode").GetString());
+            var offer = Assert.Single(me.GetProperty("offers").EnumerateArray());
+            Assert.Equal("Pro", offer.GetProperty("tier").GetString());
+            Assert.Equal(Features.All, Strings(offer.GetProperty("features")));
 
-            Assert.Equal("Free", me.GetProperty("tier").GetString());
-            Assert.Equal(Features.All, Strings(me.GetProperty("features")));
-            Assert.Equal(0, me.GetProperty("offers").GetArrayLength());
+            Assert.True((await ErrorsAsync(await EnterCodeAsync(client, "plus", PlusCode), HttpStatusCode.BadRequest)).TryGetProperty("tier", out _));
+            string proCookie = await UnlockAsync(client, "pro", ProCode);
+            Assert.Equal(Features.All, Strings((await MeAsync(client, proCookie)).GetProperty("features")));
         }
 
         [Fact]
@@ -349,17 +379,19 @@ namespace MonteCarloSimulation.Web.Tests
         }
 
         [Fact]
-        public async Task WithSubscriptionsOff_AnyoneMayChangeEveryInput()
+        public async Task InFreeOnly_EveryoneRunsTheFreeVersion()
         {
-            using var app = App(subscriptions: false);
+            using var app = App(tierPlus: false, tierPro: false);
             var request = FreeRunRequest();
+
+            using var allowed = await PostAsync(app, "/api/run", request);
+            Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+            using (var body = JsonDocument.Parse(await allowed.Content.ReadAsStringAsync()))
+                Assert.False(body.RootElement.GetProperty("taxDetail").GetBoolean());
+
             request.EnableRothConversions = true;
-            request.NewMoney = 500_000;
-            request.StockReturn = 0.09;
-
-            using var response = await PostAsync(app, "/api/run", request);
-
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/run", request), HttpStatusCode.Forbidden);
+            Assert.True(errors.TryGetProperty("enableRothConversions", out _));
         }
 
         // --- The Free Scenario runner ---
@@ -575,7 +607,7 @@ namespace MonteCarloSimulation.Web.Tests
         }
     }
 
-    // The access cookie's token on its own: stateless, signed with the tier's code, good for 30 days.
+    // The access cookie's token on its own: stateless, signed with the tier's code, good for 12 hours.
     public class TierAccessTokenTests
     {
         private static readonly DateTimeOffset Now = new(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
@@ -585,13 +617,13 @@ namespace MonteCarloSimulation.Web.Tests
         [Theory]
         [InlineData(Tier.Plus)]
         [InlineData(Tier.Pro)]
-        public void ATokenGrantsItsTier_For30Days(Tier tier)
+        public void ATokenGrantsItsTier_For12Hours(Tier tier)
         {
             string token = TierAccessToken.Issue(tier, Codes(tier)!, Now);
 
             Assert.Equal(tier, TierAccessToken.Read(token, Codes, Now));
-            Assert.Equal(tier, TierAccessToken.Read(token, Codes, Now.AddDays(30)));
-            Assert.Equal(Tier.Free, TierAccessToken.Read(token, Codes, Now.AddDays(30).AddSeconds(1)));
+            Assert.Equal(tier, TierAccessToken.Read(token, Codes, Now.AddHours(12)));
+            Assert.Equal(Tier.Free, TierAccessToken.Read(token, Codes, Now.AddHours(12).AddSeconds(1)));
         }
 
         [Fact]

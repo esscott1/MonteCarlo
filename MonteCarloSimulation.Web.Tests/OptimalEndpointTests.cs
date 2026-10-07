@@ -13,7 +13,7 @@ namespace MonteCarloSimulation.Web.Tests
     // POST /api/optimal's contract: invalid input is a 400 with field errors, as before; valid input streams
     // newline-delimited JSON - start, a progress event per claiming age, the result, then done - and the streamed
     // result is exactly what SpendingOptimizer.Optimize computes for the same inputs.
-    public class OptimalEndpointTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+    public class OptimalEndpointTests(PlusAppFactory factory) : IClassFixture<PlusAppFactory>
     {
         // The Optimal page's default inputs, its default asset mix included
         private static OptimalRequest DefaultRequest() => new()

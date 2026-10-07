@@ -66,8 +66,8 @@
             freeRow.hidden = true;
             return;
         }
-        if (!me.gated) {
-            status.textContent = t('access.notGated');
+        if (me.mode === 'FreeOnly') {
+            status.textContent = t('access.freeOnly');
             form.hidden = true;
             freeRow.hidden = true;
             return;

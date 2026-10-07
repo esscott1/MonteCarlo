@@ -29,11 +29,13 @@ builder.Services.AddKeyedSingleton(Quotas.Translations, (services, _) =>
 builder.Services.AddKeyedSingleton(Quotas.TierAccess, (services, _) =>
     new RequestQuota(20, TimeSpan.FromHours(1), services.GetRequiredService<TimeProvider>()));
 
-// Paid tiers: the release flags ("FeatureManagement"), each tier's features, price and access code ("Tiers"), and what
-// a Free visitor's locked inputs are held to ("FreeDefaults"). With the Subscriptions flag off nothing is gated.
+// Paid tiers: whether Plus and Pro are offered (SiteFlags, switched on the Observe page; defaults in "FeatureManagement"),
+// each tier's features, price and access code ("Tiers"), and what a Free visitor's locked inputs are held to
+// ("FreeDefaults").
 builder.Services.AddFeatureManagement();
 builder.Services.Configure<TiersOptions>(builder.Configuration.GetSection("Tiers"));
 builder.Services.Configure<FreeDefaultsOptions>(builder.Configuration.GetSection("FreeDefaults"));
+builder.Services.AddSingleton<SiteFlags>();
 builder.Services.AddSingleton<IEntitlements, AccessCodeEntitlements>();
 builder.Services.AddSingleton<FeatureAccess>();
 
@@ -272,15 +274,12 @@ app.MapPost("/api/observe-access", (ObserveAccessRequest request, IConfiguration
 // Verifies a token issued above. Pure computation from the token + shared secret - no
 // server-side session state - so it works identically no matter which instance handles it.
 app.MapGet("/api/observe-access/verify", (HttpContext ctx, IConfiguration config) =>
-{
-    var token = ctx.Request.Headers["X-Observe-Token"].ToString();
-    var secret = config["ChangeRequest:Passphrase"];
-    return !string.IsNullOrEmpty(secret) && ObserveAccessToken.IsValid(token, secret)
+    ObserveAccessToken.Allows(ctx.Request, config)
         ? Results.Ok()
-        : Results.StatusCode(StatusCodes.Status401Unauthorized);
-}).RequireRateLimiting("observe-verify");
+        : Results.StatusCode(StatusCodes.Status401Unauthorized)).RequireRateLimiting("observe-verify");
 
 app.MapTierAccess();
+app.MapSiteFlags();
 
 app.Run();
 

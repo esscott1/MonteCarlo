@@ -2,6 +2,10 @@
 // badges with their price flyouts, and the inputs a Free visitor can't change. Loaded after i18n.js, before the
 // page's own script. The server enforces every gate; this only keeps the pages in step with it.
 //
+// The site's mode (switched on the Observe page) decides what's offered. Free Only: locked inputs are greyed with no
+// badges and no way to upgrade. Plus Available / Pro Available: each badge and lock names the cheapest tier on offer
+// that includes the feature, styled for that tier (a blue Plus, a deep purple Pro).
+//
 // Markup it reads:
 //   <span class="paid-badge" data-feature="custom-returns" hidden></span>   a badge, shown while the feature is locked
 //   data-requires="custom-returns" on an input                            locked at its Free value while locked:
@@ -14,27 +18,33 @@
 // /api/me (it also does when the tab regains focus) and unlocks in place: nothing reloads and no input changes.
 // Pages listen for 'paywall:change' to redraw anything that depends on access.
 window.Paywall = (function () {
-    let me = { gated: false, tier: 'Free', features: [], offers: [] };
+    let me = { mode: 'FreeOnly', tier: 'Free', features: [], offers: [] };
     let checking = null;
 
     function escapeHtml(value) {
         return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
-    const can = (feature) => !me.gated || me.features.includes(feature);
+    const can = (feature) => me.features.includes(feature);
 
     // The tiers on offer that include a feature, cheapest first (the server lists them in that order)
     const offersFor = (feature) => me.offers.filter((offer) => offer.features.includes(feature));
+
+    // The tier a locked feature is offered in, as a class name ("plus", "pro"), or '' when nothing offers it
+    const lockTier = (feature) => offersFor(feature)[0]?.tier.toLowerCase() ?? '';
+
+    const SYMBOLS = { plus: '&#10022;', pro: '&#9670;' };
 
     function badgeHtml(feature) {
         const [first, ...others] = offersFor(feature);
         if (!first) return '';
         const tier = escapeHtml(first.tier);
+        const tierClass = first.tier.toLowerCase();
         const alsoIn = others.map((offer) => `<br>${t('paywall.orTier', { tier: escapeHtml(offer.tier), price: escapeHtml(offer.priceLabel) })}`).join('');
         const link = first.action === 'code' ? t('paywall.enterCode') : t('paywall.subscribe');
         // A span acting as a button, not a <button>: inside a <label>, a button would become the thing the label names
-        return `<span class="paid-badge-button" role="button" tabindex="0" aria-expanded="false" aria-label="${escapeHtml(t('paywall.badgeLabel', { tier: first.tier }))}">`
-            + `<span aria-hidden="true">&#10022;</span> ${tier}</span>`
+        return `<span class="paid-badge-button ${tierClass}" role="button" tabindex="0" aria-expanded="false" aria-label="${escapeHtml(t('paywall.badgeLabel', { tier: first.tier }))}">`
+            + `<span aria-hidden="true">${SYMBOLS[tierClass] ?? SYMBOLS.plus}</span> ${tier}</span>`
             + `<span class="paid-tip" role="dialog">`
             + `<strong>${t('paywall.tierFeature', { tier })}</strong> &middot; ${escapeHtml(first.priceLabel)}${alsoIn}`
             + `<span class="paid-tip-adds">${t('paywall.adds')}</span>`
@@ -56,7 +66,7 @@ window.Paywall = (function () {
         });
     }
 
-    function lockInput(input, locked) {
+    function lockInput(input, locked, tier) {
         if (locked && !input.classList.contains('locked')) {
             if (input.type === 'checkbox') {
                 input.checked = input.dataset.freeValue === 'true';
@@ -68,6 +78,9 @@ window.Paywall = (function () {
             input.dispatchEvent(new Event('change', { bubbles: true }));
         }
         input.classList.toggle('locked', locked);
+        // Styled for the tier it's offered in (a Pro lock carries a purple edge); none in Free Only
+        if (locked && tier) input.dataset.lockedTier = tier;
+        else delete input.dataset.lockedTier;
         if (input.type === 'checkbox') input.disabled = locked;
         else input.readOnly = locked;
     }
@@ -76,7 +89,7 @@ window.Paywall = (function () {
         document.querySelectorAll('[data-requires]').forEach((el) => {
             const locked = !can(el.dataset.requires);
             if (el.dataset.locked === 'hide') el.hidden = locked;
-            else lockInput(el, locked);
+            else lockInput(el, locked, lockTier(el.dataset.requires));
         });
         document.querySelectorAll('[data-free-only]').forEach((el) => { el.hidden = can(el.dataset.freeOnly); });
         decorate();
@@ -88,7 +101,7 @@ window.Paywall = (function () {
         const header = document.querySelector('.page-header');
         if (!header) return;
         let marker = header.querySelector('.tier-marker');
-        if (!me.gated || me.tier === 'Free') {
+        if (me.tier === 'Free') {
             marker?.remove();
             return;
         }
@@ -101,6 +114,7 @@ window.Paywall = (function () {
             header.insertBefore(marker, header.querySelector('.lang-toggle'));
         }
         marker.textContent = me.tier;
+        marker.classList.toggle('pro', me.tier === 'Pro');
         marker.title = t('paywall.markerTitle', { tier: me.tier });
     }
 

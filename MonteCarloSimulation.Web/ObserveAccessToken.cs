@@ -9,7 +9,16 @@ namespace MonteCarloSimulation.Web
     // scaled out to several.
     public static class ObserveAccessToken
     {
+        public const string Header = "X-Observe-Token";
+
         private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(30);
+
+        // Whether a request carries a valid token in the X-Observe-Token header, keyed by the change-request passphrase
+        public static bool Allows(HttpRequest request, IConfiguration config)
+        {
+            var secret = config["ChangeRequest:Passphrase"];
+            return !string.IsNullOrEmpty(secret) && IsValid(request.Headers[Header].ToString(), secret);
+        }
 
         public static string Issue(string passphraseSecret)
         {
