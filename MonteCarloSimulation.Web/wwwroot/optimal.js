@@ -334,5 +334,6 @@ Inputs.initMoneyInputs();
 Inputs.initBalanceTotals(optimalForm);
 Inputs.initAccountTotals(optimalForm);
 Inputs.initFilingStatus(optimalForm);
+Inputs.sizeInputs(optimalForm);
 Inputs.initCollapsibleInputs(optimalForm);
 initRunInSimulator();

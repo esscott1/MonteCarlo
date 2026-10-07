@@ -43,19 +43,19 @@
                     <label><span data-i18n="form.birthdate">Birthdate</span>
                         <input type="date" name="birthdate" value="1969-07-07" required>
                     </label>
-                    <fieldset class="subgroup filing-status">
+                    <fieldset class="subgroup filing-status span-all">
                         <legend data-i18n="form.filingStatus">Filing status</legend>
                         <label class="checkbox-label"><input type="radio" name="filingStatus" value="single" checked> <span data-i18n="form.single">Single</span></label>
                         <label class="checkbox-label"><input type="radio" name="filingStatus" value="married"> <span data-i18n="form.married">Married filing jointly</span></label>
                         <p class="subgroup-hint" data-filing-hint hidden data-i18n="form.marriedHint">Joint brackets, deduction and Medicare tiers, for two people the same age. Enter your household's combined Social Security.</p>
                     </fieldset>
                     <label><span data-i18n="runner.horizon">Horizon (years)</span>
-                        <input type="number" name="years" min="1" max="100" step="1" value="40" style="width: calc(3ch + 1.6rem)" required>
+                        <input type="number" name="years" min="1" max="100" step="1" value="40" required>
                     </label>
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-assets" aria-labelledby="tab-assets" hidden>
-                    <fieldset class="subgroup">
+                    <fieldset class="subgroup span-all">
                         <legend data-i18n="runner.returnsLegend">Ann Returns and Allocations</legend>
                         <table class="asset-table">
                             <thead>
@@ -104,7 +104,7 @@
                     <fieldset class="subgroup">
                         <legend data-i18n="form.taxDeferred">Tax Deferred Accts</legend>
                         <label><span data-i18n="form.balance">Balance</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" required>
                         </label>
                         <label class="checkbox-label">
                             <input type="checkbox" name="enableRothConversions" checked data-requires="roth-conversions" data-free-value="false">
@@ -115,32 +115,32 @@
                     <fieldset class="subgroup">
                         <legend><span data-i18n="form.roth">Roth Accts</span> <span class="paid-badge" data-feature="account-basis-split" hidden></span></legend>
                         <label data-free-only="account-basis-split" hidden><span data-i18n="form.total">Total</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="rothTotal" pattern="[0-9,]*\.?[0-9]*" value="20,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="rothTotal" pattern="[0-9,]*\.?[0-9]*" value="20,000" required>
                         </label>
                         <p class="subgroup-hint" id="roth-split-hint" data-free-only="account-basis-split" hidden></p>
                         <label data-requires="account-basis-split" data-locked="hide"><span data-i18n="form.basis">Basis</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="initialRothBasis" pattern="[0-9,]*\.?[0-9]*" value="15,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialRothBasis" pattern="[0-9,]*\.?[0-9]*" value="15,000" required>
                         </label>
                         <label data-requires="account-basis-split" data-locked="hide"><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="initialRothUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="5,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialRothUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="5,000" required>
                         </label>
                         <p class="total-line" id="roth-total" data-requires="account-basis-split" data-locked="hide">Total Roth = $20,000</p>
                     </fieldset>
                     <fieldset class="subgroup">
                         <legend><span data-i18n="form.brokerage">Brokerage Accts</span> <span class="paid-badge" data-feature="account-basis-split" hidden></span></legend>
                         <label data-free-only="account-basis-split" hidden><span data-i18n="form.total">Total</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="brokerageTotal" pattern="[0-9,]*\.?[0-9]*" value="400,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="brokerageTotal" pattern="[0-9,]*\.?[0-9]*" value="400,000" required>
                         </label>
                         <p class="subgroup-hint" id="brokerage-split-hint" data-free-only="account-basis-split" hidden></p>
                         <label data-requires="account-basis-split" data-locked="hide"><span data-i18n="form.basis">Basis</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageBasis" pattern="[0-9,]*\.?[0-9]*" value="100,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageBasis" pattern="[0-9,]*\.?[0-9]*" value="100,000" required>
                         </label>
                         <label data-requires="account-basis-split" data-locked="hide"><span data-i18n="form.unrealizedGains">Unrealized Gains</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="300,000" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="300,000" required>
                         </label>
                         <p class="total-line" id="brokerage-total" data-requires="account-basis-split" data-locked="hide">Total Brokerage = $400,000</p>
                     </fieldset>
-                    <p class="total-line" id="grand-total">Total money = $1,420,000</p>
+                    <p class="total-line span-all" id="grand-total">Total money = $1,420,000</p>
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-income" aria-labelledby="tab-income" hidden>
@@ -148,25 +148,25 @@
                         <legend><span data-i18n="optimal.ssLegend">Social Security (monthly, today's $)</span> <span class="paid-badge" data-feature="optimizer-full" hidden></span></legend>
                         <p class="subgroup-hint" data-free-only="optimizer-full" hidden data-i18n="optimal.ssFreeHint">Enter your benefit at 67 from your SSA statement; the amounts at other ages follow SSA's rules.</p>
                         <label data-requires="optimizer-full" data-locked="hide"><span data-i18n="optimal.atAge62">At age 62</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt62" pattern="[0-9,]*\.?[0-9]*" value="2,750" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt62" pattern="[0-9,]*\.?[0-9]*" value="2,750" required>
                         </label>
                         <label><span data-i18n="optimal.atAge67">At age 67</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt67" pattern="[0-9,]*\.?[0-9]*" value="3,900" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt67" pattern="[0-9,]*\.?[0-9]*" value="3,900" required>
                         </label>
                         <label data-requires="optimizer-full" data-locked="hide"><span data-i18n="optimal.atAge70">At age 70</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt70" pattern="[0-9,]*\.?[0-9]*" value="4,800" style="width: calc(16ch + 1rem)" required>
+                            <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt70" pattern="[0-9,]*\.?[0-9]*" value="4,800" required>
                         </label>
                         <label><span class="label-row"><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span> <span class="paid-badge" data-feature="standard-deduction" hidden></span></span>
-                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" data-married-value="32,000" style="width: calc(16ch + 1rem)" required data-requires="standard-deduction">
+                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" data-married-value="32,000" required data-requires="standard-deduction">
                         </label>
                     </fieldset>
                     <fieldset class="subgroup">
                         <legend><span data-i18n="form.inheritance">Inheritance</span> <span class="paid-badge" data-feature="inheritance" hidden></span></legend>
                         <label><span data-i18n="form.newMoney">New Money</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" style="width: calc(16ch + 1rem)" required data-requires="inheritance" data-free-value="0">
+                            <input type="text" inputmode="decimal" class="money-input" name="newMoney" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" required data-requires="inheritance" data-free-value="0">
                         </label>
                         <label><span data-i18n="optimal.whenYears">When (years after retiring)</span>
-                            <input type="number" name="yearNewMoney" min="0" step="1" value="10" style="width: calc(16ch + 1.6rem)" required data-requires="inheritance">
+                            <input type="number" name="yearNewMoney" min="0" step="1" value="10" required data-requires="inheritance">
                         </label>
                     </fieldset>
                 </div>

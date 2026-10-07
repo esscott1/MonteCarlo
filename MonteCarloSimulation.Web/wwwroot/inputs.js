@@ -284,6 +284,40 @@ window.Inputs = (() => {
         update(); // a restored form (back button) may already say Married
     }
 
+    // Fits each text and number field on the input tabs to its default value plus two more digits: 110% of that text's
+    // width in the field's own font, plus its padding and borders (and the arrows, on a number field). Longer values
+    // still fit; they scroll inside the field. The Asset Classes table's fields share the widest, so its columns line
+    // up. Date fields keep their own width.
+    const NUMBER_ARROWS = 20; // px
+    let measure;
+
+    function textWidth(text, style) {
+        measure ??= document.createElement('canvas').getContext('2d');
+        measure.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        return measure.measureText(text).width;
+    }
+
+    function fittedWidth(input) {
+        const style = getComputedStyle(input);
+        const px = (name) => parseFloat(style[name]) || 0;
+        return Math.ceil(1.1 * textWidth(`${input.defaultValue}00`, style))
+            + px('paddingLeft') + px('paddingRight') + px('borderLeftWidth') + px('borderRightWidth')
+            + (input.type === 'number' ? NUMBER_ARROWS : 0);
+    }
+
+    function sizeInputs(form) {
+        const size = () => {
+            const inputs = [...form.querySelectorAll('.tabs-tile input[type="text"], .tabs-tile input[type="number"]')];
+            const table = inputs.filter((input) => input.classList.contains('percent-input'));
+            const tableWidth = Math.max(0, ...table.map(fittedWidth));
+            inputs.forEach((input) => {
+                input.style.width = `${table.includes(input) ? tableWidth : fittedWidth(input)}px`;
+            });
+        };
+        size();
+        document.fonts?.ready.then(size);
+    }
+
     // Checks a filing status ("single" or "married") as if chosen
     function setFilingStatus(form, status) {
         const radio = form.querySelector(`input[name="filingStatus"][value="${status === 'married' ? 'married' : 'single'}"]`);
@@ -308,5 +342,6 @@ window.Inputs = (() => {
         refreshAccountTotals,
         initFilingStatus,
         setFilingStatus,
+        sizeInputs,
     };
 })();

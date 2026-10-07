@@ -736,6 +736,7 @@ Inputs.initMoneyInputs();
 Inputs.initBalanceTotals(form);
 Inputs.initAccountTotals(form);
 Inputs.initFilingStatus(form);
+Inputs.sizeInputs(form);
 initSocialSecurityDefault();
 Inputs.initCollapsibleInputs(form);
 initRunToggles();

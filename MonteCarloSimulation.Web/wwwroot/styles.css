@@ -25,6 +25,8 @@
     --plus-soft: #dbeafe;
     --pro-soft: #ede9fe;
     --teaser: #9aa5b1;
+    /* The border of an input every tier has (Free), beside Plus's blue and Pro's purple */
+    --free: #166534;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -44,6 +46,7 @@
         --plus-soft: #1e3a5f;
         --pro-soft: #3b2a63;
         --teaser: #6f7d8c;
+        --free: #22c55e;
     }
 }
 
@@ -214,10 +217,10 @@ body.wide {
     max-width: 1200px;
 }
 
-/* Inputs tile (about a third, left) beside the chart tile (the rest); stacked on narrow screens */
+/* Inputs tile (40%, left) beside the chart or recommendation tile (60%); stacked on narrow screens */
 .inputs-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
     gap: 1rem;
     align-items: start;
     margin-bottom: 1rem;
@@ -275,17 +278,33 @@ body.wide {
     color: var(--warn-border);
 }
 
+/* Each tab's fields and boxes in two columns where two fit (each at least half the panel and 11rem), else one.
+   Widths come from Inputs.sizeInputs. */
 .tab-panel.field-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(max(11rem, calc((100% - 1.5rem) / 2)), 1fr));
+    align-items: start;
     margin-bottom: 0;
+}
+
+.tab-panel > .span-all {
+    grid-column: 1 / -1;
+}
+
+/* Text and date inputs on the input tabs: the number inputs' border, and a little room inside it */
+.tabs-tile input:is([type="text"], [type="date"]) {
+    padding: 0.2rem 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+/* Free inputs (no paid feature on them or around them): a dark green border, for every visitor */
+.tabs-tile input:is([type="text"], [type="number"], [type="date"]):not([data-requires]):not([data-requires] input) {
+    border: 1px solid var(--free);
+    border-radius: 4px;
 }
 
 .tab-panel[hidden] {
     display: none;
-}
-
-.percent-input {
-    width: calc(6ch + 1.6rem);
 }
 
 .asset-table {
@@ -305,12 +324,8 @@ body.wide {
     color: var(--muted);
 }
 
-/* Asset Classes: narrower entry boxes, and a box around the allocation column and another around the return and
-   std. dev. columns, with a gap between them */
-#panel-assets .percent-input {
-    width: calc(4ch + 1.2rem);
-}
-
+/* Asset Classes: a box around the allocation column and another around the return and std. dev. columns, with a gap
+   between them */
 .asset-table .alloc,
 .asset-table .ret {
     padding: 0.2rem 0.4rem;
