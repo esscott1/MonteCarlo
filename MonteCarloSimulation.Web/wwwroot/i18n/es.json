@@ -581,7 +581,7 @@
   "paywall.badgeLabel": "Función de {tier}: precio y cómo desbloquearla",
   "paywall.markerTitle": "{tier} está activado en este navegador. Seleccione para cambiar de nivel o volver a la versión gratuita.",
   "access.unavailable": "No se pudo comprobar su acceso. Vuelva a cargar la página.",
-  "access.notGated": "Los niveles de pago no están activados aquí, así que todas las funciones ya están disponibles.",
+  "access.freeOnly": "Las mejoras no están disponibles en este momento: el sitio ofrece solo la versión gratuita.",
   "access.statusFree": "Está usando la versión gratuita.",
   "access.statusTier": "{tier} está activado en este navegador.",
   "access.tierOption": "{tier} · {price}",

@@ -36,15 +36,13 @@ namespace MonteCarloSimulation.Web
         }
     }
 
-    // The release flags, read by Microsoft.FeatureManagement from the "FeatureManagement" section (or App Service
-    // settings such as FeatureManagement__Subscriptions). Their names have no dots, so they work as setting names.
+    // The two site-wide switches: whether Plus is offered and whether Pro is. Flipped on the Observe page (SiteFlags);
+    // until then each is its default from the "FeatureManagement" section, read by Microsoft.FeatureManagement (an App
+    // Service setting such as FeatureManagement__TierPro overrides it). Their names have no dots, so they work as setting
+    // names. A tier that's off isn't offered: no badges for it, and its code is refused. Both off is Free Only.
     public static class Flags
     {
-        // The master switch: off, nothing is gated and the app is exactly as it was before paid tiers
-        public const string Subscriptions = "Subscriptions";
-        // Plus is offered and its features are gated; off, its features are free to everyone
         public const string TierPlus = "TierPlus";
-        // Pro is offered; off, a Pro code is refused
         public const string TierPro = "TierPro";
 
         public static string For(Tier tier) => tier == Tier.Pro ? TierPro : TierPlus;

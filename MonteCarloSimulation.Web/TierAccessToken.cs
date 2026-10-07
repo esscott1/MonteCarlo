@@ -6,11 +6,12 @@ namespace MonteCarloSimulation.Web
     // The signed cookie a correct access code earns: "Plus.<expiry>.<signature>", where the signature is an HMAC of the
     // tier and expiry keyed by that tier's access code. Like ObserveAccessToken it's stateless, so it survives restarts and
     // works on any instance; changing a tier's code invalidates every token issued with the old one, and editing the tier
-    // in the cookie breaks the signature. Temporary: Entra sign-in and Stripe replace it.
+    // in the cookie breaks the signature. The cookie lasts the browser session, and the token inside it 12 hours at most.
+    // Temporary: Entra sign-in and Stripe replace it.
     public static class TierAccessToken
     {
         public const string CookieName = "tier-access";
-        public static readonly TimeSpan Lifetime = TimeSpan.FromDays(30);
+        public static readonly TimeSpan Lifetime = TimeSpan.FromHours(12);
 
         public static string Issue(Tier tier, string accessCode, DateTimeOffset now)
         {

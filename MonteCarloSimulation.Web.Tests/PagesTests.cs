@@ -209,6 +209,21 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.DoesNotContain("i18n.js", html);
         }
 
+        // Observe's Features section, first on the page: the site-wide Plus and Pro switches, read and saved with the token
+        [Fact]
+        public async Task ObservePage_HasTheFeaturesSectionFirst_WithItsSwitchesBehindTheToken()
+        {
+            string html = await GetAsync("/observe.html");
+            string script = await GetAsync("/observe.js");
+
+            var sections = Regex.Matches(html, @"<section class=""observe-section""[^>]*>\s*<h2[^>]*>([^<]+)</h2>").Select(m => m.Groups[1].Value);
+            Assert.Equal(new[] { "Features", "Logs", "Errors", "Open Jira Items" }, sections);
+            Assert.Contains("'/api/features'", script);
+            Assert.Contains("`/api/features/${input.dataset.tier}`", script);
+            Assert.Contains("'X-Observe-Token': token", script);
+            Assert.Contains(@"role=""switch""", script);
+        }
+
         [Fact]
         public async Task DeniedObserveVisit_ReturnsToTheLandingPage_WhereTheMenuReopensThePassphrase()
         {

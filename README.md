@@ -101,19 +101,26 @@ and Translations pages and the passphrase box stay in English.
 
 ## Free, Plus and Pro
 
-The app is getting paid tiers: **Free**, **Plus** ($3.99 a month) and **Pro** ($100 a month: everything in Plus, plus
-features still to be built). Until sign-in and payments are added, each paid tier is unlocked with a secret **access
-code** instead.
+The app has tiers: **Free**, **Plus** ($3.99 a month) and **Pro** ($100 a month: everything in Plus, plus features
+still to be built). Until sign-in and payments are added, each paid tier is unlocked with a secret **access code**
+instead.
 
-- **Switches.** Three release flags, read by `Microsoft.FeatureManagement` from `FeatureManagement` in
-  [appsettings.json](MonteCarloSimulation.Web/appsettings.json) (in Azure, App Service settings such as
-  `FeatureManagement__Subscriptions`):
+- **The site's mode.** Two switches on the Observe page's **Features** section (behind the change-request passphrase)
+  say what the site offers, for every visitor at once:
 
-  | Flag | Default | On means |
-  |---|---|---|
-  | `Subscriptions` | off | Paid features are gated. Off, the app is exactly as it was before tiers. |
-  | `TierPlus` | on | Plus is offered and its features are locked for Free visitors. Off, they're free to everyone. |
-  | `TierPro` | off | Pro is offered and its code works. |
+  | Plus | Pro | Mode | What a visitor sees |
+  |---|---|---|---|
+  | off | off | **Free Only** | The Free version: paid features greyed, with no badges and no way to upgrade. |
+  | on | off | **Plus Available** (the default) | Paid features locked with blue Plus badges; a Plus code unlocks them. |
+  | off | on | **Pro Available** | The same features locked with deep purple Pro badges and locks; a Pro code unlocks them. |
+  | on | on | **Plus and Pro Available** | Each badge names the cheapest tier with that feature; either code works. |
+
+  A flip applies to each visitor's next request, and open pages follow when their tab is next focused. Switching a
+  tier off drops everyone who unlocked it back to Free. The switches are kept in a small file
+  ([SiteFlags.cs](MonteCarloSimulation.Web/SiteFlags.cs)): `/home/data/montecarlo/site-flags.json` on App Service
+  (kept across restarts and deploys) and `MonteCarloSimulation.Web/App_Data/site-flags.json` locally (gitignored).
+  Until a switch is flipped, its default comes from `FeatureManagement` in
+  [appsettings.json](MonteCarloSimulation.Web/appsettings.json): `TierPlus` on, `TierPro` off.
 
 - **What each tier gets** is a list of feature ids under `Tiers` in appsettings.json
   ([Features.cs](MonteCarloSimulation.Web/Features.cs)); the code asks whether a visitor may use a feature, never which
@@ -132,20 +139,20 @@ code** instead.
   amounts at 62 and 70 follow SSA's rules (70% and 124% of it). Its answer is a teaser: the recommended monthly spend
   as a $500 range ("about $6,000–$6,500 a month"), without the exact amount, the best claiming age, the comparison of
   every age or the hand-off to the Scenario runner.
-- **Badges.** [paywall.js](MonteCarloSimulation.Web/wwwroot/paywall.js) puts a small "✦ Plus" pill beside each locked
-  feature. Hovering, focusing or tapping it shows the price and an **Enter access code** link that opens in a new tab
-  (`/billing/subscribe?tier=plus`, which goes to the access-code page now and will go to checkout later). Entering a
+- **Badges.** [paywall.js](MonteCarloSimulation.Web/wwwroot/paywall.js) puts a small pill beside each locked feature:
+  "✦ Plus" in blue, or "◆ Pro" in deep purple when Pro is the cheapest tier on offer with it (Pro's locked inputs get a
+  purple edge too). Hovering, focusing or tapping it shows the price and an **Enter access code** link that opens in a
+  new tab (`/billing/subscribe?tier=`, which goes to the access-code page now and will go to checkout later). Entering a
   code there unlocks the original tab in place, without losing anything typed.
-- **Access codes.** [access.html](MonteCarloSimulation.Web/wwwroot/access.html) sends the code to `POST /api/tier-access`,
-  which sets a 30-day cookie signed with that tier's code ([TierAccessToken.cs](MonteCarloSimulation.Web/TierAccessToken.cs)),
-  so changing a code signs out everyone who used the old one. Attempts are limited to 20 an hour per address. "Use the
-  Free version" clears the cookie.
-- **Trying it locally:** set the codes in user secrets (see [Keys and secrets](#keys-and-secrets)), then run
-  `dotnet run --project MonteCarloSimulation.Web --launch-profile tiers`, which turns on `Subscriptions` and `TierPro`
-  for that run only. A normal `dotnet run` stays ungated.
-- **Trying it on the live site:** add the two code settings and set `FeatureManagement__Subscriptions` to `true` in the
-  Web App's environment variables (saving restarts the app). While it's on, **every visitor without a code gets the
-  Free version** and has no way to buy Plus yet, so set it back to `false` after testing.
+- **Access codes.** [access.html](MonteCarloSimulation.Web/wwwroot/access.html) lists the tiers on offer and sends the
+  code to `POST /api/tier-access`, which sets a browser-session cookie holding a token signed with that tier's code and
+  good for 12 hours at most ([TierAccessToken.cs](MonteCarloSimulation.Web/TierAccessToken.cs)), so changing a code
+  signs out everyone who used the old one. Attempts are limited to 20 an hour per address. "Use the Free version" clears
+  the cookie.
+- **Running it locally:** `dotnet run --project MonteCarloSimulation.Web` starts as Plus Available. Put the codes and
+  the change-request passphrase in user secrets (see [Keys and secrets](#keys-and-secrets)); enter a code to unlock a
+  tier, and open Observe from the home page's menu to switch modes. Local switches are kept in `App_Data`, separately
+  from the live site's.
 
 ## Deployment
 
@@ -171,7 +178,7 @@ No secret is committed to this repo. Each one lives in exactly one of the four p
 | `Anthropic__ApiKey` | Azure App Service → `montecarlo-otsconsulting` → **Environment variables** | The web app, to compose change-request Jira stories ([ChangeRequestAgent.cs](MonteCarloSimulation.Web/ChangeRequestAgent.cs)) | 2 | An API key from the Anthropic Console (console.anthropic.com → API Keys). **Same key as `ANTHROPIC_API_KEY` below.** |
 | `Jira__Email` | Azure App Service → Environment variables | The web app, to sign in to Jira ([JiraClient.cs](MonteCarloSimulation.Web/JiraClient.cs)) | 2 | The Atlassian account email the stories are created as. Not secret, but paired with the token. |
 | `Jira__ApiToken` | Azure App Service → Environment variables | The web app, to create Jira stories (change requests and translation updates) | 2 | An Atlassian API token for that account (id.atlassian.com → Security → API tokens). Atlassian tokens expire. |
-| `ChangeRequest__Passphrase` | Azure App Service → Environment variables | The web app: the change-request form (pencil), the Observe passphrase and the Translations page | 1 | Chosen by the site owner; shared with whoever may submit change requests. |
+| `ChangeRequest__Passphrase` | Azure App Service → Environment variables | The web app: the change-request form (pencil), the Observe passphrase (and with it the Plus/Pro switches on Observe → Features) and the Translations page | 1 | Chosen by the site owner; shared with whoever may submit change requests. |
 | `Tiers__Plus__AccessCode`, `Tiers__Pro__AccessCode` | Azure App Service → Environment variables | The web app: the access codes that unlock Plus and Pro ([Free, Plus and Pro](#free-plus-and-pro)) | — | Chosen by the site owner; shared with testers. Changing one signs out everyone who used the old code. |
 | GitHub token | Jira → Project settings → Automation → "Trigger AI Agent on In Progress" → the web request's `Authorization` header | Jira, to send the `repository_dispatch` that starts the dispatcher | 4 | A GitHub personal access token allowed to trigger workflows on `esscott1/MonteCarlo`. Personal access tokens expire. |
 | `ANTHROPIC_API_KEY` | GitHub → repo **Settings → Secrets and variables → Actions** | Claude Code in the AI handlers ([agent-title-change.yml](.github/workflows/agent-title-change.yml)) | 6 | Anthropic Console. **Same key as `Anthropic__ApiKey` above.** |
