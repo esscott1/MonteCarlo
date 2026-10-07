@@ -1063,9 +1063,17 @@ details pre {
     font-weight: 600;
 }
 
+/* A label's text with a badge beside it, on one line (the label itself stacks its text above the input) */
+.label-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
 /* An input a Free visitor can't change: shown at its Free value, greyed */
 input.locked {
     background: var(--soft);
+    border-color: var(--border);
     color: var(--muted);
     cursor: not-allowed;
 }
