@@ -85,6 +85,7 @@
         if (key.startsWith('server.') || key.startsWith('field.')) return 'server messages and field names';
         if (key.startsWith('paywall.')) return 'paywall.js (paid-feature badges)';
         if (key.startsWith('access.')) return 'access.js (access-code page)';
+        if (key.startsWith('theme.')) return 'theme.js (light/dark toggle)';
         if (key.startsWith('info.')) return 'model-info.js (Model Info)';
         if (key.startsWith('lab.')) return 'Model Info (Strategy Lab data)';
         return 'shared';

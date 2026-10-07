@@ -6,6 +6,10 @@
   "common.requestFailedWith": "La solicitud falló: {message}",
   "common.somethingWrong": "Algo salió mal. Inténtelo de nuevo.",
   "common.why": "por qué",
+  "theme.dark": "Oscuro",
+  "theme.light": "Claro",
+  "theme.toDark": "Cambiar al modo oscuro",
+  "theme.toLight": "Cambiar al modo claro",
 
   "nav.backHome": "Volver al inicio",
   "menu.label": "Menú",

@@ -30,7 +30,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         --page: #101923;
         --surface: #17212e;
         --soft: #202e40;
@@ -47,7 +47,34 @@
         --pro-soft: #3b2a63;
         --teaser: #6f7d8c;
         --free: #22c55e;
+        color-scheme: dark;
     }
+}
+
+/* The same, when the header's toggle chose dark (theme.js) */
+:root[data-theme="dark"] {
+    --page: #101923;
+    --surface: #17212e;
+    --soft: #202e40;
+    --text: #edf2f8;
+    --muted: #aebbc9;
+    --border: #3c4a5c;
+    --accent: #8ab7ff;
+    --accent-hover: #b3d0ff;
+    --danger: #ff9094;
+    --positive: #6ee7b7;
+    --pro: #c4b5fd;
+    --pro-text: #1e1035;
+    --plus-soft: #1e3a5f;
+    --pro-soft: #3b2a63;
+    --teaser: #6f7d8c;
+    --free: #22c55e;
+    color-scheme: dark;
+}
+
+/* The toggle chose light: light colours and light form controls, whatever the computer's setting */
+:root[data-theme="light"] {
+    color-scheme: light;
 }
 
 body {
@@ -424,11 +451,18 @@ body.wide {
 }
 
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         --band-upper: #81c995;
         --band-middle: #8ab4f8;
         --band-lower: #fcad70;
     }
+}
+
+/* The same, when the header's toggle chose dark (theme.js) */
+:root[data-theme="dark"] {
+    --band-upper: #81c995;
+    --band-middle: #8ab4f8;
+    --band-lower: #fcad70;
 }
 
 .chart-note {
@@ -844,8 +878,10 @@ details pre {
     margin-left: auto;
 }
 
-/* Español / English, pushed to the right of the header; the hamburger (landing page) sits just after it */
-.lang-toggle {
+/* Español / English, pushed to the right of the header, then the light/dark toggle (theme.js); the hamburger (landing
+   page) sits just after them */
+.lang-toggle,
+.theme-toggle {
     margin-left: auto;
     padding: 0.2rem 0.6rem;
     border: 1px solid var(--border);
@@ -858,12 +894,15 @@ details pre {
 }
 
 .lang-toggle:hover,
-.lang-toggle:focus-visible {
+.lang-toggle:focus-visible,
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
     color: var(--accent);
     border-color: var(--accent);
 }
 
-.lang-toggle + .hamburger-toggle {
+.lang-toggle + .theme-toggle,
+.theme-toggle + .hamburger-toggle {
     margin-left: 0;
 }
 

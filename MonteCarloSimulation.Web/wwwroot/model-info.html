@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title data-i18n="info.pageTitle">Model Info</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="theme.js"></script>
     <!-- A visitor who chose Spanish sees nothing until i18n.js has applied it, so English never flashes -->
     <style>html.i18n-pending body { visibility: hidden; }</style>
     <script>try { if (localStorage.getItem('lang') === 'es') document.documentElement.classList.add('i18n-pending'); } catch { }</script>
@@ -20,6 +21,7 @@
         <h1 data-i18n="info.heading">Model Info</h1>
 
         <button type="button" class="lang-toggle" lang="es" aria-label="Ver en español">Español</button>
+        <button type="button" class="theme-toggle" aria-label="Switch to dark mode">☾ Dark</button>
     </div>
 
     <p class="page-intro" data-i18n="info.intro">How the simulator's choices about which accounts to draw from, and how much to convert to Roth, were tested. The numbers come from the Strategy Lab: many simulated households, each run under every strategy on the same markets.</p>
