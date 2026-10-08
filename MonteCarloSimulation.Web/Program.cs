@@ -39,6 +39,9 @@ builder.Services.AddSingleton<SiteFlags>();
 builder.Services.AddSingleton<IEntitlements, AccessCodeEntitlements>();
 builder.Services.AddSingleton<FeatureAccess>();
 
+// The Observe page's Visits section: visits per day, kept in a file (VisitCounter)
+builder.Services.AddSingleton<VisitCounter>();
+
 // The Observe token check runs on every Observe page load and needs no countdown, so it keeps the built-in limiter.
 // Partitioned by caller IP and applied as middleware, so it rejects abusive traffic before the endpoint runs.
 builder.Services.AddRateLimiter(options =>
@@ -47,6 +50,10 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("observe-verify", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromHours(1) }));
+    // Each page reports one visit per browser session, so 30 an hour is plenty for an office sharing an address
+    options.AddPolicy(VisitsEndpoints.RateLimitPolicy, context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromHours(1) }));
 });
 
 var app = builder.Build();
@@ -281,6 +288,7 @@ app.MapGet("/api/observe-access/verify", (HttpContext ctx, IConfiguration config
 
 app.MapTierAccess();
 app.MapSiteFlags();
+app.MapVisits();
 
 app.Run();
 
