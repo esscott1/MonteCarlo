@@ -209,19 +209,38 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.DoesNotContain("i18n.js", html);
         }
 
-        // Observe's Features section, first on the page: the site-wide Plus and Pro switches, read and saved with the token
+        // Observe's sections each collapse (a <details> whose summary is the heading). Features comes first: the site-wide
+        // Plus and Pro switches, read and saved with the token; then Visits, the visits per day, read with the token.
         [Fact]
         public async Task ObservePage_HasTheFeaturesSectionFirst_WithItsSwitchesBehindTheToken()
         {
             string html = await GetAsync("/observe.html");
             string script = await GetAsync("/observe.js");
 
-            var sections = Regex.Matches(html, @"<section class=""observe-section""[^>]*>\s*<h2[^>]*>([^<]+)</h2>").Select(m => m.Groups[1].Value);
-            Assert.Equal(new[] { "Features", "Logs", "Errors", "Open Jira Items" }, sections);
+            var sections = Regex.Matches(html, @"<details class=""observe-section""[^>]*>\s*<summary><h2[^>]*>([^<]+)</h2></summary>").Select(m => m.Groups[1].Value);
+            Assert.Equal(new[] { "Features", "Visits", "Logs", "Errors", "Open Jira Items" }, sections);
+            Assert.DoesNotContain("<section", html);
+            Assert.Contains("'/api/visits'", script);
             Assert.Contains("'/api/features'", script);
             Assert.Contains("`/api/features/${input.dataset.tier}`", script);
             Assert.Contains("'X-Observe-Token': token", script);
             Assert.Contains(@"role=""switch""", script);
+        }
+
+        // Visits are counted from the public pages only, so Observe and Translations (the owner's own pages) don't add any
+        [Theory]
+        [InlineData("/splash.html", true)]
+        [InlineData("/index.html", true)]
+        [InlineData("/optimal.html", true)]
+        [InlineData("/model-info.html", true)]
+        [InlineData("/access.html", true)]
+        [InlineData("/observe.html", false)]
+        [InlineData("/translations.html", false)]
+        public async Task PublicPages_CountAVisit_TheOwnersPagesDont(string path, bool counts)
+        {
+            string html = await GetAsync(path);
+
+            Assert.Equal(counts, html.Contains(@"<script src=""visit.js"" defer></script>"));
         }
 
         [Fact]
