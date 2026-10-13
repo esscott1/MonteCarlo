@@ -108,6 +108,7 @@ namespace MonteCarloSimulation.Core
             double Spending,
             double Irmaa,
             SocialSecurityYear SocialSecurity,
+            RequiredDistributionYear Rmd,
             double PeriodRate,
             double TaxableStartOfYear,
             WithdrawalPlan Plan,
@@ -137,29 +138,41 @@ namespace MonteCarloSimulation.Core
             var ss = SocialSecurityYear.Compute(socialSecurity, taxYear, spending + irmaa);
             double periodRate = rate * year.Fraction;
 
-            // Start-of-year (prior year-end) Tax Deferred balance, for the "% of balance" figure
+            // Start-of-year (prior year-end) Tax Deferred balance: the RMD is based on it, and the "% of balance" figure
             double taxableStartOfYear = accounts.Taxable;
 
             // All three buckets grow by the same rate, then this year's withdrawal is taken
             accounts.ApplyReturn(periodRate);
 
+            // The required minimum distribution comes out first, stacked on taxable Social Security: last year-end's
+            // Tax Deferred balance over the year's divisor, prorated for a partial model year like spending. Its
+            // after-tax amount covers spending before anything else is drawn.
+            var rmd = year.RmdDivisor is double divisor
+                ? RequiredDistributionYear.Compute(
+                    Math.Min(taxableStartOfYear / divisor * year.Fraction, Math.Max(0, accounts.Taxable)), taxYear, ss.Taxable, ss.Need)
+                : RequiredDistributionYear.None(ss.Need);
+            accounts.WithdrawTaxable(rmd.Gross);
+            double baseOrdinaryIncome = ss.Taxable + rmd.Gross;
+
             bool ageEligible = year.AgeEligible;
             var plan = strategy.Plan(new WithdrawalContext(
-                ss.Need, ss.Taxable, taxYear,
+                rmd.Need, baseOrdinaryIncome, taxYear,
                 accounts.EligibleTaxable(ageEligible), accounts.Brokerage, accounts.BrokerageGainFraction, accounts.EligibleRoth(ageEligible)));
 
             accounts.WithdrawTaxable(plan.GrossTaxable);
             accounts.SellBrokerage(plan.GrossBrokerage);
             accounts.WithdrawRoth(plan.Roth);
 
+            // The RMD itself is never converted: the conversion fills on top of it
             var conversion = parameters.EnableRothConversions && conversionCeiling is not null
-                ? RothConversion.Apply(accounts, taxYear, ss.Taxable + plan.GrossTaxable, plan.RealizedGains, conversionCeiling,
+                ? RothConversion.Apply(accounts, taxYear, baseOrdinaryIncome + plan.GrossTaxable, plan.RealizedGains, conversionCeiling,
                     new ConversionFunding(parameters.ConversionTaxFunding, ageEligible, bridgeNeed))
                 : RothConversion.None;
 
-            // The year's income totals: ordinary income (taxable Social Security, Tax Deferred draws, the conversion)
-            // with all realized gains stacked on top - so they include the conversion and the sale funding its tax.
-            double ordinaryIncome = ss.Taxable + plan.GrossTaxable + conversion.Amount;
+            // The year's income totals: ordinary income (taxable Social Security, the RMD, Tax Deferred draws, the
+            // conversion) with all realized gains stacked on top - so they include the conversion and the sale funding
+            // its tax.
+            double ordinaryIncome = baseOrdinaryIncome + plan.GrossTaxable + conversion.Amount;
             double realizedGains = plan.RealizedGains + conversion.RealizedGains;
 
             // Leftover 0% room: realize more gains tax-free by selling and rebuying (a basis step-up, no cash)
@@ -168,13 +181,14 @@ namespace MonteCarloSimulation.Core
                 : 0;
 
             // New money (e.g. an inheritance) arrives as after-tax cash in its year; so does any Social
-            // Security beyond this year's spending
+            // Security, and then any RMD, beyond this year's spending
             if (year.Index == parameters.YearNewMoney)
                 accounts.DepositBrokerageCash(parameters.NewMoney);
             accounts.DepositBrokerageCash(ss.Surplus);
+            accounts.DepositBrokerageCash(rmd.Surplus);
 
             return new YearStep(
-                spending, irmaa, ss, periodRate, taxableStartOfYear, plan, conversion, ordinaryIncome, realizedGains, harvestedGains,
+                spending, irmaa, ss, rmd, periodRate, taxableStartOfYear, plan, conversion, ordinaryIncome, realizedGains, harvestedGains,
                 Failed: accounts.AnyNegative || plan.IsShortfall);
         }
 
@@ -185,6 +199,9 @@ namespace MonteCarloSimulation.Core
             var plan = step.Plan;
             var conversion = step.Conversion;
             var ss = step.SocialSecurity;
+            var rmd = step.Rmd;
+            // Everything drawn from Tax Deferred this year: the RMD and the strategy's own draw
+            double taxDeferredWithdrawal = rmd.Gross + plan.GrossTaxable;
             double ordinaryIncome = step.OrdinaryIncome;
             double realizedGains = step.RealizedGains;
             double harvestedGains = step.HarvestedGains;
@@ -196,7 +213,7 @@ namespace MonteCarloSimulation.Core
             double brokerageWithdrawal = plan.GrossBrokerage + conversion.TaxSale;
 
             // Blended effective tax rate across all buckets (Roth always contributes 0)
-            double totalGross = plan.GrossTaxable + brokerageWithdrawal + plan.Roth + ss.Gross;
+            double totalGross = taxDeferredWithdrawal + brokerageWithdrawal + plan.Roth + ss.Gross;
             double taxRate = totalGross > 0 ? (ordinaryTax + capitalGainsTax) / totalGross : 0;
 
             var (bracketRate, amountUntilNextBracket, nextBracketRate) = taxYear.BracketRoom(ordinaryIncome);
@@ -216,7 +233,7 @@ namespace MonteCarloSimulation.Core
                 RateOfReturn = rate,
                 ReturnAmount = returnAmount,
                 Withdrawal = step.Spending,
-                TaxableWithdrawal = plan.GrossTaxable,
+                TaxableWithdrawal = taxDeferredWithdrawal,
                 BrokerageWithdrawal = brokerageWithdrawal,
                 RothWithdrawal = plan.Roth,
                 TaxRate = taxRate,
@@ -242,12 +259,15 @@ namespace MonteCarloSimulation.Core
                 RothConversionTax = conversion.Tax,
                 RothConversionOrdinaryTaxFromBrokerage = conversion.OrdinaryTaxFromBrokerage,
                 RothConversionOrdinaryTaxFromConversion = conversion.OrdinaryTaxFromConversion,
-                TaxDeferredWithdrawalTax = plan.TaxableTax,
+                TaxDeferredWithdrawalTax = rmd.Tax + plan.TaxableTax,
                 AgeInYear = year.AgeAtStart,
-                TaxableWithdrawalPercentOfBalance = step.TaxableStartOfYear > 0 ? plan.GrossTaxable / step.TaxableStartOfYear : 0,
+                TaxableWithdrawalPercentOfBalance = step.TaxableStartOfYear > 0 ? taxDeferredWithdrawal / step.TaxableStartOfYear : 0,
                 SocialSecurityIncome = ss.Gross,
                 SocialSecurityTax = ss.Tax,
-                SocialSecurityMonths = year.SocialSecurityPayments
+                SocialSecurityMonths = year.SocialSecurityPayments,
+                RequiredMinimumDistribution = rmd.Gross,
+                RmdDivisor = year.RmdDivisor,
+                RmdSurplusToBrokerage = rmd.Surplus
             };
         }
 

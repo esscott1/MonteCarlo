@@ -70,7 +70,8 @@ function yearWithAge(yd) {
     return `${t('runner.yearAge', { year: yd.calendarYear, age: Math.floor(yd.ageInYear + 0.005) })}${partial}`;
 }
 
-function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax, socialSecurityMonths, brokerageGains) {
+// `taxableNote` follows the Tax Deferred line (the withdrawal column's RMD footnote)
+function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax, socialSecurityMonths, brokerageGains, taxableNote = '') {
     const taxablePct = taxablePercentOfBalance === undefined ? '' : ` ${t('runner.money.ofBalance', { pct: formatPercent(taxablePercentOfBalance) })}`;
     // A Brokerage sale is part embedded gain, part tax-free return of basis (average cost)
     const brokerageSplit = brokerageGains > 0.5 && brokerageAmt > 0
@@ -78,7 +79,7 @@ function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercent
         : '';
     const items = [
         t('runner.money.total', { amount: formatCurrency(total) }),
-        t('runner.money.taxable', { amount: formatCurrency(taxableAmt) }) + taxablePct,
+        t('runner.money.taxable', { amount: formatCurrency(taxableAmt) }) + taxablePct + taxableNote,
         t('runner.money.brokerage', { amount: formatCurrency(brokerageAmt) }) + brokerageSplit,
         t('runner.money.roth', { amount: formatCurrency(rothAmt) }),
     ];
@@ -108,9 +109,26 @@ function zeroRateBandFilledBySales(yd) {
 }
 
 // A superscript marker with a hover/focus/tap tooltip. Each note in a cell gets its own number, in the order the
-// notes appear.
-function footnote(text, number) {
-    return `<sup class="footnote"><a href="#" class="footnote-ref" aria-label="${t('runner.note.aria', { number })}">${number}</a><span class="footnote-tip" role="tooltip">${text}</span></sup>`;
+// notes appear; a labelled note (RMD) passes its label and its own aria label instead.
+function footnote(text, marker, ariaLabel = t('runner.note.aria', { number: marker })) {
+    return `<sup class="footnote"><a href="#" class="footnote-ref" aria-label="${ariaLabel}">${marker}</a><span class="footnote-tip" role="tooltip">${text}</span></sup>`;
+}
+
+// A year with a required minimum distribution: what the IRS required from Tax Deferred and why (the age reached this
+// year and the table's divisor), then whether the year drew more than that for spending or saved what spending
+// didn't need.
+function rmdFootnote(yd) {
+    if (!(yd.requiredMinimumDistribution > 0.5)) return '';
+    const age = yd.calendarYear - Number(view.parameters.birthdate.slice(0, 4));
+    const parts = [t('runner.note.rmd', { amount: formatCurrency(yd.requiredMinimumDistribution), age, divisor: yd.rmdDivisor.toFixed(1) })];
+    const extra = yd.taxableWithdrawal - yd.requiredMinimumDistribution;
+    if (extra > 0.5) {
+        parts.push(t('runner.note.rmd.more', { rmd: formatCurrency(yd.requiredMinimumDistribution), extra: formatCurrency(extra) }));
+    }
+    if (yd.rmdSurplusToBrokerage > 0.5) {
+        parts.push(t('runner.note.rmd.surplus', { amount: formatCurrency(yd.rmdSurplusToBrokerage) }));
+    }
+    return footnote(parts.join(' '), t('runner.note.rmd.marker'), t('runner.note.rmd.aria'));
 }
 
 function zeroRateBandNote(yd, conversionsEnabled) {
@@ -209,7 +227,7 @@ function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail) {
         return `
         <tr>
             <td>${yearWithAge(yd)}</td>
-            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax, yd.socialSecurityMonths, yd.realizedGains)}</td>
+            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax, yd.socialSecurityMonths, yd.realizedGains, rmdFootnote(yd))}</td>
             ${taxCell(yd, conversionsEnabled, taxDetail)}
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
             <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>

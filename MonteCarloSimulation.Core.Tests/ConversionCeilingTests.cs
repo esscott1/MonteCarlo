@@ -34,6 +34,8 @@ namespace MonteCarloSimulation.Core.Tests
         public void ExplicitDefaultCeiling_GivesBitIdenticalRuns(WithdrawalStrategy strategyKind)
         {
             var parameters = Parameters(strategyKind);
+            // The engine runs the 12% fill too, rather than its Automatic pick (which can be a higher line)
+            parameters.RothConversionTarget = RothConversionTarget.Bracket12;
             var timeline = RetirementTimeline.Build(parameters);
             var strategy = WithdrawalStrategies.For(strategyKind);
             ConversionCeiling explicitCeiling = (taxYear, ordinary, gains) => taxYear.OrdinaryFillCeiling(ordinary, gains);

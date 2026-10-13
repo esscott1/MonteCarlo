@@ -120,6 +120,26 @@ namespace MonteCarloSimulation.Web.Tests
         }
 
         [Fact]
+        public async Task EveryYear_ReportsItsRequiredMinimumDistribution()
+        {
+            // Born 1969: RMDs start in 2044, the year of the 75th birthday, at the Uniform Lifetime Table's 24.6
+            using var response = await PostAsync(DefaultRequest());
+
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var years = body.RootElement.GetProperty("output").GetProperty("result").GetProperty("runs").EnumerateArray()
+                .SelectMany(run => run.GetProperty("years").EnumerateArray()).ToList();
+            Assert.All(years, year =>
+            {
+                bool started = year.GetProperty("calendarYear").GetInt32() >= 2044;
+                Assert.Equal(started, year.GetProperty("rmdDivisor").ValueKind == JsonValueKind.Number);
+                if (!started) Assert.Equal(0, year.GetProperty("requiredMinimumDistribution").GetDouble());
+                Assert.True(year.TryGetProperty("rmdSurplusToBrokerage", out _));
+            });
+            Assert.Contains(years, year => year.GetProperty("calendarYear").GetInt32() == 2044
+                && year.GetProperty("rmdDivisor").GetDouble() == 24.6);
+        }
+
+        [Fact]
         public async Task AnAllocationThatDoesNotTotal100Percent_IsA400()
         {
             var request = DefaultRequest();

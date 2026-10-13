@@ -4,21 +4,22 @@ namespace MonteCarloSimulation.StrategyLab
 {
     // Builds one year's withdrawal step by step for the lab's candidate orders: each step draws from one bucket, up
     // to a cap, until the year's net need is met. Taxes are always the year's exact totals - ordinary income
-    // (taxable Social Security plus Tax Deferred draws) with every realized gain stacked on top - so the steps can
-    // come in any order. Mirrors TaxOptimizedWithdrawalStrategy's accounting and clamps.
+    // (taxable Social Security and any required minimum distribution, plus Tax Deferred draws) with every realized
+    // gain stacked on top - so the steps can come in any order. Mirrors TaxOptimizedWithdrawalStrategy's accounting
+    // and clamps.
     internal sealed class YearDraw
     {
         private readonly WithdrawalContext _c;
         private readonly TaxYear _taxYear;
         private readonly double _gf;
-        private readonly double _ssTax;
+        private readonly double _baseTax;
 
         public YearDraw(in WithdrawalContext context)
         {
             _c = context;
             _taxYear = context.TaxYear;
             _gf = Math.Clamp(context.GainFraction, 0.0, 1.0);
-            _ssTax = _taxYear.OrdinaryTax(context.SsTaxable);
+            _baseTax = _taxYear.OrdinaryTax(context.BaseOrdinaryIncome);
             Remaining = context.Need;
         }
 
@@ -31,9 +32,9 @@ namespace MonteCarloSimulation.StrategyLab
         public double BrokerageLeft => Math.Max(0, _c.Brokerage) - GrossBrokerage;
         public double Gains => GrossBrokerage * _gf;
 
-        // The year's tax on top of Social Security's own, for these gross draws.
+        // The year's tax on top of the base income's own, for these gross draws.
         public double ExtraTax(double grossTaxable, double grossBrokerage) =>
-            _taxYear.TotalTax(_c.SsTaxable + grossTaxable, grossBrokerage * _gf) - _ssTax;
+            _taxYear.TotalTax(_c.BaseOrdinaryIncome + grossTaxable, grossBrokerage * _gf) - _baseTax;
 
         // Cash left from these gross draws after that tax.
         public double CashAfterTax(double grossTaxable, double grossBrokerage) =>
@@ -48,11 +49,11 @@ namespace MonteCarloSimulation.StrategyLab
             if (Gains <= 0)
             {
                 // No gains realized yet: ordinary income only, so the closed-form gross-up is exact.
-                double netSoFar = GrossTaxable - _taxYear.IncrementalOrdinaryTax(_c.SsTaxable, GrossTaxable);
-                double netAtMax = maxGross - _taxYear.IncrementalOrdinaryTax(_c.SsTaxable, maxGross);
+                double netSoFar = GrossTaxable - _taxYear.IncrementalOrdinaryTax(_c.BaseOrdinaryIncome, GrossTaxable);
+                double netAtMax = maxGross - _taxYear.IncrementalOrdinaryTax(_c.BaseOrdinaryIncome, maxGross);
                 double net = Math.Min(Remaining, netAtMax - netSoFar);
                 // Clamp: re-grossing can overshoot the cap by float rounding
-                GrossTaxable = Math.Min(maxGross, _taxYear.GrossUpOrdinary(netSoFar + net, _c.SsTaxable));
+                GrossTaxable = Math.Min(maxGross, _taxYear.GrossUpOrdinary(netSoFar + net, _c.BaseOrdinaryIncome));
                 Remaining -= net;
                 return;
             }
@@ -80,7 +81,7 @@ namespace MonteCarloSimulation.StrategyLab
             double left = Math.Min(grossCap, Math.Max(0, _c.Brokerage)) - GrossBrokerage;
             if (Remaining <= 0 || left <= 0) return;
 
-            double ordinary = _c.SsTaxable + GrossTaxable;
+            double ordinary = _c.BaseOrdinaryIncome + GrossTaxable;
             double netSale = Math.Min(Remaining, _taxYear.BrokerageNetCapacity(left, _gf, ordinary, Gains));
             double sale = Math.Min(left, _taxYear.GrossUpBrokerageSale(netSale, _gf, ordinary, Gains));
             GrossBrokerage += sale;

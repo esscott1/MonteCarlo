@@ -51,7 +51,7 @@ namespace MonteCarloSimulation.StrategyLab.Tests
                 double roth = rng.NextDouble() < 0.3 ? 0 : rng.NextDouble() * 400_000;
                 var context = new WithdrawalContext(
                     Need: rng.NextDouble() * 300_000,
-                    SsTaxable: rng.NextDouble() < 0.4 ? 0 : rng.NextDouble() * 60_000,
+                    BaseOrdinaryIncome: rng.NextDouble() < 0.4 ? 0 : rng.NextDouble() * 60_000,
                     TaxYear: taxYear,
                     EligibleTaxable: ageEligible ? taxDeferred : 0,
                     Brokerage: rng.NextDouble() < 0.15 ? 0 : rng.NextDouble() * 1_500_000,
@@ -68,9 +68,9 @@ namespace MonteCarloSimulation.StrategyLab.Tests
                     if (!ageEligible) Assert.Equal(0, plan.GrossTaxable);
 
                     // Cash after the year's exact taxes covers the need, unless the plan reports a shortfall
-                    double ssTax = taxYear.OrdinaryTax(context.SsTaxable);
+                    double ssTax = taxYear.OrdinaryTax(context.BaseOrdinaryIncome);
                     double cash = plan.GrossTaxable + plan.GrossBrokerage + plan.Roth
-                        - (taxYear.TotalTax(context.SsTaxable + plan.GrossTaxable, plan.RealizedGains) - ssTax);
+                        - (taxYear.TotalTax(context.BaseOrdinaryIncome + plan.GrossTaxable, plan.RealizedGains) - ssTax);
                     if (!plan.IsShortfall)
                         Assert.True(Math.Abs(cash - context.Need) < 0.02, $"{order.Code} netted {cash:F4} for a need of {context.Need:F4}");
                     else

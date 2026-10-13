@@ -23,26 +23,26 @@ namespace MonteCarloSimulation.Core
             double remaining = c.Need;
 
             // 1. Brokerage up to the sale whose gains exactly fill the 0% band - untaxed, so net == gross.
-            double zeroRateSaleCap = gf > 0 ? taxYear.ZeroRateGainRoom(c.SsTaxable, 0) / gf : double.PositiveInfinity;
+            double zeroRateSaleCap = gf > 0 ? taxYear.ZeroRateGainRoom(c.BaseOrdinaryIncome, 0) / gf : double.PositiveInfinity;
             double grossBrokerage = Math.Min(Math.Min(remaining, brokerageAvailable), zeroRateSaleCap);
             double gains = grossBrokerage * gf;
             remaining -= grossBrokerage;
 
             // 2. Tax Deferred up to the fill ceiling. Income stays at or below the 0% ceiling whenever gains were
             // realized, so the ordinary-only closed-form gross-up is exact here.
-            double ceiling = taxYear.OrdinaryFillCeiling(c.SsTaxable, gains);
-            double maxTaxableGross = Math.Min(Math.Max(0, ceiling - c.SsTaxable), Math.Max(0, c.EligibleTaxable));
-            double maxTaxableNet = maxTaxableGross - taxYear.IncrementalOrdinaryTax(c.SsTaxable, maxTaxableGross);
+            double ceiling = taxYear.OrdinaryFillCeiling(c.BaseOrdinaryIncome, gains);
+            double maxTaxableGross = Math.Min(Math.Max(0, ceiling - c.BaseOrdinaryIncome), Math.Max(0, c.EligibleTaxable));
+            double maxTaxableNet = maxTaxableGross - taxYear.IncrementalOrdinaryTax(c.BaseOrdinaryIncome, maxTaxableGross);
             double netTaxable = Math.Min(remaining, maxTaxableNet);
             // Clamp: re-grossing a net derived from the full cap can overshoot it by float rounding,
             // which would leave the bucket at -1e-10 and falsely trip the negative-balance failure.
-            double grossTaxable = Math.Min(maxTaxableGross, taxYear.GrossUpOrdinary(netTaxable, c.SsTaxable));
+            double grossTaxable = Math.Min(maxTaxableGross, taxYear.GrossUpOrdinary(netTaxable, c.BaseOrdinaryIncome));
             remaining -= netTaxable;
 
             // 3. More Brokerage, its gains stacked on all ordinary income so far and step 1's gains.
             if (remaining > 0)
             {
-                double ordinaryIncome = c.SsTaxable + grossTaxable;
+                double ordinaryIncome = c.BaseOrdinaryIncome + grossTaxable;
                 double brokerageLeft = brokerageAvailable - grossBrokerage;
                 double netSale = Math.Min(remaining, taxYear.BrokerageNetCapacity(brokerageLeft, gf, ordinaryIncome, gains));
                 double sale = Math.Min(brokerageLeft, taxYear.GrossUpBrokerageSale(netSale, gf, ordinaryIncome, gains));
@@ -57,7 +57,7 @@ namespace MonteCarloSimulation.Core
             // (at least 1 - 37% - 20%), so the search is monotone.
             if (remaining > 0 && c.EligibleTaxable > grossTaxable)
             {
-                var cash = new CashAfterTax(taxYear, c.SsTaxable, gains, grossBrokerage, taxYear.OrdinaryTax(c.SsTaxable), 0);
+                var cash = new CashAfterTax(taxYear, c.BaseOrdinaryIncome, gains, grossBrokerage, taxYear.OrdinaryTax(c.BaseOrdinaryIncome), 0);
                 double target = cash.Of(grossTaxable) + remaining;
                 double maxGross = c.EligibleTaxable;
                 double cashAtMax = cash.Of(maxGross);
@@ -81,13 +81,13 @@ namespace MonteCarloSimulation.Core
         }
 
         // Step 4's after-tax cash for a gross Tax Deferred draw: the draw plus the Brokerage sales, less the tax the
-        // draw adds on top of Social Security's own (ordinary tax, plus the gains it pushes into higher brackets).
+        // draw adds on top of the base income's own (ordinary tax, plus the gains it pushes into higher brackets).
         // As a Bisection predicate it holds once that cash reaches Target.
         private readonly record struct CashAfterTax(
-            TaxYear TaxYear, double SsTaxable, double BrokerageGains, double SaleTotal, double SsTax, double Target) : Bisection.IPredicate
+            TaxYear TaxYear, double BaseIncome, double BrokerageGains, double SaleTotal, double BaseTax, double Target) : Bisection.IPredicate
         {
             public double Of(double taxableGross) =>
-                taxableGross + SaleTotal - (TaxYear.TotalTax(SsTaxable + taxableGross, BrokerageGains) - SsTax);
+                taxableGross + SaleTotal - (TaxYear.TotalTax(BaseIncome + taxableGross, BrokerageGains) - BaseTax);
 
             public bool Holds(double taxableGross) => Of(taxableGross) >= Target;
         }
