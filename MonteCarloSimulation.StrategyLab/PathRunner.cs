@@ -4,8 +4,9 @@ namespace MonteCarloSimulation.StrategyLab
 {
     // Runs Core's own per-run loop (RunSimulator) one seeded market path at a time for one scenario and one
     // combination - the Optimal page's method (PathSimulator), copied here so the Optimizer isn't touched. Path `i`
-    // always uses `new Random(i)`, so every combination and spend sees the same markets. Not thread-safe: each
-    // instance owns a private parameter copy and changes its Withdrawal.
+    // always uses `new Random(pathOffset + i)`, so every combination and spend sees the same markets; an offset gives
+    // a fresh set of markets (the schedule study's validation). Not thread-safe: each instance owns a private
+    // parameter copy and changes its Withdrawal.
     internal sealed class PathRunner
     {
         public const double Precision = 100;
@@ -14,16 +15,21 @@ namespace MonteCarloSimulation.StrategyLab
         private readonly IReadOnlyList<RetirementYear> _timeline;
         private readonly IWithdrawalStrategy _strategy;
         private readonly ConversionCeiling _ceiling;
+        private readonly ConversionSchedule? _schedule;
+        private readonly int _pathOffset;
         private readonly double _initialUpperBound;
         private readonly double _finalInflation;
 
-        public PathRunner(SimulationParameters scenario, Combination combination)
+        public PathRunner(SimulationParameters scenario, Combination combination, int pathOffset = 0)
         {
             _parameters = Scenario.Copy(scenario);
             _parameters.Iterations = 1;
             _parameters.EnableRothConversions = combination.Policy.Converts;
             if (combination.Funding is not null) _parameters.ConversionTaxFunding = combination.Funding.Value;
             _ceiling = combination.Policy.Ceiling ?? RothConversion.DefaultCeiling;
+            // A schedule depends on the household (its Social Security start, its RMD age), so it's built once here
+            _schedule = combination.Policy.Schedule?.Invoke(_parameters);
+            _pathOffset = pathOffset;
             _strategy = combination.Order.Strategy;
             _timeline = RetirementTimeline.Build(_parameters);
             _finalInflation = _timeline[^1].InflationFactor;
@@ -38,7 +44,7 @@ namespace MonteCarloSimulation.StrategyLab
         public RunSummary Run(double annualWithdrawal, int path, out Accounts finalAccounts)
         {
             _parameters.Withdrawal = annualWithdrawal;
-            return RunSimulator.Simulate(_parameters, _timeline, _strategy, new Random(path), _ceiling, out finalAccounts);
+            return RunSimulator.Simulate(_parameters, _timeline, _strategy, new Random(_pathOffset + path), _ceiling, out finalAccounts, _schedule);
         }
 
         // One path at a fixed spend: survival, lifetime taxes, and after-tax ending wealth in today's dollars (0 if it failed).

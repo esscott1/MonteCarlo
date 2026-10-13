@@ -19,19 +19,19 @@ namespace MonteCarloSimulation.StrategyLab
     {
         public const double TargetSurvival = 0.825;
 
-        public static IReadOnlyList<ResultRow> Evaluate(Scenario scenario, IReadOnlyList<Combination> combinations, int paths)
+        public static IReadOnlyList<ResultRow> Evaluate(Scenario scenario, IReadOnlyList<Combination> combinations, int paths, int pathOffset = 0)
         {
             // The baseline (today's default) is searched cold; its break-evens then seed every other combination's
             // search on the same path.
             var baseline = combinations[0];
-            var baselineRunner = new PathRunner(scenario.Parameters, baseline);
+            var baselineRunner = new PathRunner(scenario.Parameters, baseline, pathOffset);
             var baselineBreakEvens = Enumerable.Range(0, paths).Select(path => baselineRunner.BreakEven(path)).ToArray();
             double commonSpend = SpendAtSurvival(Sorted(baselineBreakEvens), TargetSurvival);
 
             var rows = new List<ResultRow>(combinations.Count);
             foreach (var combination in combinations)
             {
-                var runner = combination == baseline ? baselineRunner : new PathRunner(scenario.Parameters, combination);
+                var runner = combination == baseline ? baselineRunner : new PathRunner(scenario.Parameters, combination, pathOffset);
                 var breakEvens = combination == baseline
                     ? baselineBreakEvens
                     : Enumerable.Range(0, paths).Select(path => runner.BreakEven(path, baselineBreakEvens[path])).ToArray();

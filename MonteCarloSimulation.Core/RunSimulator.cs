@@ -9,14 +9,15 @@ namespace MonteCarloSimulation.Core
 
         // The same run with a given Roth conversion ceiling (null: no conversions), also handing back the final
         // balances (AutomaticStrategy and the Strategy Lab value what's left after tax). Conversions still happen
-        // only when EnableRothConversions is set.
+        // only when EnableRothConversions is set. A conversion schedule (the Strategy Lab's) replaces the ceiling
+        // with a choice made each year.
         public static RunSummary Simulate(
             SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, IWithdrawalStrategy strategy, Random random,
-            ConversionCeiling? conversionCeiling, out Accounts finalAccounts)
+            ConversionCeiling? conversionCeiling, out Accounts finalAccounts, ConversionSchedule? conversionSchedule = null)
         {
             finalAccounts = Accounts.FromParameters(parameters);
             var years = new List<RunYearDetail>(timeline.Count);
-            int? failureYear = Run(parameters, timeline, strategy, random, default, conversionCeiling, finalAccounts, years);
+            int? failureYear = Run(parameters, timeline, strategy, random, default, conversionCeiling, conversionSchedule, finalAccounts, years);
             return new RunSummary { Years = years, FailureYear = failureYear };
         }
 
@@ -25,10 +26,10 @@ namespace MonteCarloSimulation.Core
         // Simulate with the Random that drew those returns doesn't fail.
         public static bool Survives(
             SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, IWithdrawalStrategy strategy, ReadOnlySpan<double> returns,
-            ConversionCeiling? conversionCeiling, out Accounts finalAccounts)
+            ConversionCeiling? conversionCeiling, out Accounts finalAccounts, ConversionSchedule? conversionSchedule = null)
         {
             finalAccounts = Accounts.FromParameters(parameters);
-            return Run(parameters, timeline, strategy, null, returns, conversionCeiling, finalAccounts, null) is null;
+            return Run(parameters, timeline, strategy, null, returns, conversionCeiling, conversionSchedule, finalAccounts, null) is null;
         }
 
         // The annual returns `new Random(path)` draws for each path, one per timeline year: what Simulate would draw
@@ -77,7 +78,8 @@ namespace MonteCarloSimulation.Core
         // `years` collects the year-by-year report when given. Returns the failure year, or null if the run survives.
         private static int? Run(
             SimulationParameters parameters, IReadOnlyList<RetirementYear> timeline, IWithdrawalStrategy strategy,
-            Random? random, ReadOnlySpan<double> returns, ConversionCeiling? conversionCeiling, Accounts accounts, List<RunYearDetail>? years)
+            Random? random, ReadOnlySpan<double> returns, ConversionCeiling? conversionCeiling, ConversionSchedule? conversionSchedule,
+            Accounts accounts, List<RunYearDetail>? years)
         {
             // Medicare IRMAA looks back two years (MedicareIrmaa.LookbackYears); the model's first two years have no
             // lookback inside it
@@ -89,7 +91,8 @@ namespace MonteCarloSimulation.Core
                 double? lookbackMagi = retirementYear.Index >= MedicareIrmaa.LookbackYears ? magiTwoYearsAgo : null;
 
                 var step = SimulateYear(
-                    parameters, strategy, conversionCeiling, accounts, retirementYear, BridgeNeed(parameters, timeline, retirementYear), lookbackMagi, rate);
+                    parameters, strategy, conversionCeiling, conversionSchedule, accounts, retirementYear,
+                    BridgeNeed(parameters, timeline, retirementYear), lookbackMagi, rate);
                 magiTwoYearsAgo = magiLastYear;
                 magiLastYear = step.Magi;
                 years?.Add(Report(retirementYear, rate, step, accounts));
@@ -124,7 +127,7 @@ namespace MonteCarloSimulation.Core
         // Advances the balances through one year. Everything that changes the run's state happens here; Report only
         // describes it.
         private static YearStep SimulateYear(
-            SimulationParameters parameters, IWithdrawalStrategy strategy, ConversionCeiling? conversionCeiling,
+            SimulationParameters parameters, IWithdrawalStrategy strategy, ConversionCeiling? conversionCeiling, ConversionSchedule? conversionSchedule,
             Accounts accounts, RetirementYear year, double bridgeNeed, double? lookbackMagi, double rate)
         {
             // Today's-dollar inputs, inflated to this calendar year. Spending and returns are prorated for a partial
@@ -163,9 +166,12 @@ namespace MonteCarloSimulation.Core
             accounts.SellBrokerage(plan.GrossBrokerage);
             accounts.WithdrawRoth(plan.Roth);
 
-            // The RMD itself is never converted: the conversion fills on top of it
-            var conversion = parameters.EnableRothConversions && conversionCeiling is not null
-                ? RothConversion.Apply(accounts, taxYear, baseOrdinaryIncome + plan.GrossTaxable, plan.RealizedGains, conversionCeiling,
+            // The RMD itself is never converted: the conversion fills on top of it. A schedule picks this year's ceiling.
+            var ceiling = !parameters.EnableRothConversions ? null
+                : conversionSchedule is null ? conversionCeiling
+                : conversionSchedule(year, accounts);
+            var conversion = ceiling is not null
+                ? RothConversion.Apply(accounts, taxYear, baseOrdinaryIncome + plan.GrossTaxable, plan.RealizedGains, ceiling,
                     new ConversionFunding(parameters.ConversionTaxFunding, ageEligible, bridgeNeed))
                 : RothConversion.None;
 

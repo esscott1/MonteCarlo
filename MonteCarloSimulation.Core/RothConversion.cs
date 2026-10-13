@@ -5,6 +5,11 @@ namespace MonteCarloSimulation.Core
     // alternatives to compare against it.
     internal delegate double ConversionCeiling(TaxYear taxYear, double ordinaryIncomeSoFar, double gainsSoFar);
 
+    // A conversion ceiling that can change from year to year (the Strategy Lab's schedules): given the year and the
+    // balances after its withdrawals, the ceiling to fill to that year, or null to convert nothing. The app doesn't
+    // use one: its runs keep one ceiling for every year.
+    internal delegate ConversionCeiling? ConversionSchedule(RetirementYear year, Accounts accounts);
+
     // Where a conversion's tax may come from this year. AgeEligible is the year's 59.5 gate; BridgeNeed is the
     // spending still to come before the gate opens (today's model years after this one), which BridgeAware keeps
     // in Brokerage.
