@@ -36,7 +36,8 @@ namespace MonteCarloSimulation.StrategyLab
         ];
 
         public static ScheduleStudyResult Run(
-            CandidateSet set, IReadOnlyList<Scenario> scenarios, IReadOnlyList<ResultRow> fitRows, IReadOnlyList<ResultRow> validationRows, int seed)
+            CandidateSet set, IReadOnlyList<Scenario> scenarios, IReadOnlyList<ResultRow> fitRows, IReadOnlyList<ResultRow> validationRows, int seed,
+            int tradeoffPaths = 0)
         {
             var fit = Index(fitRows);
             var validation = Index(validationRows);
@@ -124,8 +125,50 @@ namespace MonteCarloSimulation.StrategyLab
                 .OrderByDescending(u => u.MeanAddedGain).Take(15).ToList();
             double scheduleBestShare = train.Count(s => scheduleCodes.Contains(bestOfAll[s.Id])) / (double)train.Count;
 
+            var tradeoffs = tradeoffPaths > 0 ? EarlyConversionTradeoffs(set, included, fit, tradeoffPaths) : [];
+
             return new ScheduleStudyResult(train.Count, holdout.Count, scheduleCodes.Count, scheduleBestShare, results, topSchedules,
-                AdoptMeanGain, AdoptWorstSliceMean);
+                AdoptMeanGain, AdoptWorstSliceMean, tradeoffs);
+        }
+
+        // The "convert heavily early" policies the trade-off table compares with the baseline (the app's 12% fill)
+        public static readonly string[] HeavyEarlyCodes = ["W2+C3", "W2+C4", "W2+S24>12@SS", "W2+S22>12@63", "W2+S24>12@RMD"];
+
+        // What converting heavily early does beyond the 82.5% spend: every household run at the baseline's 82.5% spend
+        // on the fit markets, comparing the after-tax money left (today's dollars) in its strong
+        // markets (the 90th-percentile path) and its weaker ones (the 25th percentile), against the baseline's own.
+        private static List<EarlyConversionTradeoff> EarlyConversionTradeoffs(
+            CandidateSet set, List<Scenario> households, Dictionary<int, Dictionary<string, ResultRow>> fit, int paths)
+        {
+            var baseline = set.Baseline;
+            var combinations = HeavyEarlyCodes.Select(code => set.All.Single(c => c.Code == code)).ToList();
+            // Per household and combination: the 90th- and 25th-percentile after-tax wealth left; [0] is the baseline
+            var wealth = new (double Strong, double Weak)[households.Count][];
+            Parallel.For(0, households.Count, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
+            {
+                var s = households[i];
+                double spend = fit[s.Id][baseline.Code].Spend825;
+                wealth[i] = combinations.Prepend(baseline).Select(c =>
+                {
+                    var runner = new PathRunner(s.Parameters, c);
+                    var left = Enumerable.Range(0, paths).Select(path => runner.Outcome(spend, path).AfterTaxEndingWealth).ToArray();
+                    return (Analysis.Percentile(left, 0.9), Analysis.Percentile(left, 0.25));
+                }).ToArray();
+            });
+
+            return combinations.Select((c, k) =>
+            {
+                double[] Diffs(Func<(double Strong, double Weak), double> pick) => Enumerable.Range(0, households.Count)
+                    .Where(i => pick(wealth[i][0]) > 0)
+                    .Select(i => pick(wealth[i][k + 1]) / pick(wealth[i][0]) - 1).ToArray();
+                var strong = Diffs(w => w.Strong);
+                var weak = Diffs(w => w.Weak);
+                return new EarlyConversionTradeoff(
+                    c.Code, c.Policy.Name,
+                    households.Average(s => fit[s.Id][c.Code].Spend825 / fit[s.Id][baseline.Code].Spend825 - 1),
+                    Analysis.Percentile(strong, 0.5), Analysis.Share(strong, v => v > 0),
+                    Analysis.Percentile(weak, 0.5), Analysis.Share(weak, v => v > 0));
+            }).ToList();
         }
 
         private static Dictionary<int, Dictionary<string, ResultRow>> Index(IReadOnlyList<ResultRow> rows) =>
@@ -202,8 +245,19 @@ namespace MonteCarloSimulation.StrategyLab
     // gain from offering it beside the app's eight pairs.
     internal sealed record ScheduleUsage(string Code, string Name, double ShareBest, double MeanAddedGain);
 
+    // TradeOffs (with tradeoffPaths > 0): the "convert heavily early" policies against the baseline beyond the 82.5% spend.
     internal sealed record ScheduleStudyResult(
         int FitHouseholds, int HoldoutHouseholds, int Schedules, double ShareWhereAScheduleIsBest,
         IReadOnlyList<ScheduleRuleResult> Rules, IReadOnlyList<ScheduleUsage> TopSchedules,
-        double AdoptMeanGain, double AdoptWorstSliceMean);
+        double AdoptMeanGain, double AdoptWorstSliceMean, IReadOnlyList<EarlyConversionTradeoff> TradeOffs);
+
+    // One "convert heavily early" policy against the baseline: its 82.5% spend (mean % difference), and the after-tax
+    // money left at the baseline's 82.5% spend in each household's strong markets (90th-percentile path) and weaker ones
+    // (25th percentile): the median % difference across households and the share of households where it leaves more.
+    // (Survival at that one spend isn't reported: where many markets break even at nearly the same spend - often the
+    // years before 59.5 - a spend $100 lower moves it by many points, so its average misleads.)
+    internal sealed record EarlyConversionTradeoff(
+        string Code, string Name, double MeanSpendDiff,
+        double StrongMarketWealthMedianDiff, double StrongMarketWealthHigherShare,
+        double WeakMarketWealthMedianDiff, double WeakMarketWealthHigherShare);
 }

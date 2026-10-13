@@ -19,7 +19,8 @@ using MonteCarloSimulation.StrategyLab;
 // schedules.json in the validation folder.
 // Completed scenarios are appended to results.csv as they finish; rerunning with the same settings (and the same
 // engine - see EngineFingerprint) resumes and redoes only the fast parts. --publish (main set) writes summary.json to
-// the web app, where the Model Info page reads it, including the funding comparison if that run exists.
+// the web app, where the Model Info page reads it, including the funding comparison and the schedule study when those
+// runs exist.
 
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
@@ -130,6 +131,22 @@ if (set == Candidates.Main)
     {
         Console.WriteLine("No complete funding run with these settings; the summary has no funding comparison (run --set funding first).");
     }
+
+    // The schedule study, from its two runs with the same settings: why the app keeps one conversion line per household
+    var scheduleFit = LabCsv.ReadResults(Path.Combine(RunDir(Candidates.Schedules), "results.csv"));
+    var scheduleValidation = LabCsv.ReadResults(Path.Combine(RunDir(Candidates.Schedules, paths), "results.csv"));
+    if (scheduleFit.Count == scenarioCount * Candidates.Schedules.All.Count && scheduleValidation.Count == scheduleFit.Count)
+    {
+        Console.WriteLine("Schedule study...");
+        summary = summary with
+        {
+            ScheduleStudy = ScheduleStudy.Run(Candidates.Schedules, scenarios, scheduleFit, scheduleValidation, seed, tradeoffPaths: paths)
+        };
+    }
+    else
+    {
+        Console.WriteLine("No complete schedule study with these settings; the summary has none (run --set schedules, then --set schedules --validate).");
+    }
 }
 
 var json = JsonSerializer.Serialize(summary, SummaryJson.Options);
@@ -163,7 +180,7 @@ if (set == Candidates.Schedules)
         return 0;
     }
 
-    var study = ScheduleStudy.Run(set, scenarios, fitRows, validationRows, seed);
+    var study = ScheduleStudy.Run(set, scenarios, fitRows, validationRows, seed, tradeoffPaths: paths);
     var studyPath = Path.Combine(RunDir(set, paths), "schedules.json");
     File.WriteAllText(studyPath, JsonSerializer.Serialize(study, SummaryJson.Options));
     Console.WriteLine();
@@ -179,6 +196,12 @@ if (set == Candidates.Schedules)
     Console.WriteLine("Schedules that add the most beside today's pick (in sample):");
     foreach (var u in study.TopSchedules.Take(10))
         Console.WriteLine($"  {u.Code,-14} +{u.MeanAddedGain:P2} on average, best for {u.ShareBest:P1}  {u.Name}");
+    Console.WriteLine($"Converting heavily early, at {set.Baseline.Code}'s 82.5% spend (after-tax money left: median % difference, share of households higher):");
+    Console.WriteLine($"  {"",-14} {"82.5% spend",11} {"strong markets (p90)",22} {"weaker markets (p25)",22}");
+    foreach (var o in study.TradeOffs)
+        Console.WriteLine($"  {o.Code,-14} {o.MeanSpendDiff,11:P2} " +
+                          $"{$"{o.StrongMarketWealthMedianDiff:P1} ({o.StrongMarketWealthHigherShare:P0})",22} " +
+                          $"{$"{o.WeakMarketWealthMedianDiff:P1} ({o.WeakMarketWealthHigherShare:P0})",22}");
     Console.WriteLine(study.Rules.Any(r => r.Adopted)
         ? "Verdict: at least one rule meets the adoption bar (see ADOPT)."
         : $"Verdict: no rule meets the adoption bar (held-out mean >= {study.AdoptMeanGain:P1} with its 95% interval above 0, " +

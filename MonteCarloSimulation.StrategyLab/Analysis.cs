@@ -444,7 +444,8 @@ namespace MonteCarloSimulation.StrategyLab
         FundingComparison? Funding,
         List<OrderChoice>? OrderChoice,
         OptimalDefaultsComparison? OptimalDefaults,
-        ConversionChoice? ConversionChoice);
+        ConversionChoice? ConversionChoice,
+        ScheduleStudyResult? ScheduleStudy = null);
 
     // The app's pick of order and conversion line, against the best of every combination per household (Rows use
     // OrderChoice's shape, with "best" meaning best of all). TargetShares: how often each target wins the ideal

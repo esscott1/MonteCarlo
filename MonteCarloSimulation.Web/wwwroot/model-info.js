@@ -236,6 +236,86 @@ function orderChoice(s) {
             : t('info.orders.noneQualifies')}</p>`;
 }
 
+// The schedule study's rules, by the lab's English name: one schedule for everyone, today's pick plus K schedules or
+// every schedule, and the decision tree
+function earlyRuleName(name) {
+    if (name === 'One schedule for everyone') return t('info.early.rule.single');
+    if (name === "Today's pick plus every schedule") return t('info.early.rule.plusAll');
+    if (name === 'Decision tree') return t('info.early.rule.tree');
+    const added = /^Today's pick plus (\d+) schedules?$/.exec(name);
+    return added ? t(added[1] === '1' ? 'info.early.rule.plusOne' : 'info.early.rule.plusMany', { count: added[1] }) : escapeHtml(name);
+}
+
+// The "convert heavily early" policies the trade-off table shows, by lab code
+const earlyPolicyKeys = {
+    'W2+C3': 'info.early.policy.top22',
+    'W2+C4': 'info.early.policy.top24',
+    'W2+S24>12@SS': 'info.early.policy.top24BeforeSs',
+    'W2+S22>12@63': 'info.early.policy.top22Before63',
+    'W2+S24>12@RMD': 'info.early.policy.top24BeforeRmd',
+};
+
+// Why the app doesn't convert heavily early: the schedule study (conversion lines that change from year to year),
+// judged out of sample, and what converting heavily early does at the app's own 82.5% spend in strong and weaker
+// markets. The app's goal is the spend that survives 80-85% of markets, not the largest balance when markets go well.
+function earlyConversion(s) {
+    const st = s.scheduleStudy;
+    const rules = st.rules.map((r) => `<tr class="${r.adopted ? 'recommended-row' : ''}">
+        <td>${earlyRuleName(r.name)}</td>
+        <td class="num">${pct(r.inSampleMeanGain, 2)}</td>
+        <td class="num ${tone(r.meanGain)}">${pct(r.meanGain, 2)}</td>
+        <td class="num">${t('info.range', { from: pct(r.meanGainCi[0], 2), to: pct(r.meanGainCi[1], 2) })}</td>
+        <td>${r.adopted ? t('info.yes') : t('info.no')}</td></tr>`);
+    const tradeOffs = st.tradeOffs.map((o) => `<tr>
+        <td>${earlyPolicyKeys[o.code] ? t(earlyPolicyKeys[o.code]) : labLabel(o.name)} ${code(o.code)}</td>
+        <td class="num ${tone(o.meanSpendDiff)}">${pct(o.meanSpendDiff, 2)}</td>
+        <td class="num ${tone(o.strongMarketWealthMedianDiff)}">${pct(o.strongMarketWealthMedianDiff, 1)}</td>
+        <td class="num">${share(o.strongMarketWealthHigherShare)}</td>
+        <td class="num ${tone(o.weakMarketWealthMedianDiff)}">${pct(o.weakMarketWealthMedianDiff, 1)}</td>
+        <td class="num">${share(o.weakMarketWealthHigherShare)}</td></tr>`);
+
+    const single = st.rules.find((r) => r.name === 'One schedule for everyone');
+    const all = st.rules.find((r) => r.name === "Today's pick plus every schedule");
+    const range = (values, format) => {
+        const sorted = [...values].sort((a, b) => a - b);
+        return t('info.range', { from: format(sorted[0]), to: format(sorted[sorted.length - 1]) });
+    };
+    const strongMedians = st.tradeOffs.map((o) => o.strongMarketWealthMedianDiff);
+    const noneMoreInMedian = strongMedians.every((v) => v <= 0.0005);
+
+    return `
+        <p>${t('info.early.intro', { schedules: st.schedules })}</p>
+        <p>${t('info.early.method', {
+            fit: st.fitHouseholds.toLocaleString('en-US'),
+            holdout: st.holdoutHouseholds.toLocaleString('en-US'),
+            bar: pct(st.adoptMeanGain, 1),
+            worst: pct(st.adoptWorstSliceMean, 0),
+        })}</p>
+        ${table([t('info.early.col.rule'), t('info.early.col.inSample'), t('info.early.col.heldOut'), t('info.col.interval'), t('info.early.col.adopted')], rules)}
+        <p>${st.rules.some((r) => r.adopted)
+            ? t('info.early.verdictAdopted')
+            : t('info.early.verdict', {
+                added: all ? pct(all.meanGain, 2) : '',
+                from: all ? pct(all.meanGainCi[0], 2) : '',
+                to: all ? pct(all.meanGainCi[1], 2) : '',
+                single: single ? pct(single.meanGain, 1) : '',
+            })}</p>
+        <h3>${t('info.early.tradeOffs.heading')}</h3>
+        <p>${t('info.early.tradeOffs.intro', { baseline: code(s.baseline) })}</p>
+        ${table([t('info.early.col.policy'), t('info.early.col.spend'), t('info.early.col.strong'), t('info.early.col.more'), t('info.early.col.weak'), t('info.early.col.more')], tradeOffs)}
+        <h3>${t('info.early.why.heading')}</h3>
+        <ul class="info-notes">
+            <li>${t('info.early.why.goal')}</li>
+            <li>${t('info.early.why.weakMarkets')}</li>
+            <li>${t('info.early.why.strongMarkets', {
+                share: range(st.tradeOffs.map((o) => o.strongMarketWealthHigherShare), (v) => share(v)),
+                median: noneMoreInMedian ? t('info.early.why.strongMedian', { range: range(strongMedians, (v) => pct(v, 1)) }) : '',
+            })}</li>
+            <li>${t('info.early.why.edge', { range: range(st.tradeOffs.map((o) => o.weakMarketWealthMedianDiff), (v) => pct(v, 1)) })}</li>
+            <li>${t('info.early.why.pick')}</li>
+        </ul>`;
+}
+
 // The Optimal page's default inputs (its default asset mix) before and after the app chose its own accounts
 function optimalDefaults(s) {
     const r = s.optimalDefaults;
@@ -414,6 +494,7 @@ function conclusions(s, byCode) {
         ${pick ? `<li>${t('info.conclusions.orderPick', { share: share(pick.shareWithinTieBand, 1) })}</li>` : ''}
         <li>${t('info.conclusions.conversionsMatter', { average: share(-noConversions.meanSpendDiff, 1), worst: share(-noConversions.p5SpendDiff) })}</li>
         ${s.conversionChoice ? conversionPick() : ''}
+        ${s.scheduleStudy ? `<li>${t('info.conclusions.earlyConversion', { added: pct(Math.max(...s.scheduleStudy.rules.map((r) => r.meanGain)), 2) })}</li>` : ''}
         ${harvesting ? `<li>${t('info.conclusions.harvesting', { average: pct(harvesting.meanSpendDiff, 2) })}</li>` : ''}
     </ul>`;
 }
@@ -443,6 +524,7 @@ function render() {
         s.funding ? section('funding', t('info.section.funding'), funding(s)) : '',
         section('choosing', t('info.section.choosing'),
             (s.orderChoice ? orderChoice(s) : '') + (s.conversionChoice ? conversionChoice(s) : '') + `<h3>${t('info.direct.heading')}</h3>` + directQuestion(s)),
+        s.scheduleStudy ? section('early-conversion', t('info.section.earlyConversion'), earlyConversion(s)) : '',
         s.optimalDefaults ? section('optimal', t('info.section.optimal'), optimalDefaults(s)) : '',
         section('grid', t('info.section.grid'), grid(s, byCode)),
         section('who-loses', t('info.section.whoLoses'), whoLoses(s)),
