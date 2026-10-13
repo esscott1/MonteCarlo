@@ -11,7 +11,7 @@ namespace MonteCarloSimulation.StrategyLab
         public WithdrawalPlan Plan(in WithdrawalContext c)
         {
             var draw = new YearDraw(c);
-            draw.TaxDeferred(c.TaxYear.Bracket22CeilingGross - c.SsTaxable);
+            draw.TaxDeferred(c.TaxYear.Bracket22CeilingGross - c.BaseOrdinaryIncome);
             draw.Brokerage();
             draw.TaxDeferred();
             draw.RothLast();

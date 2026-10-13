@@ -56,5 +56,11 @@ namespace MonteCarloSimulation.Core
         public required double SocialSecurityTax { get; init; }
         // Monthly Social Security payments received this year (fewer than 12 in the first year of benefits or a partial year)
         public required int SocialSecurityMonths { get; init; }
+        // The required minimum distribution taken from Tax Deferred this year (0 before RMDs start; part of
+        // TaxableWithdrawal, its tax part of TaxDeferredWithdrawalTax), the Uniform Lifetime Table divisor behind it
+        // (null before RMDs start), and its after-tax amount beyond the year's need, saved to Brokerage.
+        public required double RequiredMinimumDistribution { get; init; }
+        public required double? RmdDivisor { get; init; }
+        public required double RmdSurplusToBrokerage { get; init; }
     }
 }

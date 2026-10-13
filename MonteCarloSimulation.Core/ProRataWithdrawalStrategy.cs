@@ -21,11 +21,11 @@ namespace MonteCarloSimulation.Core
             // Gross up the Tax Deferred share (to net the correct after-tax amount), stacked on top of the
             // taxable share of Social Security in the inflation-scaled brackets
             double netTaxable = baseWithdrawal * taxableProportion;
-            double grossTaxable = c.TaxYear.GrossUpOrdinary(netTaxable, c.SsTaxable);
+            double grossTaxable = c.TaxYear.GrossUpOrdinary(netTaxable, c.BaseOrdinaryIncome);
 
             // The Brokerage share's gains stack on top of all of that ordinary income
             double netBrokerage = baseWithdrawal * brokerageProportion;
-            double grossBrokerage = c.TaxYear.GrossUpBrokerageSale(netBrokerage, c.GainFraction, c.SsTaxable + grossTaxable, 0);
+            double grossBrokerage = c.TaxYear.GrossUpBrokerageSale(netBrokerage, c.GainFraction, c.BaseOrdinaryIncome + grossTaxable, 0);
 
             double roth = baseWithdrawal * rothProportion;
 

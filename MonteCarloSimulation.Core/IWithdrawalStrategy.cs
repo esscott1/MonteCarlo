@@ -13,11 +13,12 @@ namespace MonteCarloSimulation.Core
 
     // What a strategy sees for one year, after returns and the age gate.
     //  Need: net (after-tax) dollars the portfolio must supply.
-    //  SsTaxable: taxable Social Security already stacked first in the ordinary brackets.
+    //  BaseOrdinaryIncome: ordinary income already stacked first in the brackets - taxable Social Security plus the
+    //  year's required minimum distribution. The strategy's draws stack on top of it.
     //  EligibleTaxable / EligibleRoth: what the 59.5 gate currently allows. Brokerage is never gated.
     internal readonly record struct WithdrawalContext(
         double Need,
-        double SsTaxable,
+        double BaseOrdinaryIncome,
         TaxYear TaxYear,
         double EligibleTaxable,
         double Brokerage,
@@ -27,7 +28,7 @@ namespace MonteCarloSimulation.Core
     // Net and gross (pre-tax) draw per bucket. Roth is untaxed, so net == gross there. RealizedGains is the
     // embedded gain the Brokerage sale realizes. IsShortfall means the eligible buckets couldn't cover the
     // need - the year fails. Because gains stack on ordinary income, the split of tax between the buckets is
-    // an attribution: TaxableTax is the ordinary tax the Tax Deferred draw adds on top of Social Security,
+    // an attribution: TaxableTax is the ordinary tax the Tax Deferred draw adds on top of BaseOrdinaryIncome,
     // and CapitalGainsTax is the gains tax on the sale stacked on all of the year's ordinary income.
     internal readonly record struct WithdrawalPlan(
         double NetTaxable,
@@ -45,8 +46,8 @@ namespace MonteCarloSimulation.Core
         public static WithdrawalPlan FromGross(in WithdrawalContext c, double grossTaxable, double grossBrokerage, double roth, bool isShortfall)
         {
             double gains = grossBrokerage * Math.Clamp(c.GainFraction, 0.0, 1.0);
-            double ordinaryIncome = c.SsTaxable + grossTaxable;
-            double taxableTax = c.TaxYear.IncrementalOrdinaryTax(c.SsTaxable, grossTaxable);
+            double ordinaryIncome = c.BaseOrdinaryIncome + grossTaxable;
+            double taxableTax = c.TaxYear.IncrementalOrdinaryTax(c.BaseOrdinaryIncome, grossTaxable);
             double capitalGainsTax = c.TaxYear.CapitalGainsTax(ordinaryIncome, gains);
             return new WithdrawalPlan(
                 grossTaxable - taxableTax, grossTaxable, grossBrokerage - capitalGainsTax, grossBrokerage, gains, roth, isShortfall);

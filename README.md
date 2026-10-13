@@ -9,6 +9,12 @@ Married filing jointly. Married uses the 2026 joint brackets, long-term gains br
 ([FederalTaxBrackets.cs](MonteCarloSimulation.Core/FederalTaxBrackets.cs)) and a $32,000 standard deduction default. It
 models two people the same age with one combined Social Security benefit, both paying Medicare's surcharge.
 
+Tax Deferred money is subject to **required minimum distributions** from 73 (born 1951–1959) or 75 (born 1960 or
+later), sized by the IRS Uniform Lifetime Table
+([RequiredMinimumDistributions.cs](MonteCarloSimulation.Core/RequiredMinimumDistributions.cs)). Each year's RMD comes out
+first and is taxed as ordinary income; what spending doesn't need is saved to Brokerage after tax. The Scenario runner's
+year tables mark an RMD year's Tax Deferred withdrawal with an **RMD** footnote explaining the amount.
+
 ## Secondary purpose: illustrating Claude AI and CI/CD concepts
 
 Beyond the retirement simulation itself, this repo doubles as a small, direct illustration of several Claude AI and CI/CD concepts, each implemented as simply as possible rather than abstracted into a reusable framework:

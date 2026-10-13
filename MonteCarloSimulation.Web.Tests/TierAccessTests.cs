@@ -501,7 +501,8 @@ namespace MonteCarloSimulation.Web.Tests
             {
                 bool preview = year.GetProperty("year").GetInt32() < teaserYears;
                 Assert.All(FreeRunView.TaxDetailFields, field => Assert.Equal(preview, year.TryGetProperty(field, out _)));
-                Assert.All(new[] { "ordinaryTaxAmount", "capitalGainsTaxAmount", "taxRate", "withdrawal", "brokerageWithdrawal", "realizedGains", "balance" },
+                Assert.All(new[] { "ordinaryTaxAmount", "capitalGainsTaxAmount", "taxRate", "withdrawal", "brokerageWithdrawal", "realizedGains", "balance",
+                        "requiredMinimumDistribution", "rmdDivisor", "rmdSurplusToBrokerage" },
                     field => Assert.True(year.TryGetProperty(field, out _), field));
             });
         }
