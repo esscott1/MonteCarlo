@@ -241,7 +241,7 @@ namespace MonteCarloSimulation.StrategyLab
         }
 
         // The household types results are sliced by.
-        private static (string Name, Func<Scenario, string> Bin, string[] Order)[] Dimensions(
+        internal static (string Name, Func<Scenario, string> Bin, string[] Order)[] Dimensions(
             string baselineCode, Dictionary<int, Dictionary<string, ResultRow>> byScenario)
         {
             double SpendToAssets(Scenario s) => byScenario[s.Id][baselineCode].Spend825 / s.TotalAssets;
@@ -348,9 +348,9 @@ namespace MonteCarloSimulation.StrategyLab
                    $"{ss}{inheritance}; inv. scenario {s.InvestmentScenarioId}";
         }
 
-        private static double Mean(double[] v) => v.Length == 0 ? 0 : v.Average();
+        internal static double Mean(double[] v) => v.Length == 0 ? 0 : v.Average();
 
-        private static double Share(double[] v, Func<double, bool> test) => v.Length == 0 ? 0 : v.Count(test) / (double)v.Length;
+        internal static double Share(double[] v, Func<double, bool> test) => v.Length == 0 ? 0 : v.Count(test) / (double)v.Length;
 
         // Linear-interpolated percentile.
         public static double Percentile(double[] values, double p)
@@ -364,7 +364,7 @@ namespace MonteCarloSimulation.StrategyLab
         }
 
         // 95% bootstrap interval (percentile method), resampling scenarios.
-        private static double[] Bootstrap(double[] values, Func<double[], double> statistic, Random rng)
+        internal static double[] Bootstrap(double[] values, Func<double[], double> statistic, Random rng)
         {
             if (values.Length == 0) return [0, 0];
             var stats = new double[BootstrapResamples];
@@ -444,7 +444,8 @@ namespace MonteCarloSimulation.StrategyLab
         FundingComparison? Funding,
         List<OrderChoice>? OrderChoice,
         OptimalDefaultsComparison? OptimalDefaults,
-        ConversionChoice? ConversionChoice);
+        ConversionChoice? ConversionChoice,
+        ScheduleStudyResult? ScheduleStudy = null);
 
     // The app's pick of order and conversion line, against the best of every combination per household (Rows use
     // OrderChoice's shape, with "best" meaning best of all). TargetShares: how often each target wins the ideal

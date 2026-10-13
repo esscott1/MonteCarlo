@@ -8,19 +8,25 @@ using MonteCarloSimulation.StrategyLab;
 // spend the most, or does another order or conversion policy do better? Runs every combination on the same seeded
 // market paths for many generated households and writes CSVs plus summary.json.
 //
-//   dotnet run -c Release --project MonteCarloSimulation.StrategyLab -- [--set main|funding] [--scenarios 1000]
+//   dotnet run -c Release --project MonteCarloSimulation.StrategyLab -- [--set main|funding|schedules] [--scenarios 1000]
 //       [--paths 200] [--seed 2026] [--single-year 1000] [--out MonteCarloSimulation.StrategyLab/output] [--quick] [--publish]
+//       [--validate]
 //
-// --set main (default) runs every order x conversion policy; --set funding compares where conversion tax comes from.
+// --set main (default) runs every order x conversion policy; --set funding compares where conversion tax comes from;
+// --set schedules runs Roth conversion lines that change from year to year (ConversionSchedules). --validate reruns
+// the same households on the next --paths markets (path i is new Random(paths + i)), in its own folder: once both the
+// schedules run and its --validate run are complete, either run writes the schedule study (ScheduleStudy) to
+// schedules.json in the validation folder.
 // Completed scenarios are appended to results.csv as they finish; rerunning with the same settings (and the same
 // engine - see EngineFingerprint) resumes and redoes only the fast parts. --publish (main set) writes summary.json to
-// the web app, where the Model Info page reads it, including the funding comparison if that run exists.
+// the web app, where the Model Info page reads it, including the funding comparison and the schedule study when those
+// runs exist.
 
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
 int scenarioCount = 1000, paths = 200, seed = 2026, singleYearCount = 1000;
 string outDir = Path.Combine("MonteCarloSimulation.StrategyLab", "output");
-bool publish = false;
+bool publish = false, validate = false;
 var set = Candidates.Main;
 for (int i = 0; i < args.Length; i++)
 {
@@ -35,22 +41,27 @@ for (int i = 0; i < args.Length; i++)
         case "--out": outDir = Next(); break;
         case "--quick": scenarioCount = 50; break;
         case "--publish": publish = true; break;
+        case "--validate": validate = true; break;
         default: Console.Error.WriteLine($"Unknown argument {args[i]}"); return 1;
     }
 }
-if (publish && set != Candidates.Main)
+if (publish && (set != Candidates.Main || validate))
 {
-    Console.Error.WriteLine("--publish needs the main set (the funding comparison is folded into it).");
+    Console.Error.WriteLine("--publish needs the main set on its own markets (the funding comparison is folded into it).");
     return 1;
 }
 
-string RunDir(CandidateSet s) => Path.Combine(outDir, $"seed{seed}-n{scenarioCount}-p{paths}-{s.Name}-{EngineFingerprint.For(s)}");
+// The validation markets follow the fit run's: paths..2*paths-1
+int pathOffset = validate ? paths : 0;
+string RunDir(CandidateSet s, int offset = 0) =>
+    Path.Combine(outDir, $"seed{seed}-n{scenarioCount}-p{paths}-{s.Name}-{EngineFingerprint.For(s)}" + (offset > 0 ? $"-o{offset}" : ""));
 
-var runDir = RunDir(set);
+var runDir = RunDir(set, pathOffset);
 Directory.CreateDirectory(runDir);
 var stopwatch = Stopwatch.StartNew();
 var combinations = set.All;
-Console.WriteLine($"Strategy Lab ({set.Name}): {scenarioCount} scenarios x {combinations.Count} combinations x {paths} paths, seed {seed} -> {runDir}");
+Console.WriteLine($"Strategy Lab ({set.Name}): {scenarioCount} scenarios x {combinations.Count} combinations x {paths} paths " +
+    $"(from path {pathOffset}), seed {seed} -> {runDir}");
 
 var scenarios = ScenarioGenerator.Generate(scenarioCount, seed);
 LabCsv.WriteScenarios(Path.Combine(runDir, "scenarios.csv"), scenarios);
@@ -68,7 +79,7 @@ var gate = new object();
 int finished = 0;
 Parallel.ForEach(todo, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, scenario =>
 {
-    var scenarioRows = ScenarioEvaluator.Evaluate(scenario, combinations, paths);
+    var scenarioRows = ScenarioEvaluator.Evaluate(scenario, combinations, paths, pathOffset);
     lock (gate)
     {
         LabCsv.AppendResults(resultsPath, scenarioRows);
@@ -120,6 +131,22 @@ if (set == Candidates.Main)
     {
         Console.WriteLine("No complete funding run with these settings; the summary has no funding comparison (run --set funding first).");
     }
+
+    // The schedule study, from its two runs with the same settings: why the app keeps one conversion line per household
+    var scheduleFit = LabCsv.ReadResults(Path.Combine(RunDir(Candidates.Schedules), "results.csv"));
+    var scheduleValidation = LabCsv.ReadResults(Path.Combine(RunDir(Candidates.Schedules, paths), "results.csv"));
+    if (scheduleFit.Count == scenarioCount * Candidates.Schedules.All.Count && scheduleValidation.Count == scheduleFit.Count)
+    {
+        Console.WriteLine("Schedule study...");
+        summary = summary with
+        {
+            ScheduleStudy = ScheduleStudy.Run(Candidates.Schedules, scenarios, scheduleFit, scheduleValidation, seed, tradeoffPaths: paths)
+        };
+    }
+    else
+    {
+        Console.WriteLine("No complete schedule study with these settings; the summary has none (run --set schedules, then --set schedules --validate).");
+    }
 }
 
 var json = JsonSerializer.Serialize(summary, SummaryJson.Options);
@@ -140,4 +167,44 @@ foreach (var c in summary.VsBaseline.OrderByDescending(c => c.MeanSpendDiff))
 Console.WriteLine($"Regret: mean {summary.Regret.Mean:P2}, median {summary.Regret.Median:P2}, >1% in {summary.Regret.ShareOver1Pct:P0}, >3% in {summary.Regret.ShareOver3Pct:P0}");
 var sy = summary.SingleYear;
 Console.WriteLine($"Single year: {sy.Checked} checked, {sy.WithinFiveDollars} within $5 of the minimum, {sy.MaterialGaps} gaps (median ${sy.MedianMaterialGap:N0}), Roth-before-others {sy.RothBeforeOthers}");
+
+// The schedule study, once both the fit run and the validation run are complete
+if (set == Candidates.Schedules)
+{
+    var fitRows = validate ? LabCsv.ReadResults(Path.Combine(RunDir(set), "results.csv")) : rows;
+    var validationRows = validate ? rows : LabCsv.ReadResults(Path.Combine(RunDir(set, paths), "results.csv"));
+    int expected = scenarioCount * combinations.Count;
+    if (fitRows.Count != expected || validationRows.Count != expected)
+    {
+        Console.WriteLine($"Schedule study: waiting for the {(validate ? "fit run (--set schedules)" : "validation run (--set schedules --validate)")}.");
+        return 0;
+    }
+
+    var study = ScheduleStudy.Run(set, scenarios, fitRows, validationRows, seed, tradeoffPaths: paths);
+    var studyPath = Path.Combine(RunDir(set, paths), "schedules.json");
+    File.WriteAllText(studyPath, JsonSerializer.Serialize(study, SummaryJson.Options));
+    Console.WriteLine();
+    Console.WriteLine($"Schedule study -> {studyPath}");
+    Console.WriteLine($"Rules chosen on {study.FitHouseholds} households (fit markets), judged on {study.HoldoutHouseholds} others: " +
+                      $"picked on the fit markets, measured on the validation markets. A schedule is the in-sample best for " +
+                      $"{study.ShareWhereAScheduleIsBest:P0} of fit households.");
+    Console.WriteLine($"{"Rule",-36} {"in-sample",10} {"held out",9} {"95% CI",17} {"win",5} {"loss",5}  worst household type");
+    foreach (var r in study.Rules)
+        Console.WriteLine($"{r.Name,-36} {r.InSampleMeanGain,10:P2} {r.MeanGain,9:P2} {$"{r.MeanGainCi[0]:P2}..{r.MeanGainCi[1]:P2}",17} " +
+                          $"{r.WinShare,5:P0} {r.LossShare,5:P0}  {r.WorstSlice} {r.WorstSliceMeanGain:P2}{(r.Adopted ? "  ADOPT" : "")}");
+    foreach (var r in study.Rules) Console.WriteLine($"  {r.Name}: {r.Description}");
+    Console.WriteLine("Schedules that add the most beside today's pick (in sample):");
+    foreach (var u in study.TopSchedules.Take(10))
+        Console.WriteLine($"  {u.Code,-14} +{u.MeanAddedGain:P2} on average, best for {u.ShareBest:P1}  {u.Name}");
+    Console.WriteLine($"Converting heavily early, at {set.Baseline.Code}'s 82.5% spend (after-tax money left: median % difference, share of households higher):");
+    Console.WriteLine($"  {"",-14} {"82.5% spend",11} {"strong markets (p90)",22} {"weaker markets (p25)",22}");
+    foreach (var o in study.TradeOffs)
+        Console.WriteLine($"  {o.Code,-14} {o.MeanSpendDiff,11:P2} " +
+                          $"{$"{o.StrongMarketWealthMedianDiff:P1} ({o.StrongMarketWealthHigherShare:P0})",22} " +
+                          $"{$"{o.WeakMarketWealthMedianDiff:P1} ({o.WeakMarketWealthHigherShare:P0})",22}");
+    Console.WriteLine(study.Rules.Any(r => r.Adopted)
+        ? "Verdict: at least one rule meets the adoption bar (see ADOPT)."
+        : $"Verdict: no rule meets the adoption bar (held-out mean >= {study.AdoptMeanGain:P1} with its 95% interval above 0, " +
+          $"no household type below {study.AdoptWorstSliceMean:P0}).");
+}
 return 0;

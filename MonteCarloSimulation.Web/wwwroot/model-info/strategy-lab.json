@@ -4,8 +4,8 @@
     "paths": 200,
     "seed": 2026,
     "singleYearCases": 1000,
-    "generatedAtUtc": "2026-10-13T07:02:56.3172493Z",
-    "runtimeSeconds": 491.7512875
+    "generatedAtUtc": "2026-10-13T17:23:28.5409172Z",
+    "runtimeSeconds": 515.7646879
   },
   "set": "main",
   "combinations": [
@@ -8324,5 +8324,383 @@
         "None": 0.287
       }
     }
+  },
+  "scheduleStudy": {
+    "fitHouseholds": 500,
+    "holdoutHouseholds": 500,
+    "schedules": 84,
+    "shareWhereAScheduleIsBest": 0.086,
+    "rules": [
+      {
+        "name": "One schedule for everyone",
+        "description": "Every household runs W2\u002BS12\u003E0@63 (convert to the 12% fill before 63 (from 63, income sets Medicare surcharges two years later), then no conversion), with no per-household pick.",
+        "schedules": [
+          "W2\u002BS12\u003E0@63"
+        ],
+        "inSampleMeanGain": -0.015201485930256008,
+        "meanGain": -0.01682905391717644,
+        "meanGainCi": [
+          -0.022228642522211697,
+          -0.012263564085736119
+        ],
+        "medianGain": -0.005436894023850447,
+        "winShare": 0.006,
+        "lossShare": 0.504,
+        "worstSlice": "Spend-to-assets (baseline 82.5% spend): Under 3%",
+        "worstSliceMeanGain": -0.12687242538691673,
+        "adopted": false
+      },
+      {
+        "name": "Today\u0027s pick plus 1 schedule",
+        "description": "The per-household pick also considers W2\u002BS12\u003E0@TD50.",
+        "schedules": [
+          "W2\u002BS12\u003E0@TD50"
+        ],
+        "inSampleMeanGain": 0.0002376801962227195,
+        "meanGain": 0.00012520593888052555,
+        "meanGainCi": [
+          5.4939516129031126E-05,
+          0.00021180226546508603
+        ],
+        "medianGain": 0,
+        "winShare": 0.008,
+        "lossShare": 0,
+        "worstSlice": "Tax Deferred share: 0-25%",
+        "worstSliceMeanGain": 0,
+        "adopted": false
+      },
+      {
+        "name": "Today\u0027s pick plus 2 schedules",
+        "description": "The per-household pick also considers W2\u002BS12\u003E0@TD50, W2\u002BS22\u003E12@TD50.",
+        "schedules": [
+          "W2\u002BS12\u003E0@TD50",
+          "W2\u002BS22\u003E12@TD50"
+        ],
+        "inSampleMeanGain": 0.00029355756238416263,
+        "meanGain": 0.00015975251270896452,
+        "meanGainCi": [
+          6.593087239715406E-05,
+          0.0002672434784286633
+        ],
+        "medianGain": 0,
+        "winShare": 0.014,
+        "lossShare": 0.002,
+        "worstSlice": "Tax Deferred share: 25-50%",
+        "worstSliceMeanGain": -5.418245404989409E-05,
+        "adopted": false
+      },
+      {
+        "name": "Today\u0027s pick plus 4 schedules",
+        "description": "The per-household pick also considers W2\u002BS12\u003E0@TD50, W2\u002BS22\u003E12@TD50, W2\u002BS22\u003E12@63, W2\u002BS24\u003E0@TD50.",
+        "schedules": [
+          "W2\u002BS12\u003E0@TD50",
+          "W2\u002BS22\u003E12@TD50",
+          "W2\u002BS22\u003E12@63",
+          "W2\u002BS24\u003E0@TD50"
+        ],
+        "inSampleMeanGain": 0.000317545200780343,
+        "meanGain": 0.00021165162096786915,
+        "meanGainCi": [
+          0.0001053631971333153,
+          0.00033330285384780783
+        ],
+        "medianGain": 0,
+        "winShare": 0.02,
+        "lossShare": 0.002,
+        "worstSlice": "Tax Deferred share: 25-50%",
+        "worstSliceMeanGain": -8.494032806564213E-05,
+        "adopted": false
+      },
+      {
+        "name": "Today\u0027s pick plus 8 schedules",
+        "description": "The per-household pick also considers W2\u002BS12\u003E0@TD50, W2\u002BS22\u003E12@TD50, W2\u002BS22\u003E12@63, W2\u002BS24\u003E0@TD50, W2\u002BS12\u003E0@TD25, W2\u002BS12\u003E0@63, W2\u002BS24\u003E0@70, W2\u002BS0\u003E24@RMD.",
+        "schedules": [
+          "W2\u002BS12\u003E0@TD50",
+          "W2\u002BS22\u003E12@TD50",
+          "W2\u002BS22\u003E12@63",
+          "W2\u002BS24\u003E0@TD50",
+          "W2\u002BS12\u003E0@TD25",
+          "W2\u002BS12\u003E0@63",
+          "W2\u002BS24\u003E0@70",
+          "W2\u002BS0\u003E24@RMD"
+        ],
+        "inSampleMeanGain": 0.0003287495012476009,
+        "meanGain": 0.0002179016209678688,
+        "meanGainCi": [
+          0.00011180836574617714,
+          0.0003372197623949401
+        ],
+        "medianGain": 0,
+        "winShare": 0.02,
+        "lossShare": 0.002,
+        "worstSlice": "Tax Deferred share: 25-50%",
+        "worstSliceMeanGain": -7.26371784593436E-05,
+        "adopted": false
+      },
+      {
+        "name": "Today\u0027s pick plus every schedule",
+        "description": "The per-household pick considers all 84 schedules too.",
+        "schedules": [
+          "W2\u002BS0\u003E12@SS",
+          "W2\u002BS0\u003E22@SS",
+          "W2\u002BS0\u003E24@SS",
+          "W2\u002BS12\u003E0@SS",
+          "W2\u002BS12\u003E22@SS",
+          "W2\u002BS12\u003E24@SS",
+          "W2\u002BS22\u003E0@SS",
+          "W2\u002BS22\u003E12@SS",
+          "W2\u002BS22\u003E24@SS",
+          "W2\u002BS24\u003E0@SS",
+          "W2\u002BS24\u003E12@SS",
+          "W2\u002BS24\u003E22@SS",
+          "W2\u002BS0\u003E12@63",
+          "W2\u002BS0\u003E22@63",
+          "W2\u002BS0\u003E24@63",
+          "W2\u002BS12\u003E0@63",
+          "W2\u002BS12\u003E22@63",
+          "W2\u002BS12\u003E24@63",
+          "W2\u002BS22\u003E0@63",
+          "W2\u002BS22\u003E12@63",
+          "W2\u002BS22\u003E24@63",
+          "W2\u002BS24\u003E0@63",
+          "W2\u002BS24\u003E12@63",
+          "W2\u002BS24\u003E22@63",
+          "W2\u002BS0\u003E12@65",
+          "W2\u002BS0\u003E22@65",
+          "W2\u002BS0\u003E24@65",
+          "W2\u002BS12\u003E0@65",
+          "W2\u002BS12\u003E22@65",
+          "W2\u002BS12\u003E24@65",
+          "W2\u002BS22\u003E0@65",
+          "W2\u002BS22\u003E12@65",
+          "W2\u002BS22\u003E24@65",
+          "W2\u002BS24\u003E0@65",
+          "W2\u002BS24\u003E12@65",
+          "W2\u002BS24\u003E22@65",
+          "W2\u002BS0\u003E12@70",
+          "W2\u002BS0\u003E22@70",
+          "W2\u002BS0\u003E24@70",
+          "W2\u002BS12\u003E0@70",
+          "W2\u002BS12\u003E22@70",
+          "W2\u002BS12\u003E24@70",
+          "W2\u002BS22\u003E0@70",
+          "W2\u002BS22\u003E12@70",
+          "W2\u002BS22\u003E24@70",
+          "W2\u002BS24\u003E0@70",
+          "W2\u002BS24\u003E12@70",
+          "W2\u002BS24\u003E22@70",
+          "W2\u002BS0\u003E12@RMD",
+          "W2\u002BS0\u003E22@RMD",
+          "W2\u002BS0\u003E24@RMD",
+          "W2\u002BS12\u003E0@RMD",
+          "W2\u002BS12\u003E22@RMD",
+          "W2\u002BS12\u003E24@RMD",
+          "W2\u002BS22\u003E0@RMD",
+          "W2\u002BS22\u003E12@RMD",
+          "W2\u002BS22\u003E24@RMD",
+          "W2\u002BS24\u003E0@RMD",
+          "W2\u002BS24\u003E12@RMD",
+          "W2\u002BS24\u003E22@RMD",
+          "W2\u002BS0\u003E12@TD50",
+          "W2\u002BS0\u003E22@TD50",
+          "W2\u002BS0\u003E24@TD50",
+          "W2\u002BS12\u003E0@TD50",
+          "W2\u002BS12\u003E22@TD50",
+          "W2\u002BS12\u003E24@TD50",
+          "W2\u002BS22\u003E0@TD50",
+          "W2\u002BS22\u003E12@TD50",
+          "W2\u002BS22\u003E24@TD50",
+          "W2\u002BS24\u003E0@TD50",
+          "W2\u002BS24\u003E12@TD50",
+          "W2\u002BS24\u003E22@TD50",
+          "W2\u002BS0\u003E12@TD25",
+          "W2\u002BS0\u003E22@TD25",
+          "W2\u002BS0\u003E24@TD25",
+          "W2\u002BS12\u003E0@TD25",
+          "W2\u002BS12\u003E22@TD25",
+          "W2\u002BS12\u003E24@TD25",
+          "W2\u002BS22\u003E0@TD25",
+          "W2\u002BS22\u003E12@TD25",
+          "W2\u002BS22\u003E24@TD25",
+          "W2\u002BS24\u003E0@TD25",
+          "W2\u002BS24\u003E12@TD25",
+          "W2\u002BS24\u003E22@TD25"
+        ],
+        "inSampleMeanGain": 0.0003322187696020227,
+        "meanGain": 0.00020151913071423834,
+        "meanGainCi": [
+          8.834046757188374E-05,
+          0.0003217305149727964
+        ],
+        "medianGain": 0,
+        "winShare": 0.02,
+        "lossShare": 0.004,
+        "worstSlice": "Tax Deferred share: 25-50%",
+        "worstSliceMeanGain": -8.472998236586182E-05,
+        "adopted": false
+      },
+      {
+        "name": "Decision tree",
+        "description": "total assets under $922k: today\u0027s pick plus W2\u002BS12\u003E0@TD50. total assets $922k or more, Social Security start age under 64: today\u0027s pick plus W2\u002BS22\u003E12@TD50. total assets $922k or more, Social Security start age 64 or more: today\u0027s pick plus W2\u002BS22\u003E12@63.",
+        "schedules": [
+          "W2\u002BS12\u003E0@TD50",
+          "W2\u002BS22\u003E12@TD50",
+          "W2\u002BS22\u003E12@63"
+        ],
+        "inSampleMeanGain": 0.0002967295698565726,
+        "meanGain": 0.00014522492785179963,
+        "meanGainCi": [
+          6.586843832652327E-05,
+          0.0002397645809018531
+        ],
+        "medianGain": 0,
+        "winShare": 0.012,
+        "lossShare": 0,
+        "worstSlice": "Tax Deferred share: 25-50%",
+        "worstSliceMeanGain": -1.4882842265684983E-05,
+        "adopted": false
+      }
+    ],
+    "topSchedules": [
+      {
+        "code": "W2\u002BS12\u003E0@TD50",
+        "name": "convert to the 12% fill while Tax Deferred is more than half the portfolio, then no conversion",
+        "shareBest": 0.04,
+        "meanAddedGain": 0.0002376801962227195
+      },
+      {
+        "code": "W2\u002BS22\u003E12@TD50",
+        "name": "convert to the top of the 22% bracket while Tax Deferred is more than half the portfolio, then convert to the 12% fill",
+        "shareBest": 0.002,
+        "meanAddedGain": 5.587736616144312E-05
+      },
+      {
+        "code": "W2\u002BS22\u003E12@63",
+        "name": "convert to the top of the 22% bracket before 63 (from 63, income sets Medicare surcharges two years later), then convert to the 12% fill",
+        "shareBest": 0,
+        "meanAddedGain": 4.2553766664534365E-05
+      },
+      {
+        "code": "W2\u002BS12\u003E0@TD25",
+        "name": "convert to the 12% fill while Tax Deferred is more than a quarter of the portfolio, then no conversion",
+        "shareBest": 0.002,
+        "meanAddedGain": 3.8442119190630566E-05
+      },
+      {
+        "code": "W2\u002BS22\u003E12@SS",
+        "name": "convert to the top of the 22% bracket before Social Security starts, then convert to the 12% fill",
+        "shareBest": 0.002,
+        "meanAddedGain": 3.6973880208154065E-05
+      },
+      {
+        "code": "W2\u002BS22\u003E0@TD50",
+        "name": "convert to the top of the 22% bracket while Tax Deferred is more than half the portfolio, then no conversion",
+        "shareBest": 0.004,
+        "meanAddedGain": 3.5682920592032816E-05
+      },
+      {
+        "code": "W2\u002BS22\u003E0@63",
+        "name": "convert to the top of the 22% bracket before 63 (from 63, income sets Medicare surcharges two years later), then no conversion",
+        "shareBest": 0.004,
+        "meanAddedGain": 3.5645786150050096E-05
+      },
+      {
+        "code": "W2\u002BS22\u003E0@SS",
+        "name": "convert to the top of the 22% bracket before Social Security starts, then no conversion",
+        "shareBest": 0.002,
+        "meanAddedGain": 3.0047372025685525E-05
+      },
+      {
+        "code": "W2\u002BS22\u003E12@65",
+        "name": "convert to the top of the 22% bracket before 65, then convert to the 12% fill",
+        "shareBest": 0,
+        "meanAddedGain": 2.1400671193415376E-05
+      },
+      {
+        "code": "W2\u002BS22\u003E0@65",
+        "name": "convert to the top of the 22% bracket before 65, then no conversion",
+        "shareBest": 0,
+        "meanAddedGain": 2.0779746014899292E-05
+      },
+      {
+        "code": "W2\u002BS12\u003E0@63",
+        "name": "convert to the 12% fill before 63 (from 63, income sets Medicare surcharges two years later), then no conversion",
+        "shareBest": 0.004,
+        "meanAddedGain": 1.3869676234626205E-05
+      },
+      {
+        "code": "W2\u002BS22\u003E12@TD25",
+        "name": "convert to the top of the 22% bracket while Tax Deferred is more than a quarter of the portfolio, then convert to the 12% fill",
+        "shareBest": 0,
+        "meanAddedGain": 1.3329223486142184E-05
+      },
+      {
+        "code": "W2\u002BS22\u003E0@TD25",
+        "name": "convert to the top of the 22% bracket while Tax Deferred is more than a quarter of the portfolio, then no conversion",
+        "shareBest": 0,
+        "meanAddedGain": 9.897125859910539E-06
+      },
+      {
+        "code": "W2\u002BS24\u003E12@63",
+        "name": "convert to the top of the 24% bracket before 63 (from 63, income sets Medicare surcharges two years later), then convert to the 12% fill",
+        "shareBest": 0,
+        "meanAddedGain": 7.933529868633382E-06
+      },
+      {
+        "code": "W2\u002BS24\u003E12@TD50",
+        "name": "convert to the top of the 24% bracket while Tax Deferred is more than half the portfolio, then convert to the 12% fill",
+        "shareBest": 0,
+        "meanAddedGain": 6.495338353717184E-06
+      }
+    ],
+    "adoptMeanGain": 0.005,
+    "adoptWorstSliceMean": -0.01,
+    "tradeOffs": [
+      {
+        "code": "W2\u002BC3",
+        "name": "To top of 22% bracket",
+        "meanSpendDiff": -0.004253495501430829,
+        "strongMarketWealthMedianDiff": -0.04656030555811952,
+        "strongMarketWealthHigherShare": 0.187,
+        "weakMarketWealthMedianDiff": -0.32570259689163594,
+        "weakMarketWealthHigherShare": 0.085
+      },
+      {
+        "code": "W2\u002BC4",
+        "name": "To top of 24% bracket",
+        "meanSpendDiff": -0.011976123165996949,
+        "strongMarketWealthMedianDiff": -0.07784333574933033,
+        "strongMarketWealthHigherShare": 0.133,
+        "weakMarketWealthMedianDiff": -0.53106933370074,
+        "weakMarketWealthHigherShare": 0.062
+      },
+      {
+        "code": "W2\u002BS24\u003E12@SS",
+        "name": "convert to the top of the 24% bracket before Social Security starts, then convert to the 12% fill",
+        "meanSpendDiff": -0.0036887064795477187,
+        "strongMarketWealthMedianDiff": -0.02091868596604124,
+        "strongMarketWealthHigherShare": 0.127,
+        "weakMarketWealthMedianDiff": -0.2108367648199705,
+        "weakMarketWealthHigherShare": 0.062
+      },
+      {
+        "code": "W2\u002BS22\u003E12@63",
+        "name": "convert to the top of the 22% bracket before 63 (from 63, income sets Medicare surcharges two years later), then convert to the 12% fill",
+        "meanSpendDiff": 0.0033432006604031,
+        "strongMarketWealthMedianDiff": 0,
+        "strongMarketWealthHigherShare": 0.147,
+        "weakMarketWealthMedianDiff": -0.02182501708293616,
+        "weakMarketWealthHigherShare": 0.08
+      },
+      {
+        "code": "W2\u002BS24\u003E12@RMD",
+        "name": "convert to the top of the 24% bracket before required minimum distributions start, then convert to the 12% fill",
+        "meanSpendDiff": -0.011477522505770615,
+        "strongMarketWealthMedianDiff": -0.07723717700998523,
+        "strongMarketWealthHigherShare": 0.139,
+        "weakMarketWealthMedianDiff": -0.5296114220748698,
+        "weakMarketWealthHigherShare": 0.063
+      }
+    ]
   }
 }

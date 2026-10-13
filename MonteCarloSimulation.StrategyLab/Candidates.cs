@@ -6,10 +6,12 @@ namespace MonteCarloSimulation.StrategyLab
     // rule shown on the Model Info page.
     internal sealed record WithdrawalOrder(string Code, string Name, string Definition, IWithdrawalStrategy Strategy);
 
-    // A Roth conversion policy. C0 converts nothing; C1 is the app's own ceiling.
-    internal sealed record ConversionPolicy(string Code, string Name, string Definition, ConversionCeiling? Ceiling)
+    // A Roth conversion policy. C0 converts nothing; C1 is the app's own ceiling. A Schedule (the schedule study's
+    // policies) picks a different ceiling each year instead, built once per household from its parameters.
+    internal sealed record ConversionPolicy(
+        string Code, string Name, string Definition, ConversionCeiling? Ceiling, Func<SimulationParameters, ConversionSchedule>? Schedule = null)
     {
-        public bool Converts => Ceiling is not null;
+        public bool Converts => Ceiling is not null || Schedule is not null;
     }
 
     // A rule for where a conversion's tax comes from (Core's ConversionTaxFunding).
@@ -134,8 +136,22 @@ namespace MonteCarloSimulation.StrategyLab
                 .ToList(),
             "W1+C1+F0");
 
+        // The app's own candidate lines, in AutomaticStrategy's order: what its per-household pick chooses from.
+        public static readonly IReadOnlyList<ConversionPolicy> AppPolicies = [AppDefault, Top22, Top24, NoConversions];
+
+        // Conversion lines that change from year to year (ConversionSchedules), under Tax-optimized, with the app's
+        // own eight (order, line) pairs alongside so today's per-household pick is measured on the same markets.
+        public static readonly CandidateSet Schedules = new("schedules",
+            new[] { Baseline }
+                .Concat(new[] { ProRata, TaxOptimized }.SelectMany(o => AppPolicies.Select(p => new Combination(o, p))))
+                .Where((c, i) => i == 0 || c.Code != Baseline.Code)
+                .Concat(ConversionSchedules.All.Select(p => new Combination(TaxOptimized, p)))
+                .ToList(),
+            "W1+C1");
+
         public static CandidateSet SetNamed(string name) =>
-            new[] { Main, Funding }.SingleOrDefault(s => s.Name == name) ?? throw new ArgumentException($"Unknown set '{name}' (main, funding)");
+            new[] { Main, Funding, Schedules }.SingleOrDefault(s => s.Name == name)
+                ?? throw new ArgumentException($"Unknown set '{name}' (main, funding, schedules)");
 
         // The definitions tables. Conversion lines are evaluated for a 2026 single filer with the lab's $16,000
         // deduction and nothing else counted yet; C1's alternative line applies once gains have been realized.
