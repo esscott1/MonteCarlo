@@ -13,8 +13,8 @@ namespace MonteCarloSimulation.Core
 
     // What a strategy sees for one year, after returns and the age gate.
     //  Need: net (after-tax) dollars the portfolio must supply.
-    //  BaseOrdinaryIncome: ordinary income already stacked first in the brackets - taxable Social Security plus the
-    //  year's required minimum distribution. The strategy's draws stack on top of it.
+    //  BaseOrdinaryIncome: ordinary income already stacked first in the brackets - taxable Social Security, the
+    //  annuity's taxable part and the year's required minimum distribution. The strategy's draws stack on top of it.
     //  EligibleTaxable / EligibleRoth: what the 59.5 gate currently allows. Brokerage is never gated.
     internal readonly record struct WithdrawalContext(
         double Need,

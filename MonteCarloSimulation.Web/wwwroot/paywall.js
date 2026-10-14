@@ -87,10 +87,19 @@ window.Paywall = (function () {
         });
     }
 
+    // A checkbox, radio button or select can't be read-only, so a lock disables it instead (the page reads it all the same)
+    const disablesWhenLocked = (input) => input.type === 'checkbox' || input.type === 'radio' || input.tagName === 'SELECT';
+
     function lockInput(input, locked, tier) {
         if (locked && !input.classList.contains('locked')) {
             if (input.type === 'checkbox') {
                 input.checked = input.dataset.freeValue === 'true';
+            } else if (input.type === 'radio') {
+                input.checked = input.defaultChecked;
+            } else if (input.tagName === 'SELECT') {
+                const option = [...input.options].find((o) => o.value === input.dataset.freeValue)
+                    ?? [...input.options].find((o) => o.defaultSelected) ?? input.options[0];
+                if (option) input.value = option.value;
             } else {
                 input.value = input.dataset.freeValue ?? input.defaultValue;
             }
@@ -102,7 +111,7 @@ window.Paywall = (function () {
         // Styled for the tier it's offered in (a Pro lock carries a purple edge); none in Free Only
         if (locked && tier) input.dataset.lockedTier = tier;
         else delete input.dataset.lockedTier;
-        if (input.type === 'checkbox') input.disabled = locked;
+        if (disablesWhenLocked(input)) input.disabled = locked;
         else input.readOnly = locked;
     }
 

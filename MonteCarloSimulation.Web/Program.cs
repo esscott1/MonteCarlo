@@ -98,6 +98,7 @@ app.MapPost("/api/run", async (
 
     var access = await features.ForAsync(context);
     var locked = FreeTier.LockedInputs(request, access, freeDefaults.CurrentValue);
+    foreach (var (key, message) in FreeTier.LockedAnnuity(request, access)) locked[key] = message;
     if (locked.Count > 0) return FreeTier.Refused(locked);
     FreeTier.SplitAccounts(request, access, freeDefaults.CurrentValue);
 
@@ -122,6 +123,7 @@ app.MapPost("/api/run", async (
         YearNewMoney = request.YearNewMoney,
         SocialSecurityStartDate = request.SocialSecurityStartDate,
         SocialSecurityMonthlyAmount = request.SocialSecurityMonthlyAmount,
+        Annuity = request.ToAnnuity(),
         AnnualStandardDeduction = request.AnnualStandardDeduction,
         EnableRothConversions = request.EnableRothConversions,
         ScenarioDescription = request.MixDescription()

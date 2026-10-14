@@ -15,6 +15,15 @@ later), sized by the IRS Uniform Lifetime Table
 first and is taxed as ordinary income; what spending doesn't need is saved to Brokerage after tax. The Scenario runner's
 year tables mark an RMD year's Tax Deferred withdrawal with an **RMD** footnote explaining the amount.
 
+The Scenario runner's **Annuity** tab (Plus) adds an income annuity the household **already owns**: its cost isn't taken
+from the balances. It pays a monthly amount (default $2,600) from the Retire On date (a **SPIA**) or from a date at least
+two years out (a **DIA**), for the rest of the horizon. The amount is fixed in dollars unless a **COLA** (Pro) raises it
+1%, 2% or 3% each January. Like Social Security, the payments are income that reduces what the portfolio must supply,
+and any excess is saved to Brokerage. For taxes, an annuity in a tax-deferred account is all ordinary income. Otherwise
+the exclusion ratio applies: the investment amount (default $400,000) comes back tax-free, 1/312 of it in each of the
+first 312 payments (26 years), and after that every payment is ordinary income ([Annuity.cs](MonteCarloSimulation.Core/Annuity.cs)).
+The Optimizer doesn't model an annuity yet.
+
 ## Secondary purpose: illustrating Claude AI and CI/CD concepts
 
 Beyond the retirement simulation itself, this repo doubles as a small, direct illustration of several Claude AI and CI/CD concepts, each implemented as simply as possible rather than abstracted into a reusable framework:
@@ -112,8 +121,8 @@ and Translations pages and the passphrase box stay in English.
 
 ## Free, Plus and Pro
 
-The app has tiers: **Free**, **Plus** ($3.99 a month) and **Pro** ($100 a month: everything in Plus, plus features
-still to be built). Until sign-in and payments are added, each paid tier is unlocked with a secret **access code**
+The app has tiers: **Free**, **Plus** ($3.99 a month) and **Pro** ($100 a month: everything in Plus, plus an annuity's
+yearly increase (COLA) and features still to be built). Until sign-in and payments are added, each paid tier is unlocked with a secret **access code**
 instead.
 
 - **The site's mode.** Two switches on the Observe page's **Features** section (behind the change-request passphrase)
@@ -136,10 +145,11 @@ instead.
 - **What each tier gets** is a list of feature ids under `Tiers` in appsettings.json
   ([Features.cs](MonteCarloSimulation.Web/Features.cs)); the code asks whether a visitor may use a feature, never which
   tier they're on ([FeatureAccess.cs](MonteCarloSimulation.Web/FeatureAccess.cs), `GET /api/me`). A Free visitor's
-  locked inputs stay at the pages' defaults: Roth conversions off, no inheritance, the standard deduction at
+  locked inputs stay at the pages' defaults: Roth conversions off, no inheritance, no annuity, the standard deduction at
   `FreeDefaults:StandardDeduction` (`FreeDefaults:StandardDeductionMarried` when married), and the default returns, std. devs and correlation. The pages lock them, and
   `/api/run` and `/api/optimal` refuse anything else with a 403 naming each field
-  ([FreeTier.cs](MonteCarloSimulation.Web/FreeTier.cs)).
+  ([FreeTier.cs](MonteCarloSimulation.Web/FreeTier.cs)). A Plus visitor's annuity COLA stays off the same way. While Pro
+  isn't offered, the COLA checkbox is greyed with no badge.
 - **The Free Scenario runner.** A Free visitor enters one **total** for Roth and one for Brokerage instead of basis and
   gains. Each total is split by the `FreeDefaults` shares (Brokerage 50% gains / 50% basis, Roth 100% basis), on the
   page and again on the server, whatever split the request carries. Unlocking Plus shows the basis and gain fields

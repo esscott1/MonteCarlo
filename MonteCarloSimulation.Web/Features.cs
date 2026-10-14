@@ -11,9 +11,12 @@ namespace MonteCarloSimulation.Web
         public const string Inheritance = "inheritance";
         public const string TaxDetail = "tax-detail";
         public const string OptimizerFull = "optimizer-full";
+        // The Scenario runner's Annuity tab, and its cost-of-living increase
+        public const string Annuity = "annuity";
+        public const string AnnuityCola = "annuity-cola";
 
         public static IReadOnlyList<string> All { get; } =
-            [AccountBasisSplit, RothConversions, CustomReturns, StandardDeduction, Inheritance, TaxDetail, OptimizerFull];
+            [AccountBasisSplit, RothConversions, CustomReturns, StandardDeduction, Inheritance, TaxDetail, OptimizerFull, Annuity, AnnuityCola];
     }
 
     public enum Tier { Free, Plus, Pro }

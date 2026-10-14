@@ -486,11 +486,13 @@ namespace MonteCarloSimulation.Core.Tests
         }
 
         [Theory]
-        [InlineData(ConversionTaxFunding.Brokerage)]
-        [InlineData(ConversionTaxFunding.FromConversion)]
-        [InlineData(ConversionTaxFunding.BrokerageThenConversion)]
-        [InlineData(ConversionTaxFunding.BridgeAware)]
-        public void EveryYear_OrdinaryTaxSources_SumToOrdinaryTax(ConversionTaxFunding rule)
+        [InlineData(ConversionTaxFunding.Brokerage, false)]
+        [InlineData(ConversionTaxFunding.FromConversion, false)]
+        [InlineData(ConversionTaxFunding.BrokerageThenConversion, false)]
+        [InlineData(ConversionTaxFunding.BridgeAware, false)]
+        [InlineData(ConversionTaxFunding.FromConversion, true)]
+        [InlineData(ConversionTaxFunding.Brokerage, true)]
+        public void EveryYear_OrdinaryTaxSources_SumToOrdinaryTax(ConversionTaxFunding rule, bool annuity)
         {
             // What the main page's "who paid" footnote shows must add up to the ordinary tax line, every year.
             var parameters = new SimulationParameters
@@ -501,7 +503,10 @@ namespace MonteCarloSimulation.Core.Tests
                 InitialBrokerageBasis = 60_000, InitialBrokerageUnrealizedGain = 90_000,
                 Mean = 0.07, StdDev = 0.12, SocialSecurityStartDate = new DateOnly(2035, 5, 1), SocialSecurityMonthlyAmount = 2_500,
                 AnnualStandardDeduction = 16_000, EnableRothConversions = true, ConversionTaxFunding = rule,
-                WithdrawalStrategy = WithdrawalStrategy.TaxOptimized, ScenarioDescription = "tax sources"
+                WithdrawalStrategy = WithdrawalStrategy.TaxOptimized, ScenarioDescription = "tax sources",
+                Annuity = annuity
+                    ? new Annuity { MonthlyPayment = 2_600, FirstPayment = new DateOnly(2029, 6, 10), Basis = 400_000, AnnualIncrease = 0.03 }
+                    : null
             };
             var timeline = RetirementTimeline.Build(parameters);
             var strategy = WithdrawalStrategies.For(parameters.WithdrawalStrategy);
@@ -509,7 +514,8 @@ namespace MonteCarloSimulation.Core.Tests
             for (int seed = 0; seed < 20; seed++)
                 foreach (var y in RunSimulator.Simulate(parameters, timeline, strategy, new Random(seed)).Years)
                     Assert.Equal(y.OrdinaryTaxAmount,
-                        y.SocialSecurityTax + y.TaxDeferredWithdrawalTax + y.RothConversionOrdinaryTaxFromBrokerage + y.RothConversionOrdinaryTaxFromConversion, 6);
+                        y.SocialSecurityTax + y.AnnuityTax + y.TaxDeferredWithdrawalTax
+                        + y.RothConversionOrdinaryTaxFromBrokerage + y.RothConversionOrdinaryTaxFromConversion, 6);
         }
 
         // --- Social Security ---

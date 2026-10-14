@@ -44,9 +44,10 @@ namespace MonteCarloSimulation.Core
         public required bool AgeEligible { get; init; }
         public required double RothConversionAmount { get; init; }
         public required double RothConversionTax { get; init; }
-        // Who paid the year's ordinary tax (reporting only; with SocialSecurityTax these sum to OrdinaryTaxAmount):
-        // the tax the Tax Deferred withdrawal adds on top of Social Security (withheld from that withdrawal), and the
-        // conversion's ordinary tax split between the Brokerage sale and the converted amount itself.
+        // Who paid the year's ordinary tax (reporting only; with SocialSecurityTax and AnnuityTax these sum to
+        // OrdinaryTaxAmount): the tax the Tax Deferred withdrawal adds on top of Social Security and the annuity
+        // (withheld from that withdrawal), and the conversion's ordinary tax split between the Brokerage sale and the
+        // converted amount itself.
         public required double TaxDeferredWithdrawalTax { get; init; }
         public required double RothConversionOrdinaryTaxFromBrokerage { get; init; }
         public required double RothConversionOrdinaryTaxFromConversion { get; init; }
@@ -56,6 +57,13 @@ namespace MonteCarloSimulation.Core
         public required double SocialSecurityTax { get; init; }
         // Monthly Social Security payments received this year (fewer than 12 in the first year of benefits or a partial year)
         public required int SocialSecurityMonths { get; init; }
+        // An annuity's payments this year (Annuity): the gross amount, the part that's ordinary income (the rest is a
+        // tax-free return of basis), the tax that part adds on top of taxable Social Security (paid out of the
+        // payments), and how many monthly payments fell in the year. All 0 without an annuity.
+        public required double AnnuityIncome { get; init; }
+        public required double AnnuityTaxableIncome { get; init; }
+        public required double AnnuityTax { get; init; }
+        public required int AnnuityPayments { get; init; }
         // The required minimum distribution taken from Tax Deferred this year (0 before RMDs start; part of
         // TaxableWithdrawal, its tax part of TaxDeferredWithdrawalTax), the Uniform Lifetime Table divisor behind it
         // (null before RMDs start), and its after-tax amount beyond the year's need, saved to Brokerage.

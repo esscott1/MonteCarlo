@@ -50,6 +50,17 @@ namespace MonteCarloSimulation.Web
             return errors;
         }
 
+        // The Scenario runner's Annuity tab: the annuity is Plus, its COLA Pro
+        public static Dictionary<string, string> LockedAnnuity(RunRequest request, Access access)
+        {
+            var errors = new Dictionary<string, string>();
+            if (!access.Can(Features.Annuity) && request.IncludeAnnuity)
+                errors["includeAnnuity"] = "Annuities are a Plus feature.";
+            if (!access.Can(Features.AnnuityCola) && request.AnnuityCola)
+                errors["annuityCola"] = "An annuity COLA is a Pro feature.";
+            return errors;
+        }
+
         public const string CustomReturnsMessage = "Changing returns, std. devs and the correlation is a Plus feature.";
 
         // A Free visitor enters one total per account, so whatever split the request carries, the server splits each total

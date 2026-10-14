@@ -111,6 +111,7 @@ namespace MonteCarloSimulation.Core
             double Spending,
             double Irmaa,
             SocialSecurityYear SocialSecurity,
+            AnnuityYear Annuity,
             RequiredDistributionYear Rmd,
             double PeriodRate,
             double TaxableStartOfYear,
@@ -139,6 +140,10 @@ namespace MonteCarloSimulation.Core
             // Medicare IRMAA surcharges are a cost of the year on top of spending
             double irmaa = MedicareIrmaa.YearSurcharge(lookbackMagi, year);
             var ss = SocialSecurityYear.Compute(socialSecurity, taxYear, spending + irmaa);
+            // An annuity's payments are income too, their taxable part stacked on taxable Social Security
+            var annuity = year.AnnuityPayments > 0
+                ? AnnuityYear.Compute(year.AnnuityIncome, year.AnnuityTaxable, taxYear, ss.Taxable, ss.Need)
+                : AnnuityYear.None(ss.Need);
             double periodRate = rate * year.Fraction;
 
             // Start-of-year (prior year-end) Tax Deferred balance: the RMD is based on it, and the "% of balance" figure
@@ -147,15 +152,16 @@ namespace MonteCarloSimulation.Core
             // All three buckets grow by the same rate, then this year's withdrawal is taken
             accounts.ApplyReturn(periodRate);
 
-            // The required minimum distribution comes out first, stacked on taxable Social Security: last year-end's
+            // The required minimum distribution comes out first, stacked on taxable Social Security and the annuity: last year-end's
             // Tax Deferred balance over the year's divisor, prorated for a partial model year like spending. Its
             // after-tax amount covers spending before anything else is drawn.
             var rmd = year.RmdDivisor is double divisor
                 ? RequiredDistributionYear.Compute(
-                    Math.Min(taxableStartOfYear / divisor * year.Fraction, Math.Max(0, accounts.Taxable)), taxYear, ss.Taxable, ss.Need)
-                : RequiredDistributionYear.None(ss.Need);
+                    Math.Min(taxableStartOfYear / divisor * year.Fraction, Math.Max(0, accounts.Taxable)), taxYear,
+                    ss.Taxable + annuity.Taxable, annuity.Need)
+                : RequiredDistributionYear.None(annuity.Need);
             accounts.WithdrawTaxable(rmd.Gross);
-            double baseOrdinaryIncome = ss.Taxable + rmd.Gross;
+            double baseOrdinaryIncome = ss.Taxable + annuity.Taxable + rmd.Gross;
 
             bool ageEligible = year.AgeEligible;
             var plan = strategy.Plan(new WithdrawalContext(
@@ -175,7 +181,7 @@ namespace MonteCarloSimulation.Core
                     new ConversionFunding(parameters.ConversionTaxFunding, ageEligible, bridgeNeed))
                 : RothConversion.None;
 
-            // The year's income totals: ordinary income (taxable Social Security, the RMD, Tax Deferred draws, the
+            // The year's income totals: ordinary income (taxable Social Security and annuity, the RMD, Tax Deferred draws, the
             // conversion) with all realized gains stacked on top - so they include the conversion and the sale funding
             // its tax.
             double ordinaryIncome = baseOrdinaryIncome + plan.GrossTaxable + conversion.Amount;
@@ -187,14 +193,15 @@ namespace MonteCarloSimulation.Core
                 : 0;
 
             // New money (e.g. an inheritance) arrives as after-tax cash in its year; so does any Social
-            // Security, and then any RMD, beyond this year's spending
+            // Security, then any annuity income, and then any RMD, beyond this year's spending
             if (year.Index == parameters.YearNewMoney)
                 accounts.DepositBrokerageCash(parameters.NewMoney);
             accounts.DepositBrokerageCash(ss.Surplus);
+            accounts.DepositBrokerageCash(annuity.Surplus);
             accounts.DepositBrokerageCash(rmd.Surplus);
 
             return new YearStep(
-                spending, irmaa, ss, rmd, periodRate, taxableStartOfYear, plan, conversion, ordinaryIncome, realizedGains, harvestedGains,
+                spending, irmaa, ss, annuity, rmd, periodRate, taxableStartOfYear, plan, conversion, ordinaryIncome, realizedGains, harvestedGains,
                 Failed: accounts.AnyNegative || plan.IsShortfall);
         }
 
@@ -205,6 +212,7 @@ namespace MonteCarloSimulation.Core
             var plan = step.Plan;
             var conversion = step.Conversion;
             var ss = step.SocialSecurity;
+            var annuity = step.Annuity;
             var rmd = step.Rmd;
             // Everything drawn from Tax Deferred this year: the RMD and the strategy's own draw
             double taxDeferredWithdrawal = rmd.Gross + plan.GrossTaxable;
@@ -219,7 +227,7 @@ namespace MonteCarloSimulation.Core
             double brokerageWithdrawal = plan.GrossBrokerage + conversion.TaxSale;
 
             // Blended effective tax rate across all buckets (Roth always contributes 0)
-            double totalGross = taxDeferredWithdrawal + brokerageWithdrawal + plan.Roth + ss.Gross;
+            double totalGross = taxDeferredWithdrawal + brokerageWithdrawal + plan.Roth + ss.Gross + annuity.Gross;
             double taxRate = totalGross > 0 ? (ordinaryTax + capitalGainsTax) / totalGross : 0;
 
             var (bracketRate, amountUntilNextBracket, nextBracketRate) = taxYear.BracketRoom(ordinaryIncome);
@@ -271,6 +279,10 @@ namespace MonteCarloSimulation.Core
                 SocialSecurityIncome = ss.Gross,
                 SocialSecurityTax = ss.Tax,
                 SocialSecurityMonths = year.SocialSecurityPayments,
+                AnnuityIncome = annuity.Gross,
+                AnnuityTaxableIncome = annuity.Taxable,
+                AnnuityTax = annuity.Tax,
+                AnnuityPayments = year.AnnuityPayments,
                 RequiredMinimumDistribution = rmd.Gross,
                 RmdDivisor = year.RmdDivisor,
                 RmdSurplusToBrokerage = rmd.Surplus

@@ -106,7 +106,8 @@ namespace MonteCarloSimulation.Core.Tests
             Assert.Contains(years, y => y.HarvestedGains > 0);
             foreach (var y in years)
             {
-                double ordinary = TaxAssumptions.SsTaxableFraction * y.SocialSecurityIncome + y.TaxableWithdrawal + y.RothConversionAmount;
+                double ordinary = TaxAssumptions.SsTaxableFraction * y.SocialSecurityIncome + y.AnnuityTaxableIncome
+                    + y.TaxableWithdrawal + y.RothConversionAmount;
                 Assert.Equal(ordinary + y.RealizedGains + y.HarvestedGains, y.Magi, 6);
             }
         }

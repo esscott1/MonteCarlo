@@ -41,6 +41,15 @@ namespace MonteCarloSimulation.Core.Tests
             return parameters;
         }
 
+        private static SimulationParameters WithAnnuity(SimulationParameters parameters)
+        {
+            parameters.Annuity = new Annuity
+            {
+                MonthlyPayment = 2_600, FirstPayment = new DateOnly(2031, 4, 15), Basis = 400_000, AnnualIncrease = 0.02
+            };
+            return parameters;
+        }
+
         public static TheoryData<WithdrawalStrategy, RothConversionTarget, ConversionTaxFunding> Combinations()
         {
             var data = new TheoryData<WithdrawalStrategy, RothConversionTarget, ConversionTaxFunding>();
@@ -63,7 +72,9 @@ namespace MonteCarloSimulation.Core.Tests
                 Parameters(new DateOnly(1975, 9, 30), new DateOnly(2027, 1, 1), 95_000),
                 Parameters(new DateOnly(1961, 5, 2), new DateOnly(2027, 7, 1), 130_000),
                 // The Scenario runner's stocks/bonds/cash market
-                WithAssetMix(Parameters(new DateOnly(1975, 9, 30), new DateOnly(2027, 1, 1), 90_000))
+                WithAssetMix(Parameters(new DateOnly(1975, 9, 30), new DateOnly(2027, 1, 1), 90_000)),
+                // An annuity: a non-qualified DIA with a COLA, its surplus years saved to Brokerage
+                WithAnnuity(Parameters(new DateOnly(1975, 9, 30), new DateOnly(2027, 1, 1), 110_000))
             };
             var strategy = WithdrawalStrategies.For(order);
             var ceiling = ConversionTargets.CeilingFor(target);

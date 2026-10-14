@@ -22,6 +22,34 @@ namespace MonteCarloSimulation.Web
         public double SocialSecurityMonthlyAmount { get; set; }
         public double AnnualStandardDeduction { get; set; }
         public bool EnableRothConversions { get; set; }
+        // The Annuity tab (Plus; its COLA Pro): an annuity already owned. The monthly payment, the investment amount
+        // (its tax basis, unless it's in a tax-deferred account), "spia" (paying from the Retire On date) or "dia"
+        // (from AnnuityStartDate, at least two years out), and an optional yearly increase of 1%, 2% or 3% (a fraction).
+        public bool IncludeAnnuity { get; set; }
+        public double AnnuityMonthlyAmount { get; set; }
+        public double AnnuityInvestment { get; set; }
+        public string? AnnuityType { get; set; }
+        public DateOnly? AnnuityStartDate { get; set; }
+        public bool AnnuityTaxDeferred { get; set; }
+        public bool AnnuityCola { get; set; }
+        public double AnnuityColaRate { get; set; }
+
+        public static readonly double[] AnnuityColaRates = [0.01, 0.02, 0.03];
+
+        public bool IsDia => string.Equals(AnnuityType, "dia", StringComparison.OrdinalIgnoreCase);
+
+        // The earliest first payment a DIA may have: two years from today, less a day so a visitor whose local date is
+        // a day behind the server's isn't refused the page's own minimum
+        public static DateOnly EarliestDiaStart(DateOnly today) => today.AddYears(2).AddDays(-1);
+
+        // The engine's annuity, or null when the tab is off. Call on a validated request.
+        public Annuity? ToAnnuity() => !IncludeAnnuity ? null : new Annuity
+        {
+            MonthlyPayment = AnnuityMonthlyAmount,
+            FirstPayment = IsDia ? AnnuityStartDate!.Value : RetirementDate,
+            Basis = AnnuityTaxDeferred ? 0 : AnnuityInvestment,
+            AnnualIncrease = AnnuityCola ? AnnuityColaRate : 0
+        };
 
         public Dictionary<string, string> Validate()
         {
@@ -47,9 +75,22 @@ namespace MonteCarloSimulation.Web
             if (YearNewMoney < 0) errors["yearNewMoney"] = "Year of new money must be non-negative.";
             if (SocialSecurityMonthlyAmount < 0) errors["socialSecurityMonthlyAmount"] = "Must be non-negative.";
             if (AnnualStandardDeduction < 0) errors["annualStandardDeduction"] = "Must be non-negative.";
+            if (IncludeAnnuity) ValidateAnnuity(errors);
             FilingStatusInput.Validate(this, errors);
             ValidateAssetMix(errors);
             return errors;
+        }
+
+        private void ValidateAnnuity(Dictionary<string, string> errors)
+        {
+            if (AnnuityMonthlyAmount <= 0) errors["annuityMonthlyAmount"] = "The annuity's monthly payment must be positive.";
+            if (AnnuityInvestment < 0) errors["annuityInvestment"] = "The investment amount must be non-negative.";
+            if (!IsDia && !string.Equals(AnnuityType, "spia", StringComparison.OrdinalIgnoreCase))
+                errors["annuityType"] = "The annuity must be a SPIA or a DIA.";
+            else if (IsDia && (AnnuityStartDate is not DateOnly start || start < EarliestDiaStart(DateOnly.FromDateTime(DateTime.Today))))
+                errors["annuityStartDate"] = "A DIA's payments must start at least 2 years from today.";
+            if (AnnuityCola && !AnnuityColaRates.Any(rate => Math.Abs(rate - AnnuityColaRate) < 1e-9))
+                errors["annuityColaRate"] = "The COLA must be 1%, 2% or 3%.";
         }
     }
 }
