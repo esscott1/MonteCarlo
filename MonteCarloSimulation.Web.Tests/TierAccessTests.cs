@@ -17,6 +17,8 @@ namespace MonteCarloSimulation.Web.Tests
     {
         private const string PlusCode = "plus-test-code";
         private const string ProCode = "pro-test-code";
+        // appsettings.json gives Plus every feature but the annuity COLA, which is Pro's
+        private static readonly string[] PlusFeatures = Features.All.Where(f => f != Features.AnnuityCola).ToArray();
 
         private static WebApplicationFactory<Program> App(
             bool tierPlus = true, bool tierPro = true, string plusCode = PlusCode, int? teaserYears = null) =>
@@ -123,7 +125,8 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(new[] { "Plus", "Pro" }, offers.Select(o => o.GetProperty("tier").GetString()));
             Assert.Equal(new[] { "$3.99/month", "$100/month" }, offers.Select(o => o.GetProperty("priceLabel").GetString()));
             Assert.All(offers, o => Assert.Equal("code", o.GetProperty("action").GetString()));
-            Assert.All(offers, o => Assert.Equal(Features.All, Strings(o.GetProperty("features"))));
+            Assert.Equal(PlusFeatures, Strings(offers[0].GetProperty("features")));
+            Assert.Equal(Features.All, Strings(offers[1].GetProperty("features")));
             // What Pro will add, shown in its upgrade offer
             Assert.Empty(Strings(offers[0].GetProperty("highlights")));
             Assert.Equal(new[] { "Return models", "Per-account asset mixes", "Advisor workspace" }, Strings(offers[1].GetProperty("highlights")));
@@ -152,7 +155,7 @@ namespace MonteCarloSimulation.Web.Tests
 
             var me = await MeAsync(client, setCookie.Split(';')[0]);
             Assert.Equal(expected, me.GetProperty("tier").GetString());
-            Assert.Equal(Features.All, Strings(me.GetProperty("features")));
+            Assert.Equal(expected == "Pro" ? Features.All : PlusFeatures, Strings(me.GetProperty("features")));
         }
 
         [Fact]
@@ -408,6 +411,113 @@ namespace MonteCarloSimulation.Web.Tests
             using var response = await PostAsync(app, "/api/run", request, cookie);
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        // --- The Annuity tab: Plus, its COLA Pro ---
+
+        // A DIA paying $2,600 a month from a little over two years out, with the default $400,000 basis
+        private static RunRequest WithAnnuity(RunRequest request, bool cola = false)
+        {
+            request.IncludeAnnuity = true;
+            request.AnnuityMonthlyAmount = 2_600;
+            request.AnnuityInvestment = 400_000;
+            request.AnnuityType = "dia";
+            request.AnnuityStartDate = DateOnly.FromDateTime(DateTime.Today).AddYears(2).AddMonths(1);
+            request.AnnuityCola = cola;
+            request.AnnuityColaRate = 0.02;
+            return request;
+        }
+
+        [Fact]
+        public async Task AFreeVisitor_SendingAnAnnuity_GetsA403()
+        {
+            using var app = App();
+
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/run", WithAnnuity(FreeRunRequest(), cola: true)), HttpStatusCode.Forbidden);
+
+            Assert.Equal("Annuities are a Plus feature.", errors.GetProperty("includeAnnuity")[0].GetString());
+            Assert.Equal("An annuity COLA is a Pro feature.", errors.GetProperty("annuityCola")[0].GetString());
+        }
+
+        [Fact]
+        public async Task APlusVisitor_RunsAnAnnuity_AsIncome_ButNotItsCola()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+
+            using var response = await PostAsync(app, "/api/run", WithAnnuity(FreeRunRequest()), cookie);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var annuity = body.RootElement.GetProperty("parameters").GetProperty("annuity");
+            Assert.Equal(400_000, annuity.GetProperty("basis").GetDouble());
+            Assert.Equal(0, annuity.GetProperty("annualIncrease").GetDouble());
+            var years = body.RootElement.GetProperty("output").GetProperty("result").GetProperty("runs")[0].GetProperty("years").EnumerateArray().ToList();
+            Assert.Equal(0, years[0].GetProperty("annuityIncome").GetDouble());
+            Assert.Contains(years, y => y.GetProperty("annuityPayments").GetInt32() == 12
+                && Math.Abs(y.GetProperty("annuityIncome").GetDouble() - 31_200) < 1e-6);
+
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/run", WithAnnuity(FreeRunRequest(), cola: true), cookie), HttpStatusCode.Forbidden);
+            Assert.Equal("An annuity COLA is a Pro feature.", errors.GetProperty("annuityCola")[0].GetString());
+            Assert.False(errors.TryGetProperty("includeAnnuity", out _));
+        }
+
+        [Fact]
+        public async Task AProVisitor_MayAddACola_InATaxDeferredAnnuity()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "pro", ProCode);
+            var request = WithAnnuity(FreeRunRequest(), cola: true);
+            request.AnnuityTaxDeferred = true;
+
+            using var response = await PostAsync(app, "/api/run", request, cookie);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var annuity = body.RootElement.GetProperty("parameters").GetProperty("annuity");
+            Assert.Equal(0, annuity.GetProperty("basis").GetDouble()); // in a tax-deferred account: every payment taxed
+            Assert.Equal(0.02, annuity.GetProperty("annualIncrease").GetDouble());
+        }
+
+        [Fact]
+        public async Task ADiaStartingWithinTwoYears_IsA400_ButASpiaIgnoresTheDate()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+            var tooSoon = WithAnnuity(FreeRunRequest());
+            tooSoon.AnnuityStartDate = DateOnly.FromDateTime(DateTime.Today).AddYears(1);
+
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/run", tooSoon, cookie), HttpStatusCode.BadRequest);
+            Assert.Equal("A DIA's payments must start at least 2 years from today.", errors.GetProperty("annuityStartDate")[0].GetString());
+
+            tooSoon.AnnuityType = "spia";
+            using var spia = await PostAsync(app, "/api/run", tooSoon, cookie);
+            Assert.Equal(HttpStatusCode.OK, spia.StatusCode);
+            using var body = JsonDocument.Parse(await spia.Content.ReadAsStringAsync());
+            // A SPIA pays from the Retire On date
+            Assert.Equal("2027-01-01", body.RootElement.GetProperty("parameters").GetProperty("annuity").GetProperty("firstPayment").GetString());
+        }
+
+        [Theory]
+        [InlineData("annuityMonthlyAmount")]
+        [InlineData("annuityInvestment")]
+        [InlineData("annuityType")]
+        [InlineData("annuityColaRate")]
+        public async Task AnAnnuitysInputs_AreValidated(string field)
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "pro", ProCode);
+            var request = WithAnnuity(FreeRunRequest(), cola: true);
+            switch (field)
+            {
+                case "annuityMonthlyAmount": request.AnnuityMonthlyAmount = 0; break;
+                case "annuityInvestment": request.AnnuityInvestment = -1; break;
+                case "annuityType": request.AnnuityType = "variable"; break;
+                case "annuityColaRate": request.AnnuityColaRate = 0.05; break;
+            }
+
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/run", request, cookie), HttpStatusCode.BadRequest);
+
+            Assert.True(errors.TryGetProperty(field, out _));
         }
 
         [Fact]

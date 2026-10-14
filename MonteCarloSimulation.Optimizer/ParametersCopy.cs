@@ -25,6 +25,7 @@ namespace MonteCarloSimulation.Optimizer
             YearNewMoney = p.YearNewMoney,
             SocialSecurityStartDate = p.SocialSecurityStartDate,
             SocialSecurityMonthlyAmount = p.SocialSecurityMonthlyAmount,
+            Annuity = p.Annuity,
             FilingStatus = p.FilingStatus,
             AnnualStandardDeduction = p.AnnualStandardDeduction,
             EnableRothConversions = p.EnableRothConversions,

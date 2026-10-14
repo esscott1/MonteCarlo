@@ -27,6 +27,8 @@ namespace MonteCarloSimulation.Core
         public DateOnly SocialSecurityStartDate { get; set; }
         // Monthly Social Security benefit, in today's (2026) dollars.
         public double SocialSecurityMonthlyAmount { get; set; }
+        // An income annuity the household already owns (the Scenario runner's Annuity tab). Null: none.
+        public Annuity? Annuity { get; set; }
         // Picks the bracket tables and Medicare IRMAA tiers (FederalTaxBrackets.For).
         public FilingStatus FilingStatus { get; set; } = FilingStatus.Single;
         // Annual standard deduction, in today's (2026) dollars.

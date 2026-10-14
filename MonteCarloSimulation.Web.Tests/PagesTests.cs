@@ -125,10 +125,10 @@ namespace MonteCarloSimulation.Web.Tests
         {
             string html = await GetAsync("/index.html");
 
-            // Four tabs, in order, each controlling its panel; the first is selected
+            // Five tabs, in order, each controlling its panel; the first is selected
             var tabs = Regex.Matches(html, @"role=""tab"" id=""(tab-\w+)"" aria-controls=""(panel-\w+)"" aria-selected=""(\w+)""");
-            Assert.Equal(new[] { "tab-demographics", "tab-assets", "tab-money", "tab-income" }, tabs.Select(m => m.Groups[1].Value));
-            Assert.Equal(new[] { "true", "false", "false", "false" }, tabs.Select(m => m.Groups[3].Value));
+            Assert.Equal(new[] { "tab-demographics", "tab-assets", "tab-money", "tab-income", "tab-annuity" }, tabs.Select(m => m.Groups[1].Value));
+            Assert.Equal(new[] { "true", "false", "false", "false", "false" }, tabs.Select(m => m.Groups[3].Value));
             foreach (Match tab in tabs)
                 Assert.True(HasId(html, tab.Groups[2].Value));
 
@@ -139,6 +139,8 @@ namespace MonteCarloSimulation.Web.Tests
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-money")));
             Assert.All(new[] { "socialSecurityMonthlyAmount", "socialSecurityStartDate", "annualStandardDeduction", "newMoney", "yearNewMoney" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
+            Assert.All(new[] { "includeAnnuity", "annuityMonthlyAmount", "annuityInvestment", "annuityType", "annuityStartDate", "annuityTaxDeferred", "annuityCola", "annuityColaRate" },
+                name => Assert.Contains($@"name=""{name}""", Panel("panel-annuity")));
 
             // Asset Classes: each class's allocation (60/30/10), return and std. dev. (8/19, 4.5/4, 3.5/1),
             // and the stock-bond correlation (0.1)
@@ -294,6 +296,11 @@ namespace MonteCarloSimulation.Web.Tests
                 Assert.Matches($@"name=""{name}""[^>]*value=""{Regex.Escape(value)}""[^>]*data-requires=""custom-returns""", html);
             Assert.Matches(@"name=""enableRothConversions""[^>]*data-requires=""roth-conversions"" data-free-value=""false""", html);
             Assert.Matches(@"name=""newMoney""[^>]*data-requires=""inheritance"" data-free-value=""0""", html);
+            if (path == "/index.html")
+            {
+                Assert.Matches(@"name=""includeAnnuity""[^>]*data-requires=""annuity"" data-free-value=""false""", html);
+                Assert.Matches(@"name=""annuityCola""[^>]*data-requires=""annuity-cola"" data-free-value=""false""", html);
+            }
             // A married household's default (inputs.js moves the field to it when Married is chosen)
             Assert.Matches($@"name=""annualStandardDeduction""[^>]*data-married-value=""{free.StandardDeductionMarried.ToString("N0", CultureInfo.InvariantCulture)}""", html);
         }
@@ -413,6 +420,33 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Matches(@"<h2 id=""recommendation-title""[^>]*>.*?<span class=""paid-badge"" data-feature=""optimizer-full"" hidden></span></h2>", optimal);
             Assert.Matches(@"<legend><span data-i18n=""optimal.markets"">[^<]*</span> <span class=""paid-badge"" data-feature=""optimizer-full"" hidden></span></legend>", optimal);
             Assert.Contains("data-feature=\"tax-detail\"", await GetAsync("/app.js"));
+            // The annuity's badge beside "Include an annuity", the COLA's beside its checkbox
+            Assert.Matches(@"name=""includeAnnuity""[^>]*>\s*<span data-i18n=""runner.annuity.include"">[^<]*</span><sup class=""form-note-ref"">\*</sup>\s*<span class=""paid-badge"" data-feature=""annuity"" hidden></span>", runner);
+            Assert.Matches(@"name=""annuityCola""[^>]*>\s*<span data-i18n=""runner.annuity.cola"">[^<]*</span>\s*<span class=""paid-badge"" data-feature=""annuity-cola"" hidden></span>", runner);
+        }
+
+        // The Annuity tab: Include (off), then the payment ($2,600) and investment ($400,000), SPIA or DIA (SPIA chosen;
+        // the DIA's date hidden until chosen, its minimum set by app.js), tax-deferred, and the COLA's 1/2/3% (2% chosen).
+        // Its fields sit in a fieldset that stays disabled until Include is ticked, and its notes explain the * and 1-3.
+        [Fact]
+        public async Task ScenarioRunner_AnnuityTab_HasItsDefaultsAndNotes()
+        {
+            string html = await GetAsync("/index.html");
+            string panel = Regex.Match(html, @"id=""panel-annuity""(.*?)(?=<section class=""graph-tile)", RegexOptions.Singleline).Groups[1].Value;
+
+            Assert.Matches(@"<input type=""checkbox"" name=""includeAnnuity""(?![^>]*checked)", panel);
+            Assert.Contains(@"<fieldset class=""annuity-details"" id=""annuity-details"" disabled>", panel);
+            Assert.Matches(@"name=""annuityMonthlyAmount""[^>]*value=""2,600""", panel);
+            Assert.Matches(@"name=""annuityInvestment""[^>]*value=""400,000""", panel);
+            Assert.Contains(@"name=""annuityType"" value=""spia"" checked", panel);
+            Assert.Matches(@"name=""annuityType"" value=""dia""(?![^>]*checked)", panel);
+            Assert.Contains(@"<label id=""annuity-start"" hidden>", panel);
+            Assert.Matches(@"<input type=""date"" name=""annuityStartDate""[^>]*disabled", panel);
+            Assert.Contains(@"<label id=""annuity-cola-rate"" hidden>", panel);
+            Assert.Equal(new[] { "0.01", "0.02", "0.03" }, Regex.Matches(panel, @"<option value=""([\d.]+)""").Select(m => m.Groups[1].Value));
+            Assert.Contains(@"<option value=""0.02"" selected>", panel);
+            foreach (var marker in new[] { "*", "1", "2", "3" })
+                Assert.Matches($@"<p><sup>{Regex.Escape(marker)}</sup> <span data-i18n=""runner.annuity.note\w+"">", panel);
         }
 
         [Fact]

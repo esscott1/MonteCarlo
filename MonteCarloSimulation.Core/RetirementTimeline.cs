@@ -3,7 +3,8 @@ namespace MonteCarloSimulation.Core
     // One model year: the part of a calendar year that falls inside the retirement window. The first year starts
     // on the retirement date and the last ends on its anniversary, so both are partial unless retirement starts
     // on January 1. Every dollar amount for the year is derived from here. RmdDivisor is the year's required minimum
-    // distribution divisor (RequiredMinimumDistributions), null before RMDs start.
+    // distribution divisor (RequiredMinimumDistributions), null before RMDs start. The annuity's payments, gross
+    // income and taxable part (Annuity) don't depend on markets either, so they're laid out here too (0 without one).
     internal sealed record RetirementYear(
         int Index,
         int CalendarYear,
@@ -13,6 +14,9 @@ namespace MonteCarloSimulation.Core
         double InflationFactor,
         double AgeAtStart,
         int SocialSecurityPayments,
+        int AnnuityPayments,
+        double AnnuityIncome,
+        double AnnuityTaxable,
         int MedicareMonths,
         int MedicarePeople,
         double? RmdDivisor,
@@ -55,12 +59,13 @@ namespace MonteCarloSimulation.Core
                 double inflationFactor = InflationFactor(calendarYear, retirement.Year);
                 double ageAtStart = (start.DayNumber - parameters.Birthdate.DayNumber) / 365.25;
                 int payments = SocialSecurityPayments(parameters.SocialSecurityStartDate, start, stop);
+                var (annuityPayments, annuityIncome, annuityTaxable) = AnnuityYearIncome(parameters.Annuity, calendarYear, start, stop);
                 int medicareMonths = MedicareMonths(parameters.Birthdate, start, stop);
                 double? rmdDivisor = RequiredMinimumDistributions.DivisorFor(parameters.Birthdate, calendarYear);
                 var taxYear = TaxYear.For(tables, parameters.AnnualStandardDeduction * inflationFactor, inflationFactor);
 
                 years.Add(new RetirementYear(years.Count, calendarYear, start, stop, fraction, inflationFactor, ageAtStart, payments,
-                    medicareMonths, tables.MedicarePeople, rmdDivisor, taxYear));
+                    annuityPayments, annuityIncome, annuityTaxable, medicareMonths, tables.MedicarePeople, rmdDivisor, taxYear));
             }
 
             return years;
@@ -82,6 +87,21 @@ namespace MonteCarloSimulation.Core
         {
             var sixtyFive = birthdate.AddYears(65);
             return SocialSecurityPayments(new DateOnly(sixtyFive.Year, sixtyFive.Month, 1), from, to);
+        }
+
+        // The annuity's payments falling in [from, to) (a calendar year's part of the window), their gross amount, and
+        // the part that's ordinary income: all of it, less Basis / 312 of each payment among the first 312 - counted
+        // from the first payment, even one before the window starts.
+        public static (int Payments, double Income, double Taxable) AnnuityYearIncome(Annuity? annuity, int calendarYear, DateOnly from, DateOnly to)
+        {
+            if (annuity is null) return (0, 0, 0);
+            int payments = SocialSecurityPayments(annuity.FirstPayment, from, to);
+            if (payments == 0) return (0, 0, 0);
+            double payment = annuity.PaymentIn(calendarYear);
+            int paidBefore = SocialSecurityPayments(annuity.FirstPayment, annuity.FirstPayment, from);
+            int recovering = Math.Min(payments, Math.Max(0, Annuity.BasisRecoveryPayments - paidBefore));
+            double income = payment * payments;
+            return (payments, income, income - recovering * annuity.ExcludedPerPayment(payment));
         }
 
         // Social Security pays monthly on the start date's day of the month (clamped to shorter months), beginning

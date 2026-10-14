@@ -128,6 +128,7 @@ namespace MonteCarloSimulation.StrategyLab.Tests
                     var t when t == typeof(RothConversionTarget) => RothConversionTarget.Bracket24,
                     var t when t == typeof(FilingStatus) => FilingStatus.MarriedJoint,
                     var t when t == typeof(AssetMix) => new AssetMix { StockWeight = 0.7, StockMean = 0.07 },
+                    var t when t == typeof(Annuity) => new Annuity { MonthlyPayment = 2_600, Basis = 400_000 },
                     var t => throw new InvalidOperationException($"Add a test value for {t.Name} ({property.Name})")
                 };
                 property.SetValue(original, value);

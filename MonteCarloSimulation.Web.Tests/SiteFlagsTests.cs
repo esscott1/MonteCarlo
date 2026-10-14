@@ -83,7 +83,8 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.True(plus.GetProperty("on").GetBoolean());
             Assert.Equal(JsonValueKind.Null, plus.GetProperty("changedAt").ValueKind);
             Assert.Equal("$3.99/month", plus.GetProperty("priceLabel").GetString());
-            Assert.Equal(Features.All.Count, plus.GetProperty("features").GetArrayLength());
+            // Every feature but the annuity COLA, which is Pro's
+            Assert.Equal(Features.All.Count - 1, plus.GetProperty("features").GetArrayLength());
             Assert.False(TierOf(view, "Pro").GetProperty("on").GetBoolean());
         }
 

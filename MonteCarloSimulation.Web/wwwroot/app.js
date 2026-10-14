@@ -47,6 +47,47 @@ function initSocialSecurityDefault() {
     followBirthdate();
 }
 
+// The Annuity tab (Plus; its COLA Pro): an annuity already owned. Its fields are disabled until "Include an annuity"
+// is ticked; a DIA shows its start date, at least two years from today (the visitor's own date), and a COLA its rate.
+function initAnnuity() {
+    const include = form.elements['includeAnnuity'];
+    const details = document.getElementById('annuity-details');
+    const start = form.elements['annuityStartDate'];
+    const cola = form.elements['annuityCola'];
+    const today = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const earliest = addYears(`${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`, 2);
+    start.min = earliest;
+    // Also what a Free visitor's lock holds it at (paywall.js)
+    start.defaultValue = earliest;
+    start.value = earliest;
+    const update = () => {
+        details.disabled = !include.checked;
+        const dia = form.elements['annuityType'].value === 'dia';
+        document.getElementById('annuity-start').hidden = !dia;
+        start.disabled = !dia;
+        document.getElementById('annuity-cola-rate').hidden = !cola.checked;
+    };
+    [include, cola, ...form.elements['annuityType']].forEach((input) => input.addEventListener('change', update));
+    update();
+}
+
+// The annuity as /api/run takes it. Read from the elements, not FormData: disabled controls aren't in FormData.
+function annuityRequest() {
+    const el = form.elements;
+    const dia = el['annuityType'].value === 'dia';
+    return {
+        includeAnnuity: el['includeAnnuity'].checked,
+        annuityMonthlyAmount: parseNumber(el['annuityMonthlyAmount'].value),
+        annuityInvestment: parseNumber(el['annuityInvestment'].value),
+        annuityType: el['annuityType'].value,
+        annuityStartDate: dia && el['annuityStartDate'].value ? el['annuityStartDate'].value : null,
+        annuityTaxDeferred: el['annuityTaxDeferred'].checked,
+        annuityCola: el['annuityCola'].checked,
+        annuityColaRate: Number(el['annuityColaRate'].value),
+    };
+}
+
 // User-supplied text is echoed back into the change-request result panel, so it has to be
 // escaped rather than interpolated raw.
 function escapeHtml(value) {
@@ -74,26 +115,67 @@ function yearWithAge(yd) {
     return `${t('runner.yearAge', { year: yd.calendarYear, age: Math.floor(yd.ageInYear + 0.005) })}${partial}`;
 }
 
-// `taxableNote` follows the Tax Deferred line (the withdrawal column's RMD footnote)
-function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax, socialSecurityMonths, brokerageGains, taxableNote = '') {
-    const taxablePct = taxablePercentOfBalance === undefined ? '' : ` ${t('runner.money.ofBalance', { pct: formatPercent(taxablePercentOfBalance) })}`;
-    // A Brokerage sale is part embedded gain, part tax-free return of basis (average cost)
-    const brokerageSplit = brokerageGains > 0.5 && brokerageAmt > 0
-        ? ` ${t('runner.money.gainsBasis', { gains: formatCurrency(brokerageGains), basis: formatCurrency(brokerageAmt - brokerageGains) })}`
+// The Total Balance column: the year-end total and each account
+function balanceBreakdown(yd) {
+    return bulletList([
+        t('runner.money.total', { amount: formatCurrency(yd.balance) }),
+        t('runner.money.taxable', { amount: formatCurrency(yd.taxableBalance) }),
+        t('runner.money.brokerage', { amount: formatCurrency(yd.brokerageBalance) }),
+        t('runner.money.roth', { amount: formatCurrency(yd.rothBalance) }),
+    ]);
+}
+
+// Everything the year drew before tax: each account's withdrawal, Social Security, the annuity, and the part of a Roth
+// conversion withheld from Tax Deferred for its tax
+const yearWithdrawals = (yd) => yd.taxableWithdrawal + yd.brokerageWithdrawal + yd.rothWithdrawal
+    + yd.socialSecurityIncome + yd.annuityIncome + (yd.rothConversionTaxWithheld ?? 0);
+
+const yearTaxes = (yd) => yd.ordinaryTaxAmount + yd.capitalGainsTaxAmount;
+
+// The Withdrawal column: the year's net after taxes on top, then the total withdrawals it came from and each one.
+// Total withdrawals less the Taxes column's total taxes is the net, to the dollar as shown. The net is the year's
+// spending, plus any Medicare surcharge and any income beyond spending saved to Brokerage, which it then names.
+function withdrawalBreakdown(yd) {
+    const net = Math.round(yearWithdrawals(yd)) - Math.round(yearTaxes(yd));
+    const irmaa = yd.irmaaSurcharge ?? 0; // not sent without the tax detail
+    const saved = yd.incomeSurplusToBrokerage + yd.rmdSurplusToBrokerage;
+    const uses = irmaa > 0.5 || saved > 0.5
+        ? ` (${[
+            t('runner.money.netSpending', { amount: formatCurrency(yd.withdrawal) }),
+            ...(irmaa > 0.5 ? [t('runner.money.netIrmaa', { amount: formatCurrency(irmaa) })] : []),
+            ...(saved > 0.5 ? [t('runner.money.netSaved', { amount: formatCurrency(saved) })] : []),
+        ].join(', ')})`
         : '';
-    const items = [
-        t('runner.money.total', { amount: formatCurrency(total) }),
-        t('runner.money.taxable', { amount: formatCurrency(taxableAmt) }) + taxablePct + taxableNote,
-        t('runner.money.brokerage', { amount: formatCurrency(brokerageAmt) }) + brokerageSplit,
-        t('runner.money.roth', { amount: formatCurrency(rothAmt) }),
+
+    const pct = ` ${t('runner.money.ofBalance', { pct: formatPercent(yd.taxableWithdrawalPercentOfBalance) })}`;
+    // A Brokerage sale is part embedded gain, part tax-free return of basis (average cost)
+    const brokerageSplit = yd.realizedGains > 0.5 && yd.brokerageWithdrawal > 0
+        ? ` ${t('runner.money.gainsBasis', { gains: formatCurrency(yd.realizedGains), basis: formatCurrency(yd.brokerageWithdrawal - yd.realizedGains) })}`
+        : '';
+    const parts = [
+        t('runner.money.taxable', { amount: formatCurrency(yd.taxableWithdrawal) }) + pct + rmdFootnote(yd),
+        t('runner.money.brokerage', { amount: formatCurrency(yd.brokerageWithdrawal) }) + brokerageSplit,
+        t('runner.money.roth', { amount: formatCurrency(yd.rothWithdrawal) }),
     ];
-    if (socialSecurity > 0) {
-        const detail = socialSecurityMonths < 12
-            ? t('runner.money.ssMonthsTax', { months: socialSecurityMonths, tax: formatCurrency(socialSecurityTax) })
-            : t('runner.money.ssTax', { tax: formatCurrency(socialSecurityTax) });
-        items.push(t('runner.money.socialSecurity', { amount: formatCurrency(socialSecurity), detail }));
+    if (yd.socialSecurityIncome > 0) {
+        const detail = yd.socialSecurityMonths < 12
+            ? t('runner.money.ssMonthsTax', { months: yd.socialSecurityMonths, tax: formatCurrency(yd.socialSecurityTax) })
+            : t('runner.money.ssTax', { tax: formatCurrency(yd.socialSecurityTax) });
+        parts.push(t('runner.money.socialSecurity', { amount: formatCurrency(yd.socialSecurityIncome), detail }));
     }
-    return bulletList(items);
+    if (yd.annuityIncome > 0) {
+        const detail = yd.annuityPayments < 12
+            ? t('runner.money.ssMonthsTax', { months: yd.annuityPayments, tax: formatCurrency(yd.annuityTax) })
+            : t('runner.money.ssTax', { tax: formatCurrency(yd.annuityTax) });
+        parts.push(t('runner.money.annuity', { amount: formatCurrency(yd.annuityIncome), detail }) + annuityFootnote(yd));
+    }
+    if (yd.rothConversionTaxWithheld > 0.5) {
+        parts.push(t('runner.money.conversionWithheld', { amount: formatCurrency(yd.rothConversionTaxWithheld) }));
+    }
+    return bulletList([
+        t('runner.money.net', { amount: formatCurrency(net) }) + uses,
+        t('runner.money.totalWithdrawals', { amount: formatCurrency(yearWithdrawals(yd)) }) + bulletList(parts),
+    ]);
 }
 
 function ratePercent(rate) {
@@ -135,6 +217,21 @@ function rmdFootnote(yd) {
     return footnote(parts.join(' '), t('runner.note.rmd.marker'), t('runner.note.rmd.aria'));
 }
 
+// How the year's annuity payments were taxed: part a tax-free return of basis (the first 26 years of a non-qualified
+// annuity), or all ordinary income (in a tax-deferred account, or once the basis has come back)
+function annuityFootnote(yd) {
+    const returned = yd.annuityIncome - yd.annuityTaxableIncome;
+    let text;
+    if (returned > 0.5) {
+        text = t('runner.note.annuity.basis', { basis: formatCurrency(returned), taxable: formatCurrency(yd.annuityTaxableIncome) });
+    } else if (view.parameters.annuity?.basis > 0) {
+        text = t('runner.note.annuity.recovered');
+    } else {
+        text = t('runner.note.annuity.taxDeferred');
+    }
+    return footnote(text, 1);
+}
+
 function zeroRateBandNote(yd, conversionsEnabled) {
     let ending = '';
     if (yd.rothConversionAmount > 0) {
@@ -154,6 +251,9 @@ function ordinaryTaxSourcesNote(yd) {
     }
     if (yd.socialSecurityTax > 0.5) {
         parts.push(t('runner.note.socialSecurity', { amount: formatCurrency(yd.socialSecurityTax) }));
+    }
+    if (yd.annuityTax > 0.5) {
+        parts.push(t('runner.note.annuityTax', { amount: formatCurrency(yd.annuityTax) }));
     }
     const fromBrokerage = yd.rothConversionOrdinaryTaxFromBrokerage;
     const fromConversion = yd.rothConversionOrdinaryTaxFromConversion;
@@ -181,6 +281,7 @@ function taxesBreakdown(yd, conversionsEnabled) {
     const zeroRateOnConversionLine = zeroRateOnConversion ? footnote(zeroRateNote, next++) : '';
 
     const items = [
+        t('runner.tax.total', { amount: formatCurrency(yearTaxes(yd)) }),
         t('runner.tax.capGains', { amount: formatCurrency(yd.capitalGainsTaxAmount), rate: ratePercent(yd.capitalGainsBracketRate) }) + zeroRateOnGainsLine,
         t('runner.tax.ordinary', { amount: formatCurrency(yd.ordinaryTaxAmount), rate: ratePercent(yd.ordinaryBracketRate) }) + sourcesMarker,
         hasNextBracket(yd.nextBracketRate)
@@ -191,7 +292,11 @@ function taxesBreakdown(yd, conversionsEnabled) {
         items.push(t('runner.tax.harvested', { amount: formatCurrency(yd.harvestedGains) }));
     }
     if (yd.rothConversionAmount > 0) {
-        items.push(t('runner.tax.converted', { amount: formatCurrency(yd.rothConversionAmount), tax: formatCurrency(yd.rothConversionTax) }) + zeroRateOnConversionLine);
+        // What was withheld beyond the conversion's own ordinary tax is the capital gains tax it caused, by pushing the
+        // year's gains into a higher bracket (the Withdrawal column's withheld line is both)
+        const gainsWithheld = (yd.rothConversionTaxWithheld ?? 0) - yd.rothConversionOrdinaryTaxFromConversion;
+        const converted = { amount: formatCurrency(yd.rothConversionAmount), tax: formatCurrency(yd.rothConversionTax), gains: formatCurrency(gainsWithheld) };
+        items.push(t(gainsWithheld > 0.5 ? 'runner.tax.convertedWithGains' : 'runner.tax.converted', converted) + zeroRateOnConversionLine);
     }
     if (yd.irmaaSurcharge > 0.5) {
         // Medicare premiums surcharge, set by income two years earlier and paid on top of spending
@@ -203,6 +308,7 @@ function taxesBreakdown(yd, conversionsEnabled) {
 // Without the tax-detail feature the server sends only each year's tax totals (FreeRunView)
 function taxTotals(yd) {
     return bulletList([
+        t('runner.tax.total', { amount: formatCurrency(yearTaxes(yd)) }),
         t('runner.tax.capGainsTotal', { amount: formatCurrency(yd.capitalGainsTaxAmount) }),
         t('runner.tax.ordinaryTotal', { amount: formatCurrency(yd.ordinaryTaxAmount) }),
     ]);
@@ -231,10 +337,10 @@ function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail) {
         return `
         <tr>
             <td>${yearWithAge(yd)}</td>
-            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax, yd.socialSecurityMonths, yd.realizedGains, rmdFootnote(yd))}</td>
+            <td>${withdrawalBreakdown(yd)}</td>
             ${taxCell(yd, conversionsEnabled, taxDetail)}
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
-            <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>
+            <td>${balanceBreakdown(yd)}</td>
         </tr>
     `;
     }).join('');
@@ -296,6 +402,20 @@ function accountChoiceLine(parameters, output) {
     return `<p>${t('runner.accounts', { order, conversions: t(`target.phrase.${target}`), funding, picked })} (<a href="model-info.html" class="summary-link">${t('common.why')}</a>)</p>`;
 }
 
+// The annuity the run included: what it pays from when, any yearly increase, and how its payments are taxed
+function annuityLine(parameters) {
+    const annuity = parameters.annuity;
+    if (!annuity) return '';
+    return `<p>${t('runner.annuityLine', {
+        amount: formatCurrency(annuity.monthlyPayment),
+        start: I18n.monthYear(new Date(`${annuity.firstPayment}T00:00:00Z`)),
+        cola: annuity.annualIncrease > 0 ? t('runner.annuityLine.cola', { rate: ratePercent(annuity.annualIncrease) }) : '',
+        taxes: annuity.basis > 0
+            ? t('runner.annuityLine.basis', { basis: formatCurrency(annuity.basis) })
+            : t('runner.annuityLine.taxDeferred'),
+    })}</p>`;
+}
+
 function renderSummary(parameters, output) {
     const result = output.result;
     const totalAvgRate = output.allRates.reduce((a, b) => a + b, 0) / output.allRates.length;
@@ -316,7 +436,7 @@ function renderSummary(parameters, output) {
         cash: formatAllocation(mix.cashWeight * 100),
         mean: formatPercent(parameters.mean),
         stdDev: formatPercent(parameters.stdDev),
-    })}</p>${parameters.filingStatus === 'MarriedJoint' ? `<p>${t('runner.filingMarried')}</p>` : ''}`;
+    })}</p>${parameters.filingStatus === 'MarriedJoint' ? `<p>${t('runner.filingMarried')}</p>` : ''}${annuityLine(parameters)}`;
 
     if (result.outOfMoneyCount > 0) {
         const survival = 1 - (result.outOfMoneyCount / parameters.iterations);
@@ -618,6 +738,7 @@ form.addEventListener('submit', async (e) => {
         annualStandardDeduction: parseNumber(formData.get('annualStandardDeduction')),
         filingStatus: formData.get('filingStatus'),
         enableRothConversions: form.elements['enableRothConversions'].checked,
+        ...annuityRequest(),
         ...Inputs.readAssetMix(form)
     };
 
@@ -727,6 +848,9 @@ function applySimulatorHandoff() {
         .forEach((name) => setMoney(name, h[name]));
     set('yearNewMoney', h.yearNewMoney);
     form.elements['enableRothConversions'].checked = h.enableRothConversions;
+    // The Optimal page has no annuity, so the run leaves it out too
+    form.elements['includeAnnuity'].checked = false;
+    form.elements['includeAnnuity'].dispatchEvent(new Event('change'));
     Inputs.setAssetMix(form, h.assetMix);
     updateBalanceTotals();
     Inputs.refreshAccountTotals(form);
@@ -772,6 +896,7 @@ Inputs.initAccountTotals(form);
 Inputs.initFilingStatus(form);
 Inputs.sizeInputs(form);
 initSocialSecurityDefault();
+initAnnuity();
 Inputs.initCollapsibleInputs(form);
 initRunToggles();
 initFootnotes();

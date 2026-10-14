@@ -334,6 +334,42 @@ body.wide {
     display: none;
 }
 
+/* The Annuity tab. Its fields join the panel's grid: the fieldset around them is only there to disable them all while
+   "Include an annuity" is off, greying their labels too. The DIA start date and the COLA rate show only when chosen. */
+.annuity-details {
+    display: contents;
+}
+
+.annuity-details:disabled :is(label, legend) {
+    color: var(--muted);
+}
+
+#panel-annuity label[hidden] {
+    display: none;
+}
+
+.tabs-tile select {
+    padding: 0.2rem 0.35rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.form-note-ref {
+    color: var(--muted);
+}
+
+/* Footnotes under a tab's fields */
+.form-notes {
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.form-notes p {
+    margin: 0 0 0.25rem;
+}
+
 .asset-table {
     border-collapse: collapse;
     font-size: 0.9rem;
@@ -766,6 +802,11 @@ button[type="submit"]:hover {
     margin: 0;
     padding-left: 1.1rem;
     list-style: disc;
+}
+
+/* The withdrawals that make up a year's total, under it */
+.breakdown-list .breakdown-list {
+    list-style: circle;
 }
 
 .run-toggle {
@@ -1374,12 +1415,14 @@ details.observe-section {
 
 /* Inputs the visitor's tier has enabled: outlined in its colour (inputs inside a revealed group too) */
 input[data-enabled-tier="plus"],
+select[data-enabled-tier="plus"],
 [data-enabled-tier="plus"] input:not([type="radio"]) {
     outline: 2px solid var(--accent);
     outline-offset: 0;
 }
 
 input[data-enabled-tier="pro"],
+select[data-enabled-tier="pro"],
 [data-enabled-tier="pro"] input:not([type="radio"]) {
     outline: 2px solid var(--pro);
     outline-offset: 0;
@@ -1387,6 +1430,19 @@ input[data-enabled-tier="pro"],
 
 input[type="checkbox"][data-enabled-tier] {
     outline-offset: 1px;
+}
+
+/* A radio button takes the tier colour itself: a square outline around a round button looks broken */
+input[type="radio"][data-enabled-tier] {
+    outline: none;
+}
+
+input[type="radio"][data-enabled-tier="plus"] {
+    accent-color: var(--accent);
+}
+
+input[type="radio"][data-enabled-tier="pro"] {
+    accent-color: var(--pro);
 }
 
 fieldset[data-enabled-tier="plus"] {
@@ -1444,7 +1500,8 @@ fieldset[data-enabled-tier="pro"] {
 }
 
 /* An input a Free visitor can't change: shown at its Free value, greyed */
-input.locked {
+input.locked,
+select.locked {
     background: var(--soft);
     border-color: var(--border);
     color: var(--muted);
@@ -1452,7 +1509,8 @@ input.locked {
 }
 
 /* Locked for Pro: a deep purple edge */
-input.locked[data-locked-tier="pro"] {
+input.locked[data-locked-tier="pro"],
+select.locked[data-locked-tier="pro"] {
     border-left: 3px solid var(--pro);
 }
 

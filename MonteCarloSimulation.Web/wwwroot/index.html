@@ -64,6 +64,7 @@
                     <button type="button" role="tab" id="tab-assets" aria-controls="panel-assets" aria-selected="false" tabindex="-1" data-i18n="runner.tab.assets">Asset Classes</button>
                     <button type="button" role="tab" id="tab-money" aria-controls="panel-money" aria-selected="false" tabindex="-1" data-i18n="runner.tab.money">Your Money</button>
                     <button type="button" role="tab" id="tab-income" aria-controls="panel-income" aria-selected="false" tabindex="-1" data-i18n="runner.tab.income">Other Income</button>
+                    <button type="button" role="tab" id="tab-annuity" aria-controls="panel-annuity" aria-selected="false" tabindex="-1" data-i18n="runner.tab.annuity">Annuity</button>
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-demographics" aria-labelledby="tab-demographics">
@@ -205,6 +206,55 @@
                             <input type="number" name="yearNewMoney" min="0" step="1" value="10" required data-requires="inheritance">
                         </label>
                     </fieldset>
+                </div>
+
+                <div class="tab-panel field-grid" role="tabpanel" id="panel-annuity" aria-labelledby="tab-annuity" hidden>
+                    <label class="checkbox-label span-all">
+                        <input type="checkbox" name="includeAnnuity" data-requires="annuity" data-free-value="false">
+                        <span data-i18n="runner.annuity.include">Include an annuity I already own</span><sup class="form-note-ref">*</sup>
+                        <span class="paid-badge" data-feature="annuity" hidden></span>
+                    </label>
+                    <fieldset class="annuity-details" id="annuity-details" disabled>
+                        <label><span data-i18n="runner.annuity.monthly">Return (monthly $)</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="annuityMonthlyAmount" pattern="[0-9,]*\.?[0-9]*" value="2,600" data-i18n-title="runner.annuity.monthlyTitle" title="The annuity's monthly payment. It stays the same every year unless a COLA raises it." required data-requires="annuity">
+                        </label>
+                        <label><span data-i18n="runner.annuity.investment">Investment Amount</span>
+                            <input type="text" inputmode="decimal" class="money-input" name="annuityInvestment" pattern="[0-9,]*\.?[0-9]*" value="400,000" data-i18n-title="runner.annuity.investmentTitle" title="What you paid for the annuity: its tax basis, returned tax-free over its first 26 years of payments. Ignored when it's in a tax-deferred account." required data-requires="annuity">
+                        </label>
+                        <fieldset class="subgroup">
+                            <legend data-i18n="runner.annuity.type">Type</legend>
+                            <label class="checkbox-label"><input type="radio" name="annuityType" value="spia" checked data-requires="annuity"> <span>SPIA</span><sup class="form-note-ref">1</sup></label>
+                            <label class="checkbox-label"><input type="radio" name="annuityType" value="dia" data-requires="annuity"> <span>DIA</span><sup class="form-note-ref">2</sup></label>
+                            <label id="annuity-start" hidden><span data-i18n="runner.annuity.start">Payments start</span>
+                                <input type="date" name="annuityStartDate" data-i18n-title="runner.annuity.startTitle" title="The date of the first payment: at least 2 years from today." required disabled data-requires="annuity">
+                            </label>
+                        </fieldset>
+                        <fieldset class="subgroup">
+                            <legend data-i18n="runner.annuity.taxesAndIncreases">Taxes and increases</legend>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="annuityTaxDeferred" data-requires="annuity">
+                                <span><span data-i18n="runner.annuity.taxDeferred">In a tax-deferred account</span><sup class="form-note-ref">3</sup></span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="annuityCola" data-requires="annuity-cola" data-free-value="false">
+                                <span data-i18n="runner.annuity.cola">Yearly increase (COLA)</span>
+                                <span class="paid-badge" data-feature="annuity-cola" hidden></span>
+                            </label>
+                            <label id="annuity-cola-rate" hidden><span data-i18n="runner.annuity.colaRate">Increase each January</span>
+                                <select name="annuityColaRate" data-requires="annuity-cola">
+                                    <option value="0.01">1%</option>
+                                    <option value="0.02" selected>2%</option>
+                                    <option value="0.03">3%</option>
+                                </select>
+                            </label>
+                        </fieldset>
+                    </fieldset>
+                    <div class="form-notes span-all">
+                        <p><sup>*</sup> <span data-i18n="runner.annuity.noteOwned">This annuity is already owned: its cost isn't taken from the balances on Your Money.</span></p>
+                        <p><sup>1</sup> <span data-i18n="runner.annuity.noteSpia">Single Premium Immediate Annuity: payments start on your Retire On Date.</span></p>
+                        <p><sup>2</sup> <span data-i18n="runner.annuity.noteDia">Deferred Income Annuity: payments start on the date you enter, at least 2 years from today.</span></p>
+                        <p><sup>3</sup> <span data-i18n="runner.annuity.noteTaxDeferred">All distributions from an annuity in a tax-deferred account are taxed 100% as ordinary income. Otherwise the exclusion ratio applies: part of each payment is a tax-free return of the investment amount for 26 years, and after that the whole payment is taxable.</span></p>
+                    </div>
                 </div>
             </div>
 
