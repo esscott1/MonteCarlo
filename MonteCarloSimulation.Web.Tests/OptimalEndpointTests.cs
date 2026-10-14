@@ -164,6 +164,27 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(JsonValueKind.String, streamed.GetProperty("recommended").GetProperty("withdrawalStrategy").ValueKind);
         }
 
+        [Fact]
+        public async Task TheStream_IsNeverCompressed_SoEachEventArrivesAsItHappens()
+        {
+            // Only /api/run's response is compressed: compressing this one would hold events back until a block fills
+            var request = DefaultRequest();
+            request.Paths = SpendingOptimizer.PathChoices.Min();
+            using var message = new HttpRequestMessage(HttpMethod.Post, "/api/optimal")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(request, AppJsonOptions), Encoding.UTF8, "application/json")
+            };
+            message.Headers.Add("Accept-Encoding", "gzip, br");
+
+            // Headers only, then the first line: the start event arrives before the optimizer finishes
+            using var response = await factory.CreateClient().SendAsync(message, HttpCompletionOption.ResponseHeadersRead);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Empty(response.Content.Headers.ContentEncoding);
+            using var reader = new StreamReader(await response.Content.ReadAsStreamAsync());
+            using var first = JsonDocument.Parse((await reader.ReadLineAsync())!);
+            Assert.Equal("start", first.RootElement.GetProperty("type").GetString());
+        }
+
         // --- Choosing how many market paths to simulate ---
 
         [Fact]

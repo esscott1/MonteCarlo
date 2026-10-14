@@ -12,8 +12,12 @@ const { parseNumber, formatWithCommas, formatAllocation } = Inputs;
 const updateAllocation = () => Inputs.updateAllocation(form);
 const updateBalanceTotals = () => Inputs.updateBalanceTotals(form);
 
+// One formatter for every amount: toLocaleString with options builds a new one on every call (about 60 times slower),
+// and a run's year table formats over a thousand amounts
+const usdFormat = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
 function formatCurrency(value) {
-    return Number(value).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    return usdFormat.format(Number(value));
 }
 
 function formatPercent(value) {
@@ -245,14 +249,16 @@ function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail) {
     `;
 }
 
-function renderPerRunTable(result, conversionsEnabled, taxDetail) {
+// One line per run. A run's year table is built the first time it's expanded (initRunToggles): building all of them
+// up front took seconds for 99 runs, and most are never opened.
+function renderPerRunTable(result) {
     const rows = result.runs.map((run, i) => {
         const failureNote = run.failed
             ? `<span class="failure">${t('runner.run.failed', { year: run.failureYear })}</span>`
             : '<span class="success">&mdash;</span>';
         return `
             <tr>
-                <td><button type="button" class="run-toggle" aria-expanded="false">${i + 1} <span class="run-toggle-icon">&#9656;</span></button></td>
+                <td><button type="button" class="run-toggle" data-run="${i}" aria-expanded="false">${i + 1} <span class="run-toggle-icon">&#9656;</span></button></td>
                 <td>${formatCurrency(run.endingBalance)}</td>
                 <td>${t('runner.run.lowest', { amount: formatCurrency(run.lowestBalanceValue), year: run.lowestBalanceYear })}</td>
                 <td>${formatPercent(run.averageAnnualReturn)}</td>
@@ -262,7 +268,7 @@ function renderPerRunTable(result, conversionsEnabled, taxDetail) {
                 <td>${failureNote}</td>
             </tr>
             <tr class="run-detail-row" hidden>
-                <td colspan="8">${renderRunDetailTable(run.years, conversionsEnabled, taxDetail)}</td>
+                <td colspan="8"></td>
             </tr>
         `;
     }).join('');
@@ -394,7 +400,7 @@ function renderView() {
         const { parameters, output, taxDetail } = view;
         results.innerHTML =
             renderSummary(parameters, output) +
-            renderPerRunTable(output.result, parameters.enableRothConversions, taxDetail) +
+            renderPerRunTable(output.result) +
             renderDetail(output, parameters.enableRothConversions, taxDetail);
         Paywall.decorate(results);
     }
@@ -416,6 +422,16 @@ function initRunToggles() {
 
         const detailRow = button.closest('tr').nextElementSibling;
         const expanded = button.getAttribute('aria-expanded') === 'true';
+
+        // The run's year table, built on its first expand since the results were drawn (renderView starts over,
+        // collapsed, after a language or tier change, so a table built later always reads the current ones)
+        if (!expanded && !detailRow.dataset.built) {
+            const run = view.output.result.runs[Number(button.dataset.run)];
+            const cell = detailRow.firstElementChild;
+            cell.innerHTML = renderRunDetailTable(run.years, view.parameters.enableRothConversions, view.taxDetail);
+            Paywall.decorate(cell);
+            detailRow.dataset.built = 'true';
+        }
 
         detailRow.hidden = expanded;
         button.setAttribute('aria-expanded', String(!expanded));

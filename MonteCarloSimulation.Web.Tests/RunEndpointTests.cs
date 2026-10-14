@@ -49,6 +49,54 @@ namespace MonteCarloSimulation.Web.Tests
             await factory.CreateClient().PostAsync("/api/run",
                 new StringContent(JsonSerializer.Serialize(request, AppJsonOptions), Encoding.UTF8, "application/json"));
 
+        private async Task<HttpResponseMessage> PostAcceptingAsync(RunRequest request, string acceptEncoding)
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Post, "/api/run")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(request, AppJsonOptions), Encoding.UTF8, "application/json")
+            };
+            message.Headers.Add("Accept-Encoding", acceptEncoding);
+            return await factory.CreateClient().SendAsync(message);
+        }
+
+        [Theory]
+        [InlineData("gzip")]
+        [InlineData("br")]
+        public async Task TheResults_AreCompressed_WhenTheBrowserAcceptsIt(string encoding)
+        {
+            using var response = await PostAcceptingAsync(DefaultRequest(), encoding);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal([encoding], response.Content.Headers.ContentEncoding);
+            await using var compressed = await response.Content.ReadAsStreamAsync();
+            await using Stream body = encoding == "gzip"
+                ? new System.IO.Compression.GZipStream(compressed, System.IO.Compression.CompressionMode.Decompress)
+                : new System.IO.Compression.BrotliStream(compressed, System.IO.Compression.CompressionMode.Decompress);
+            using var json = await JsonDocument.ParseAsync(body);
+            Assert.Equal(5, json.RootElement.GetProperty("output").GetProperty("result").GetProperty("runs").GetArrayLength());
+        }
+
+        [Fact]
+        public async Task TheResults_AreNotCompressed_WithoutAcceptEncoding()
+        {
+            using var response = await PostAsync(DefaultRequest());
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Empty(response.Content.Headers.ContentEncoding);
+        }
+
+        [Fact]
+        public async Task OnlyTheRunResults_AreCompressed()
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Get, "/api/me");
+            message.Headers.Add("Accept-Encoding", "gzip, br");
+
+            using var response = await factory.CreateClient().SendAsync(message);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Empty(response.Content.Headers.ContentEncoding);
+        }
+
         private static async Task<JsonElement> ErrorsAsync(HttpResponseMessage response)
         {
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
