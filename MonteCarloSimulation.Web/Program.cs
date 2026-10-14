@@ -1,6 +1,8 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.IO.Compression;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Options;
 using Microsoft.FeatureManagement;
 using MonteCarloSimulation.Core;
@@ -42,6 +44,19 @@ builder.Services.AddSingleton<FeatureAccess>();
 // The Observe page's Visits section: visits per day, kept in a file (VisitCounter)
 builder.Services.AddSingleton<VisitCounter>();
 
+// The Scenario runner's results are large JSON (about 2.7 MB for 99 runs of 30 years) that shrinks about 5x, so
+// /api/run's response is compressed (Brotli or gzip, as the browser accepts). Only that endpoint: /api/optimal streams
+// its results line by line, which compression would hold back, and leaving the passphrase and token responses alone
+// keeps compressed HTTPS clear of BREACH-style attacks. The fastest level: the bulk of the gain at little CPU.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
+builder.Services.Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
+
 // The Observe token check runs on every Observe page load and needs no countdown, so it keeps the built-in limiter.
 // Partitioned by caller IP and applied as middleware, so it rejects abusive traffic before the endpoint runs.
 builder.Services.AddRateLimiter(options =>
@@ -57,6 +72,8 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+app.UseWhen(context => context.Request.Path.Equals("/api/run"), branch => branch.UseResponseCompression());
 
 // The splash page is the home: "/" serves splash.html, which introduces the app and has tiles to the Scenario runner
 // (index.html) and the Optimizer (optimal.html), plus the menu to Model Info/Translations/Observe. Every page keeps
