@@ -1,5 +1,6 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
-using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using MonteCarloSimulation.Core;
 
 namespace MonteCarloSimulation.Web
@@ -9,6 +10,9 @@ namespace MonteCarloSimulation.Web
     // brackets and the room to the next, harvested and 0% gains, Medicare IRMAA and MAGI, Roth conversions and who paid
     // the ordinary tax. Each year's tax totals and effective rate, the spending, which account paid and the balances stay.
     // "taxDetail": false and "taxDetailYears" tell the page.
+    //
+    // The detail is left out as the response is written, in one pass: a type-info modifier skips those properties. (It
+    // used to be serialized into a JsonNode tree, trimmed and serialized again, which cost several times the response.)
     public static class FreeRunView
     {
         public static IReadOnlyList<string> TaxDetailFields { get; } = new[]
@@ -32,31 +36,39 @@ namespace MonteCarloSimulation.Web
 
         private static readonly string LifetimeIrmaa = JsonNamingPolicy.CamelCase.ConvertName(nameof(RunSummary.LifetimeIrmaaSurcharges));
 
-        private static readonly string YearField = JsonNamingPolicy.CamelCase.ConvertName(nameof(RunYearDetail.Year));
+        public static IResult Result(SimulationParameters parameters, SimulationRunOutput output, JsonSerializerOptions appOptions, int teaserYears) =>
+            Results.Json(new FreeRunResponse(parameters, output, TaxDetail: false, teaserYears), OptionsFor(appOptions, teaserYears));
 
-        public static JsonObject From(object response, JsonSerializerOptions options, int teaserYears)
-        {
-            var root = JsonSerializer.SerializeToNode(response, options)!.AsObject();
-            var output = root["output"]!.AsObject();
-            foreach (var run in output["result"]!["runs"]!.AsArray())
-            {
-                run!.AsObject().Remove(LifetimeIrmaa);
-                foreach (var year in run["years"]!.AsArray()) Strip(year!.AsObject(), teaserYears);
-            }
-            if (output["lastSuccessfulRun"] is JsonArray last)
-            {
-                foreach (var year in last) Strip(year!.AsObject(), teaserYears);
-            }
-            root["taxDetail"] = false;
-            root["taxDetailYears"] = teaserYears;
-            return root;
-        }
+        // The options a Free response is written with: the app's plus the modifier. Built once per (app options, teaser
+        // years): options are costly to build, and the teaser setting can change while the app runs.
+        private static readonly ConcurrentDictionary<(JsonSerializerOptions AppOptions, int TeaserYears), JsonSerializerOptions> Options = new();
 
-        // A year from the teaser on (model year 0 is the retirement year) loses its detail
-        private static void Strip(JsonObject year, int teaserYears)
+        public static JsonSerializerOptions OptionsFor(JsonSerializerOptions appOptions, int teaserYears) =>
+            Options.GetOrAdd((appOptions, teaserYears), key => new JsonSerializerOptions(key.AppOptions)
+            {
+                TypeInfoResolver = (key.AppOptions.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
+                    .WithAddedModifier(info => LeaveOutDetail(info, key.TeaserYears))
+            });
+
+        // A year from the teaser on (model year 0 is the retirement year) loses its detail, and a run its lifetime IRMAA
+        private static void LeaveOutDetail(JsonTypeInfo info, int teaserYears)
         {
-            if (year[YearField]!.GetValue<int>() < teaserYears) return;
-            foreach (var field in TaxDetailFields) year.Remove(field);
+            if (info.Type == typeof(RunYearDetail))
+            {
+                foreach (var property in info.Properties)
+                    if (TaxDetailFields.Contains(property.Name)) // the JSON (camelCase) name
+                        property.ShouldSerialize = (year, _) => ((RunYearDetail)year).Year < teaserYears;
+            }
+            else if (info.Type == typeof(RunSummary))
+            {
+                foreach (var property in info.Properties)
+                    if (property.Name == LifetimeIrmaa)
+                        property.ShouldSerialize = (_, _) => false;
+            }
         }
     }
+
+    // What /api/run sends a visitor without the tax-detail feature: the run's parameters and output (written through
+    // FreeRunView's options) and the two flags the page reads
+    public sealed record FreeRunResponse(SimulationParameters Parameters, SimulationRunOutput Output, bool TaxDetail, int TaxDetailYears);
 }
