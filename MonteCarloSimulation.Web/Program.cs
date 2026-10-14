@@ -128,10 +128,9 @@ app.MapPost("/api/run", async (
     };
 
     var output = MonteCarloEngine.Run(parameters);
-    var response = new RunResponse(parameters, output);
     return access.Can(Features.TaxDetail)
-        ? Results.Ok(response)
-        : Results.Json(FreeRunView.From(response, jsonOptions.Value.SerializerOptions, freeDefaults.CurrentValue.TaxDetailTeaserYears));
+        ? Results.Ok(new RunResponse(parameters, output))
+        : FreeRunView.Result(parameters, output, jsonOptions.Value.SerializerOptions, freeDefaults.CurrentValue.TaxDetailTeaserYears);
 });
 
 // The Optimal page: the annual spending that survives 80-85% of market paths per investment scenario, and the
