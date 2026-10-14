@@ -44,6 +44,9 @@ namespace MonteCarloSimulation.Core
         public required bool AgeEligible { get; init; }
         public required double RothConversionAmount { get; init; }
         public required double RothConversionTax { get; init; }
+        // The part of the conversion withheld for its tax (ordinary, and any capital gains tax it caused): money that
+        // left Tax Deferred to pay tax rather than reaching Roth. 0 when Brokerage paid it all.
+        public required double RothConversionTaxWithheld { get; init; }
         // Who paid the year's ordinary tax (reporting only; with SocialSecurityTax and AnnuityTax these sum to
         // OrdinaryTaxAmount): the tax the Tax Deferred withdrawal adds on top of Social Security and the annuity
         // (withheld from that withdrawal), and the conversion's ordinary tax split between the Brokerage sale and the
@@ -70,5 +73,7 @@ namespace MonteCarloSimulation.Core
         public required double RequiredMinimumDistribution { get; init; }
         public required double? RmdDivisor { get; init; }
         public required double RmdSurplusToBrokerage { get; init; }
+        // After-tax Social Security and annuity income beyond the year's spending, saved to Brokerage.
+        public required double IncomeSurplusToBrokerage { get; init; }
     }
 }

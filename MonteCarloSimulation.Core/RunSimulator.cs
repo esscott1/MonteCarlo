@@ -271,6 +271,7 @@ namespace MonteCarloSimulation.Core
                 AgeEligible = year.AgeEligible,
                 RothConversionAmount = conversion.Amount,
                 RothConversionTax = conversion.Tax,
+                RothConversionTaxWithheld = conversion.Withheld,
                 RothConversionOrdinaryTaxFromBrokerage = conversion.OrdinaryTaxFromBrokerage,
                 RothConversionOrdinaryTaxFromConversion = conversion.OrdinaryTaxFromConversion,
                 TaxDeferredWithdrawalTax = rmd.Tax + plan.TaxableTax,
@@ -285,7 +286,8 @@ namespace MonteCarloSimulation.Core
                 AnnuityPayments = year.AnnuityPayments,
                 RequiredMinimumDistribution = rmd.Gross,
                 RmdDivisor = year.RmdDivisor,
-                RmdSurplusToBrokerage = rmd.Surplus
+                RmdSurplusToBrokerage = rmd.Surplus,
+                IncomeSurplusToBrokerage = ss.Surplus + annuity.Surplus
             };
         }
 

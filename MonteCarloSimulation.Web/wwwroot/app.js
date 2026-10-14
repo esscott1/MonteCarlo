@@ -115,34 +115,67 @@ function yearWithAge(yd) {
     return `${t('runner.yearAge', { year: yd.calendarYear, age: Math.floor(yd.ageInYear + 0.005) })}${partial}`;
 }
 
-// `taxableNote` follows the Tax Deferred line (the withdrawal column's RMD footnote); `annuityYear` is the year, when
-// it may have annuity payments
-function moneyBreakdown(total, taxableAmt, brokerageAmt, rothAmt, taxablePercentOfBalance, socialSecurity, socialSecurityTax, socialSecurityMonths, brokerageGains, taxableNote = '', annuityYear = null) {
-    const taxablePct = taxablePercentOfBalance === undefined ? '' : ` ${t('runner.money.ofBalance', { pct: formatPercent(taxablePercentOfBalance) })}`;
-    // A Brokerage sale is part embedded gain, part tax-free return of basis (average cost)
-    const brokerageSplit = brokerageGains > 0.5 && brokerageAmt > 0
-        ? ` ${t('runner.money.gainsBasis', { gains: formatCurrency(brokerageGains), basis: formatCurrency(brokerageAmt - brokerageGains) })}`
+// The Total Balance column: the year-end total and each account
+function balanceBreakdown(yd) {
+    return bulletList([
+        t('runner.money.total', { amount: formatCurrency(yd.balance) }),
+        t('runner.money.taxable', { amount: formatCurrency(yd.taxableBalance) }),
+        t('runner.money.brokerage', { amount: formatCurrency(yd.brokerageBalance) }),
+        t('runner.money.roth', { amount: formatCurrency(yd.rothBalance) }),
+    ]);
+}
+
+// Everything the year drew before tax: each account's withdrawal, Social Security, the annuity, and the part of a Roth
+// conversion withheld from Tax Deferred for its tax
+const yearWithdrawals = (yd) => yd.taxableWithdrawal + yd.brokerageWithdrawal + yd.rothWithdrawal
+    + yd.socialSecurityIncome + yd.annuityIncome + (yd.rothConversionTaxWithheld ?? 0);
+
+const yearTaxes = (yd) => yd.ordinaryTaxAmount + yd.capitalGainsTaxAmount;
+
+// The Withdrawal column: the year's net after taxes on top, then the total withdrawals it came from and each one.
+// Total withdrawals less the Taxes column's total taxes is the net, to the dollar as shown. The net is the year's
+// spending, plus any Medicare surcharge and any income beyond spending saved to Brokerage, which it then names.
+function withdrawalBreakdown(yd) {
+    const net = Math.round(yearWithdrawals(yd)) - Math.round(yearTaxes(yd));
+    const irmaa = yd.irmaaSurcharge ?? 0; // not sent without the tax detail
+    const saved = yd.incomeSurplusToBrokerage + yd.rmdSurplusToBrokerage;
+    const uses = irmaa > 0.5 || saved > 0.5
+        ? ` (${[
+            t('runner.money.netSpending', { amount: formatCurrency(yd.withdrawal) }),
+            ...(irmaa > 0.5 ? [t('runner.money.netIrmaa', { amount: formatCurrency(irmaa) })] : []),
+            ...(saved > 0.5 ? [t('runner.money.netSaved', { amount: formatCurrency(saved) })] : []),
+        ].join(', ')})`
         : '';
-    const items = [
-        t('runner.money.total', { amount: formatCurrency(total) }),
-        t('runner.money.taxable', { amount: formatCurrency(taxableAmt) }) + taxablePct + taxableNote,
-        t('runner.money.brokerage', { amount: formatCurrency(brokerageAmt) }) + brokerageSplit,
-        t('runner.money.roth', { amount: formatCurrency(rothAmt) }),
+
+    const pct = ` ${t('runner.money.ofBalance', { pct: formatPercent(yd.taxableWithdrawalPercentOfBalance) })}`;
+    // A Brokerage sale is part embedded gain, part tax-free return of basis (average cost)
+    const brokerageSplit = yd.realizedGains > 0.5 && yd.brokerageWithdrawal > 0
+        ? ` ${t('runner.money.gainsBasis', { gains: formatCurrency(yd.realizedGains), basis: formatCurrency(yd.brokerageWithdrawal - yd.realizedGains) })}`
+        : '';
+    const parts = [
+        t('runner.money.taxable', { amount: formatCurrency(yd.taxableWithdrawal) }) + pct + rmdFootnote(yd),
+        t('runner.money.brokerage', { amount: formatCurrency(yd.brokerageWithdrawal) }) + brokerageSplit,
+        t('runner.money.roth', { amount: formatCurrency(yd.rothWithdrawal) }),
     ];
-    if (socialSecurity > 0) {
-        const detail = socialSecurityMonths < 12
-            ? t('runner.money.ssMonthsTax', { months: socialSecurityMonths, tax: formatCurrency(socialSecurityTax) })
-            : t('runner.money.ssTax', { tax: formatCurrency(socialSecurityTax) });
-        items.push(t('runner.money.socialSecurity', { amount: formatCurrency(socialSecurity), detail }));
+    if (yd.socialSecurityIncome > 0) {
+        const detail = yd.socialSecurityMonths < 12
+            ? t('runner.money.ssMonthsTax', { months: yd.socialSecurityMonths, tax: formatCurrency(yd.socialSecurityTax) })
+            : t('runner.money.ssTax', { tax: formatCurrency(yd.socialSecurityTax) });
+        parts.push(t('runner.money.socialSecurity', { amount: formatCurrency(yd.socialSecurityIncome), detail }));
     }
-    if (annuityYear?.annuityIncome > 0) {
-        const yd = annuityYear;
+    if (yd.annuityIncome > 0) {
         const detail = yd.annuityPayments < 12
             ? t('runner.money.ssMonthsTax', { months: yd.annuityPayments, tax: formatCurrency(yd.annuityTax) })
             : t('runner.money.ssTax', { tax: formatCurrency(yd.annuityTax) });
-        items.push(t('runner.money.annuity', { amount: formatCurrency(yd.annuityIncome), detail }) + annuityFootnote(yd));
+        parts.push(t('runner.money.annuity', { amount: formatCurrency(yd.annuityIncome), detail }) + annuityFootnote(yd));
     }
-    return bulletList(items);
+    if (yd.rothConversionTaxWithheld > 0.5) {
+        parts.push(t('runner.money.conversionWithheld', { amount: formatCurrency(yd.rothConversionTaxWithheld) }));
+    }
+    return bulletList([
+        t('runner.money.net', { amount: formatCurrency(net) }) + uses,
+        t('runner.money.totalWithdrawals', { amount: formatCurrency(yearWithdrawals(yd)) }) + bulletList(parts),
+    ]);
 }
 
 function ratePercent(rate) {
@@ -248,6 +281,7 @@ function taxesBreakdown(yd, conversionsEnabled) {
     const zeroRateOnConversionLine = zeroRateOnConversion ? footnote(zeroRateNote, next++) : '';
 
     const items = [
+        t('runner.tax.total', { amount: formatCurrency(yearTaxes(yd)) }),
         t('runner.tax.capGains', { amount: formatCurrency(yd.capitalGainsTaxAmount), rate: ratePercent(yd.capitalGainsBracketRate) }) + zeroRateOnGainsLine,
         t('runner.tax.ordinary', { amount: formatCurrency(yd.ordinaryTaxAmount), rate: ratePercent(yd.ordinaryBracketRate) }) + sourcesMarker,
         hasNextBracket(yd.nextBracketRate)
@@ -258,7 +292,11 @@ function taxesBreakdown(yd, conversionsEnabled) {
         items.push(t('runner.tax.harvested', { amount: formatCurrency(yd.harvestedGains) }));
     }
     if (yd.rothConversionAmount > 0) {
-        items.push(t('runner.tax.converted', { amount: formatCurrency(yd.rothConversionAmount), tax: formatCurrency(yd.rothConversionTax) }) + zeroRateOnConversionLine);
+        // What was withheld beyond the conversion's own ordinary tax is the capital gains tax it caused, by pushing the
+        // year's gains into a higher bracket (the Withdrawal column's withheld line is both)
+        const gainsWithheld = (yd.rothConversionTaxWithheld ?? 0) - yd.rothConversionOrdinaryTaxFromConversion;
+        const converted = { amount: formatCurrency(yd.rothConversionAmount), tax: formatCurrency(yd.rothConversionTax), gains: formatCurrency(gainsWithheld) };
+        items.push(t(gainsWithheld > 0.5 ? 'runner.tax.convertedWithGains' : 'runner.tax.converted', converted) + zeroRateOnConversionLine);
     }
     if (yd.irmaaSurcharge > 0.5) {
         // Medicare premiums surcharge, set by income two years earlier and paid on top of spending
@@ -270,6 +308,7 @@ function taxesBreakdown(yd, conversionsEnabled) {
 // Without the tax-detail feature the server sends only each year's tax totals (FreeRunView)
 function taxTotals(yd) {
     return bulletList([
+        t('runner.tax.total', { amount: formatCurrency(yearTaxes(yd)) }),
         t('runner.tax.capGainsTotal', { amount: formatCurrency(yd.capitalGainsTaxAmount) }),
         t('runner.tax.ordinaryTotal', { amount: formatCurrency(yd.ordinaryTaxAmount) }),
     ]);
@@ -298,10 +337,10 @@ function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail) {
         return `
         <tr>
             <td>${yearWithAge(yd)}</td>
-            <td>${moneyBreakdown(yd.withdrawal, yd.taxableWithdrawal, yd.brokerageWithdrawal, yd.rothWithdrawal, yd.taxableWithdrawalPercentOfBalance, yd.socialSecurityIncome, yd.socialSecurityTax, yd.socialSecurityMonths, yd.realizedGains, rmdFootnote(yd), yd)}</td>
+            <td>${withdrawalBreakdown(yd)}</td>
             ${taxCell(yd, conversionsEnabled, taxDetail)}
             <td>${formatCurrency(yd.returnAmount)} (${formatPercent(yd.rateOfReturn)}) ${yd.returnAmount > yd.withdrawal ? '&uarr;' : '&darr;'}</td>
-            <td>${moneyBreakdown(yd.balance, yd.taxableBalance, yd.brokerageBalance, yd.rothBalance)}</td>
+            <td>${balanceBreakdown(yd)}</td>
         </tr>
     `;
     }).join('');

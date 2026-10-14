@@ -804,6 +804,11 @@ button[type="submit"]:hover {
     list-style: disc;
 }
 
+/* The withdrawals that make up a year's total, under it */
+.breakdown-list .breakdown-list {
+    list-style: circle;
+}
+
 .run-toggle {
     background: none;
     border: none;
