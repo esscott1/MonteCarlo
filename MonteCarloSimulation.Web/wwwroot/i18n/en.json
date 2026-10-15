@@ -48,6 +48,8 @@
   "optimal.annuity.statusBought": "<strong>The Optimizer bought this annuity with Tax Deferred money:</strong> {amount}, paying {payment}/mo for life ({per}/mo per $100,000, rates as of {asOf}).",
   "optimal.annuity.statusNone": "Buying an annuity with Tax Deferred money wouldn&rsquo;t raise your spend, so none was bought ({count} sizes checked, rates as of {asOf}).",
   "optimal.tdPurchaseNote": "{amount} of {full} bought the annuity. Find optimal adds it back and decides again.",
+  "optimal.teaserAnnuityGain": "<strong>Consider buying an annuity:</strong> it could increase your monthly spend by about <strong>{gain}</strong>.",
+  "optimal.teaserAnnuity": "<strong>Consider buying an annuity.</strong> The full Optimizer checks whether one would raise your spend.",
   "optimal.runInScenarioRunner": "Run in Scenario runner",
   "optimal.compareAges": "Compare Social Security start ages",
   "optimal.benefitCurve": "Monthly Social Security benefit by start age (estimated from your three amounts)",

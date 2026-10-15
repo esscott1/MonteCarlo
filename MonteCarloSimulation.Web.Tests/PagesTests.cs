@@ -86,7 +86,7 @@ namespace MonteCarloSimulation.Web.Tests
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
 
             // The Annuity tab only shows what the Optimizer decided: nothing to enter (every field read-only or disabled)
-            // but the Pro gender choice, which sets the rate it buys at
+            // but whether to consider a purchase and the Pro gender choice, which sets the rate it buys at
             string annuity = Regex.Match(html, @"id=""panel-annuity""(.*?)(?=<section class=""graph-tile)", RegexOptions.Singleline).Groups[1].Value;
             Assert.Matches(@"name=""annuityInvestment""[^>]*readonly", annuity);
             Assert.Matches(@"name=""annuityMonthlyAmount""[^>]*readonly", annuity);
@@ -95,7 +95,9 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Matches(@"name=""annuityTaxDeferred"" checked disabled", annuity);
             Assert.DoesNotContain("includeAnnuity", annuity);
             Assert.DoesNotContain("annuityCola", annuity);
-            Assert.Equal(new[] { "annuity-gender", "annuity-gender" }, Regex.Matches(annuity, @"data-requires=""([\w-]+)""").Select(m => m.Groups[1].Value));
+            Assert.Equal(new[] { "annuity", "annuity-gender", "annuity-gender" }, Regex.Matches(annuity, @"data-requires=""([\w-]+)""").Select(m => m.Groups[1].Value));
+            // "Consider buying an annuity" (Plus): ticked, and held ticked for Free, whose teaser always weighs one
+            Assert.Matches(@"<input type=""checkbox"" name=""considerAnnuities"" checked data-requires=""annuity"" data-free-value=""true"">", annuity);
             Assert.Contains(@"<span class=""paid-badge"" data-feature=""annuity"" hidden></span>", annuity);
             Assert.Contains(@"id=""td-purchase-note"" hidden", Panel("panel-money"));
 

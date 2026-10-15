@@ -182,7 +182,12 @@
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-annuity" aria-labelledby="tab-annuity" hidden>
                     <p class="subgroup-hint span-all"><span data-i18n="optimal.annuity.intro">The Optimizer decides whether buying an annuity with Tax Deferred money raises your spend, and shows what it bought here. You can't enter an annuity on this page.</span> <span class="paid-badge" data-feature="annuity" hidden></span></p>
+                    <label class="checkbox-label span-all">
+                        <input type="checkbox" name="considerAnnuities" checked data-requires="annuity" data-free-value="true">
+                        <span data-i18n="optimal.annuity.consider">Consider buying an annuity</span>
+                    </label>
                     <p class="annuity-status span-all" id="annuity-not-yet" data-i18n="optimal.annuity.notYet">Nothing considered yet: select Find optimal.</p>
+                    <p class="annuity-status span-all" id="annuity-off" data-i18n="optimal.annuity.off" hidden>Annuity purchases are off: the Optimizer won't consider buying one.</p>
                     <p class="annuity-status span-all" id="annuity-status" hidden></p>
                     <label><span data-i18n="optimal.annuity.bought">Annuity bought</span>
                         <input type="text" class="display-only" name="annuityInvestment" value="0" data-size-as="1,000,000" readonly>

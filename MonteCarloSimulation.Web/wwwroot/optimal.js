@@ -71,6 +71,8 @@ function readRequest() {
         // The rate a suggested annuity is bought at: a man's unless a Pro visitor chose Female (a disabled radio
         // isn't in FormData, so it's read from the element)
         annuitySex: Paywall.can('annuity-gender') ? optimalForm.elements['annuitySex'].value : 'male',
+        // Unticked (Plus), the Optimizer skips the purchase search; a Free visitor's stays ticked
+        considerAnnuities: optimalForm.elements['considerAnnuities'].checked,
         ...Inputs.readAssetMix(optimalForm),
     };
 }
@@ -93,9 +95,17 @@ function renderPurchaseNotes() {
     const status = document.getElementById('annuity-status');
     const note = document.getElementById('td-purchase-note');
     const decision = bought?.decision;
-    document.getElementById('annuity-not-yet').hidden = !!view?.optimum || !!view?.teaser;
-    status.hidden = !view?.optimum && !view?.teaser;
+    const result = !!view?.optimum || !!view?.teaser;
+    const off = !optimalForm.elements['considerAnnuities'].checked;
+    document.getElementById('annuity-not-yet').hidden = result || off;
+    document.getElementById('annuity-off').hidden = result || !off;
+    status.hidden = !result;
     note.hidden = !(decision?.amount > 0);
+    if (view?.teaser) {
+        status.innerHTML = annuityTeaserLine(view.teaser);
+        Paywall.decorate(status);
+        return;
+    }
     if (!decision) {
         status.innerHTML = t('optimal.annuity.notConsidered');
         return;
@@ -157,8 +167,18 @@ function renderTeaser(teaser) {
     return `
         <div class="summary-box ok">
             <p>${t('optimal.teaser', { low: formatCurrency(teaser.monthlyLow), high: formatCurrency(teaser.monthlyHigh) })}</p>
+            <p>${annuityTeaserLine(teaser)}</p>
             ${more}
         </div>`;
+}
+
+// The Free teaser's nudge toward annuities (Plus), always shown: with the gain when buying one would add $100 a month or
+// more (the server rounds it down to $100), else just the suggestion
+function annuityTeaserLine(teaser) {
+    const text = teaser.annuityGainMonthly
+        ? t('optimal.teaserAnnuityGain', { gain: formatCurrency(teaser.annuityGainMonthly) })
+        : t('optimal.teaserAnnuity');
+    return `${text} <span class="paid-badge" data-feature="annuity" hidden></span>`;
 }
 
 // The recommendation card in the tile beside the inputs
@@ -407,4 +427,5 @@ Inputs.initFilingStatus(optimalForm);
 Inputs.sizeInputs(optimalForm);
 Inputs.initCollapsibleInputs(optimalForm);
 Inputs.initFormFootnotes(optimalForm);
+optimalForm.elements['considerAnnuities'].addEventListener('change', renderPurchaseNotes);
 initRunInSimulator();

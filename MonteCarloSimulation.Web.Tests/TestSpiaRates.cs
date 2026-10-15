@@ -21,8 +21,8 @@ namespace MonteCarloSimulation.Web.Tests
         }
 
         // The purchase options /api/optimal gives the Optimizer for this request, from the app's own figures
-        public static async Task<AnnuityPurchaseOptions?> PurchaseFor(WebApplicationFactory<Program> app, OptimalRequest request) =>
-            request.PurchaseOptions(await app.Services.GetRequiredService<SpiaPayoutIndex>().CurrentAsync());
+        public static async Task<AnnuityPurchaseOptions?> PurchaseFor(WebApplicationFactory<Program> app, OptimalRequest request, bool female = false) =>
+            request.PurchaseOptions(await app.Services.GetRequiredService<SpiaPayoutIndex>().CurrentAsync(), female);
 
         private sealed class Unreachable : HttpMessageHandler
         {

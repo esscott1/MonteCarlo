@@ -38,7 +38,7 @@ namespace MonteCarloSimulation.Web
                 {
                     var result = SpendingOptimizer.Optimize(inputs, listener, cancellationToken);
                     events.Writer.TryWrite(teaser
-                        ? OptimalTeaserEvent.For(result.Optimum.Recommended.SpendAtMidpoint)
+                        ? OptimalTeaserEvent.For(result.Optimum)
                         : new OptimalResultEvent(result.Optimum));
                     events.Writer.TryWrite(new OptimalDoneEvent());
                     events.Writer.TryComplete();
@@ -91,15 +91,28 @@ namespace MonteCarloSimulation.Web
 
     public sealed record OptimalResultEvent(SpendOptimum Optimum) : OptimalStreamEvent("result");
 
-    // The Free Optimizer's answer: the recommended (82.5%) spend per month, as the $500 range it falls in
-    public sealed record OptimalTeaserEvent(double MonthlyLow, double MonthlyHigh) : OptimalStreamEvent("teaser")
+    // The Free Optimizer's answer: the recommended (82.5%) spend per month, as the $500 range it falls in - the plan
+    // without an annuity purchase, which a Free visitor can act on - and, when buying an annuity would add $100 a month or
+    // more, that gain rounded down to $100 (AnnuityGainMonthly; null otherwise). Nothing else about the purchase.
+    public sealed record OptimalTeaserEvent(double MonthlyLow, double MonthlyHigh, double? AnnuityGainMonthly = null)
+        : OptimalStreamEvent("teaser")
     {
         public const double Step = 500;
+        public const double GainStep = 100;
 
         public static OptimalTeaserEvent For(double annualSpend)
         {
             double low = Math.Floor(annualSpend / 12 / Step) * Step;
             return new OptimalTeaserEvent(low, low + Step);
+        }
+
+        public static OptimalTeaserEvent For(SpendOptimum optimum)
+        {
+            var purchase = optimum.Purchase;
+            var range = For(purchase?.SpendWithout ?? optimum.Recommended.SpendAtMidpoint);
+            if (purchase is not { Amount: > 0 }) return range;
+            double gain = Math.Floor((purchase.SpendWith - purchase.SpendWithout) / 12 / GainStep) * GainStep;
+            return range with { AnnuityGainMonthly = gain >= GainStep ? gain : null };
         }
     }
 

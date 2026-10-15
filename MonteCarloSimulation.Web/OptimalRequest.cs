@@ -28,6 +28,8 @@ namespace MonteCarloSimulation.Web
         public int? Paths { get; set; }
         // The annuitant for a suggested annuity's rate: "male" (or omitted) or "female", which needs annuity-gender (Pro)
         public string? AnnuitySex { get; set; }
+        // The Annuity tab's "Consider buying an annuity" (Plus): false skips the purchase search. Omitted means true.
+        public bool ConsiderAnnuities { get; set; } = true;
 
         public bool AnnuitantIsFemale => string.Equals(AnnuitySex?.Trim(), "female", StringComparison.OrdinalIgnoreCase);
 
@@ -65,10 +67,11 @@ namespace MonteCarloSimulation.Web
         // The age on the Retire On date, when a suggested annuity would be bought (as the SPIA rate takes it)
         public double AgeAtRetirement => (RetirementDate.DayNumber - Birthdate.DayNumber) / 365.25;
 
-        // The annuity purchases to consider: none without figures, or when the index has no rate for that age
-        public AnnuityPurchaseOptions? PurchaseOptions(SpiaFigures? figures)
+        // The annuity purchases to consider, at a woman's rate or a man's: none without figures, or when the index has no
+        // rate for that age
+        public AnnuityPurchaseOptions? PurchaseOptions(SpiaFigures? figures, bool female)
         {
-            if (figures?.Model.MonthlyPer100k(AgeAtRetirement, AnnuitantIsFemale ? AnnuitantSex.Female : AnnuitantSex.Male) is not { } rate)
+            if (figures?.Model.MonthlyPer100k(AgeAtRetirement, female ? AnnuitantSex.Female : AnnuitantSex.Male) is not { } rate)
                 return null;
             return new AnnuityPurchaseOptions(rate.Monthly, figures.AsOf);
         }
