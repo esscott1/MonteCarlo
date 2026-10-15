@@ -17,8 +17,9 @@ namespace MonteCarloSimulation.Web.Tests
     {
         private const string PlusCode = "plus-test-code";
         private const string ProCode = "pro-test-code";
-        // appsettings.json gives Plus every feature but the annuity COLA, which is Pro's
-        private static readonly string[] PlusFeatures = Features.All.Where(f => f != Features.AnnuityCola).ToArray();
+        // appsettings.json gives Plus every feature but the annuity's COLA and annuitant's sex, which are Pro's
+        private static readonly string[] PlusFeatures =
+            Features.All.Where(f => f != Features.AnnuityCola && f != Features.AnnuityGender).ToArray();
 
         private static WebApplicationFactory<Program> App(
             bool tierPlus = true, bool tierPro = true, string plusCode = PlusCode, int? teaserYears = null) =>

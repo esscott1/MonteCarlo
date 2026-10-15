@@ -1,0 +1,312 @@
+{
+  "name": "SPIA Payout Index",
+  "publisher": "LifeAnnuities.us",
+  "url": "https://lifeannuities.us/rates/spia-payout-index/",
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "licenseName": "Creative Commons Attribution 4.0 International (CC BY 4.0)",
+  "attribution": "Source: LifeAnnuities.us SPIA Payout Index, https://lifeannuities.us/rates/spia-payout-index/ (CC BY 4.0)",
+  "isAccessibleForFree": true,
+  "methodology": "https://lifeannuities.us/rates/methodology/",
+  "basis": "Monthly income per $100,000 single premium; single life (or joint life, 100% to survivor, both spouses the same age) with a 5-year period certain; income starting one month after purchase; IRA and non-qualified quotes pooled.",
+  "basisNote": "From August 2026, figures are built from real carrier quotes for a single life (or joint life, 100% to the survivor) with a 5-year period certain. Earlier months were market-survey estimates on a life-only basis, so any comparison that spans August 2026 is not like-for-like.",
+  "firstRealQuoteMonth": "August 2026",
+  "source": "LifeAnnuities.us quote surveys, run for real clients through the quoting platform licensed agents use. Base tables: 54 survey runs received and 52 used for pricing, covering 30 client scenarios, prepared July 14 to September 14, 2026 (17 carriers quoted, ages 49 to 85 for the first-named buyer, 18 states), last repriced September 16, 2026. Checked October 1, 2026 against 7 new survey runs covering 4 client scenarios, prepared September 18 to 29, 2026 (ages 52 to 66). One of the eight published carriers, Athene, was repriced: its table is scaled by its measured change on quotes for the same age and sex, measured at ages 59 and 62. The other seven are held at their September 16 figures. Three quoted the same as in mid-September and three were within about half a percent, which premium size and age in months explain. New York Life's readings were mixed: two direct comparisons came in 0.7% and 1.6% higher once premium size is allowed for, and a third, measured through August, came in 0.6% lower. Joint figures at 65 and 70 are calibrated to a direct same-age joint quote (both spouses 66, $250,000 premium) from September 18. Men 60, 65 and 80 are read at surveyed ages in earlier rounds; men 55, 70 and 75 are interpolated through surveyed ages; women's and other joint figures are derived from each carrier's own female-to-male and joint-to-single ratios at surveyed ages. Only carriers rated A or better by AM Best that quoted in nearly every survey are published.",
+  "surveys": {
+    "base": {
+      "label": "Base tables (rounds from July 14 to September 14)",
+      "runs": 54,
+      "runsMeaning": "runs received",
+      "runsReceived": 54,
+      "runsUsed": 52,
+      "runsExcluded": 2,
+      "excludedWhy": "2 runs used annual payments and were left out of pricing",
+      "scenarios": 30,
+      "runWindow": "July 14 to September 14, 2026",
+      "runStart": "2026-07-14",
+      "runEnd": "2026-09-14",
+      "iraFunded": 22,
+      "iraFundedOf": "runs received",
+      "nonQualified": 32,
+      "carriersQuoted": 17,
+      "states": 18,
+      "ageRange": "49 to 85",
+      "ageRangeOf": "first-named buyer of each run"
+    },
+    "current": {
+      "label": "October 2026 review (late-September round)",
+      "runs": 7,
+      "runsMeaning": "runs used",
+      "runsReceived": 11,
+      "runsUsed": 7,
+      "runsExcluded": 4,
+      "excludedWhy": "4 runs were for a 41-year-old, well below our table ages; two of them were at $5,000,000",
+      "scenarios": 4,
+      "runWindow": "September 18 to 29, 2026",
+      "runStart": "2026-09-18",
+      "runEnd": "2026-09-29",
+      "iraFunded": 2,
+      "iraFundedOf": "runs used",
+      "nonQualified": 5,
+      "carriersQuoted": 17,
+      "states": 4,
+      "ageRange": "52 to 66",
+      "ageRangeOf": "first-named buyer of each run"
+    },
+    "total": {
+      "runs": 65,
+      "runsUsed": 59,
+      "iraFunded": 24,
+      "since": "July 14, 2026",
+      "sinceISO": "2026-07-14"
+    }
+  },
+  "surveyLog": [
+    {
+      "label": "August 2026 base round",
+      "runWindow": "July 14 to August 11, 2026",
+      "runs": 37,
+      "runsUsed": 37,
+      "scenarios": 20,
+      "carriersQuoted": 17,
+      "iraFunded": 13,
+      "states": 15,
+      "ageRange": "52 to 85",
+      "premiumRange": "$25,000 to $500,000",
+      "role": "Set the base tables",
+      "notes": "31 runs were prepared in July and 6 in August."
+    },
+    {
+      "label": "September 2026 repricing round",
+      "runWindow": "September 8 to 14, 2026",
+      "runs": 17,
+      "runsUsed": 15,
+      "scenarios": 10,
+      "carriersQuoted": 17,
+      "iraFunded": 9,
+      "states": 8,
+      "ageRange": "49 to 68",
+      "premiumRange": "$25,000 to $500,000",
+      "role": "Moved every carrier's table on September 16 and supplied the men's age 65 column",
+      "notes": "2 runs used annual payments and were excluded from pricing."
+    },
+    {
+      "label": "Late-September round (October 2026 tables)",
+      "runWindow": "September 18 to 29, 2026",
+      "runs": 11,
+      "runsUsed": 7,
+      "scenarios": 5,
+      "carriersQuoted": 17,
+      "iraFunded": 2,
+      "states": 5,
+      "ageRange": "41 to 66",
+      "premiumRange": "$25,000 to $5,000,000",
+      "role": "Checked every carrier on October 1: one carrier repriced, joint figures at 65 and 70 calibrated to a direct same-age joint quote",
+      "notes": "4 runs were for a 41-year-old, well below our table ages (two of them at $5,000,000), and were not used."
+    }
+  ],
+  "methodLegend": {
+    "direct": "read from a quote in the latest survey round",
+    "surveyed": "read at a surveyed age in an earlier round, then repriced",
+    "interpolated": "interpolated between surveyed ages in an earlier round, then repriced",
+    "ratio": "derived from each carrier's own ratio to its men's quote at surveyed ages, then repriced",
+    "calibrated": "derived by ratio, then calibrated to a direct same-age joint quote (both spouses 66) from the latest round"
+  },
+  "methodSummary": "Men 60, 65 and 80: read at a surveyed age in an earlier round, then repriced. Men 55, 70 and 75: interpolated between surveyed ages in an earlier round, then repriced. Women, all ages: derived from each carrier's own ratio to its men's quote at surveyed ages, then repriced. Joint 55, 60, 75 and 80: derived from each carrier's own ratio to its men's quote at surveyed ages, then repriced. Joint 65 and 70: derived by ratio, then calibrated to a direct same-age joint quote (both spouses 66) from the latest round.",
+  "directQuoteNote": "None of the figures in our tables is a direct quote from the latest survey round. They are built from earlier rounds (read at surveyed ages, interpolated or derived from carrier ratios) and checked carrier by carrier against the latest one.",
+  "carrierMoves": {
+    "asOf": "2026-10-01",
+    "basis": "Change in each carrier's quote for the same age and sex between the September 16 tables and the late-September round",
+    "moved": [
+      {
+        "carrier": "Athene",
+        "pct": 1.8,
+        "note": "Measured at ages 59 and 62 and applied to Athene's whole table. A comparison at age 52 showed a larger rise, about 3.1%"
+      }
+    ],
+    "held": [
+      "New York Life",
+      "Nationwide",
+      "Western & Southern",
+      "Penn Mutual",
+      "Pacific Life",
+      "Mutual of Omaha",
+      "Lincoln Financial"
+    ],
+    "heldNotes": [
+      {
+        "carrier": "New York Life",
+        "note": "Readings were mixed, so we held its figures until the next round. Two direct comparisons with mid-September quotes came in 0.7% and 1.6% higher once premium size is allowed for. A third, measured through August, came in 0.6% lower."
+      }
+    ],
+    "heldMeaning": "Held means we kept the carrier's figures as they were in our last tables. Unless a note says otherwise, its quotes for the same age and sex were the same as before, or differed by no more than premium size and age in months can explain."
+  },
+  "jointCalibration": {
+    "asOf": "2026-10-01",
+    "quote": "Same-age joint quote, both spouses 66, 100% to the survivor, 5-year period certain, prepared September 18, 2026",
+    "note": "The quote was for a $250,000 premium and our tables are stated per $100,000, so we first put it on a $100,000 basis using each carrier's own premium-size step, measured on every client quoted at both sizes on the same day (New York Life pays about 0.3% more per $100,000 at $250,000, Western & Southern 0.5%, Penn Mutual 0.3%, Mutual of Omaha 0.4%; the other four pay the same). Changes under half a percent are ignored. Earlier rounds had a same-age joint quote for a couple who were both 57; this is the first one near ages 65 and 70.",
+    "ages": [
+      "65",
+      "70"
+    ],
+    "moves": [
+      {
+        "carrier": "New York Life",
+        "pct": 1.6
+      },
+      {
+        "carrier": "Nationwide",
+        "pct": 0
+      },
+      {
+        "carrier": "Western & Southern",
+        "pct": 0
+      },
+      {
+        "carrier": "Athene",
+        "pct": 0
+      },
+      {
+        "carrier": "Penn Mutual",
+        "pct": 0.7
+      },
+      {
+        "carrier": "Pacific Life",
+        "pct": 0.8
+      },
+      {
+        "carrier": "Mutual of Omaha",
+        "pct": 1.4
+      },
+      {
+        "carrier": "Lincoln Financial",
+        "pct": 0
+      }
+    ]
+  },
+  "realQuotesMeaning": "In series[], realQuotes true means the month is built from real carrier quotes on a 5-year period certain basis. It does not mean every figure in that row is a direct quote. See current.method, methodLegend and directQuoteNote.",
+  "carriers": [
+    "New York Life",
+    "Nationwide",
+    "Western & Southern",
+    "Athene",
+    "Penn Mutual",
+    "Pacific Life",
+    "Mutual of Omaha",
+    "Lincoln Financial"
+  ],
+  "last_updated": "October 2026",
+  "lastUpdatedISO": "2026-10-01",
+  "asOf": "October 1, 2026",
+  "current": {
+    "month": "October 2026",
+    "asOf": "2026-10-01",
+    "basis": "built from real quotes, 5-year certain",
+    "male_65": 693,
+    "female_65": 658,
+    "joint_65": 608,
+    "male_70": 767,
+    "male_75": 893,
+    "method": {
+      "male_65": "surveyed",
+      "female_65": "ratio",
+      "joint_65": "calibrated",
+      "male_70": "interpolated",
+      "male_75": "interpolated"
+    },
+    "anyDirectQuote": false,
+    "changeVsPreviousMonthPct": 0,
+    "previousMonth": "September 2026",
+    "changeSinceFirstRealQuoteMonthPct": 2.7
+  },
+  "series": [
+    {
+      "month": "March 2026",
+      "asOf": "2026-03",
+      "basis": "estimate, life-only",
+      "realQuotes": false,
+      "male65": 618,
+      "female65": 585,
+      "joint65": 542,
+      "male70": 698,
+      "male75": 808,
+      "note": null,
+      "revisions": []
+    },
+    {
+      "month": "May 2026",
+      "asOf": "2026-05",
+      "basis": "estimate, life-only",
+      "realQuotes": false,
+      "male65": 632,
+      "female65": 598,
+      "joint65": 555,
+      "male70": 712,
+      "male75": 825,
+      "note": null,
+      "revisions": []
+    },
+    {
+      "month": "July 2026",
+      "asOf": "2026-07",
+      "basis": "estimate, life-only",
+      "realQuotes": false,
+      "male65": 664,
+      "female65": 635,
+      "joint65": 583,
+      "male70": 754,
+      "male75": 882,
+      "note": null,
+      "revisions": []
+    },
+    {
+      "month": "August 2026",
+      "asOf": "2026-08",
+      "basis": "built from real quotes, 5-year certain",
+      "realQuotes": true,
+      "male65": 675,
+      "female65": 637,
+      "joint65": 587,
+      "male70": 751,
+      "male75": 873,
+      "note": "From August 2026, figures come from actual carrier quote surveys (single life, 5-year period certain). Earlier months were market-survey estimates on a life-only basis, so the July→August change is partly a change in basis rather than a market move.",
+      "revisions": []
+    },
+    {
+      "month": "September 2026",
+      "asOf": "2026-09-16",
+      "basis": "built from real quotes, 5-year certain",
+      "realQuotes": true,
+      "male65": 693,
+      "female65": 658,
+      "joint65": 598,
+      "male70": 767,
+      "male75": 893,
+      "note": null,
+      "revisions": [
+        {
+          "date": "2026-09-01",
+          "male65": 675,
+          "what": "August round carried forward after a yield check"
+        },
+        {
+          "date": "2026-09-16",
+          "male65": 693,
+          "what": "Repriced against 17 new survey runs"
+        }
+      ]
+    },
+    {
+      "month": "October 2026",
+      "asOf": "2026-10-01",
+      "basis": "built from real quotes, 5-year certain",
+      "realQuotes": true,
+      "male65": 693,
+      "female65": 658,
+      "joint65": 608,
+      "male70": 767,
+      "male75": 893,
+      "note": "The couple figure was calibrated this month to a direct same-age joint quote (both spouses 66), put on a $100,000 basis. On the same footing, September's couple figure would have been about $608, so the change from $598 is a correction to our estimate, not a market move.",
+      "revisions": []
+    }
+  ]
+}

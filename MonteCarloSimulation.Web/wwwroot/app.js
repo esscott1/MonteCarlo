@@ -88,6 +88,119 @@ function annuityRequest() {
     };
 }
 
+// The Annuity tab's suggested SPIA rate (Plus; choosing the gender is Pro, else the male rate): the best current payout
+// per $100,000 for the age at the Retire On Date, from the LifeAnnuities.us SPIA Payout Index by way of /api/spia-rate,
+// with the figures' as-of date. Shown for a SPIA only. The last answer is kept, so a language switch redraws it.
+let annuityRate = null;
+let annuityRateRequest = 0;
+
+function annuityPurchaseAge() {
+    const birthdate = form.elements['birthdate'].value;
+    const retirement = form.elements['retirementDate'].value;
+    if (!birthdate || !retirement) return null;
+    return (Date.parse(retirement) - Date.parse(birthdate)) / (365.25 * 86_400_000);
+}
+
+// "2026-10-01" as "Oct 1, 2026" (a month-only "2026-10" as "Oct 2026")
+function formatAsOf(asOf) {
+    const monthOnly = /^\d{4}-\d{2}$/.test(asOf);
+    const date = new Date(`${monthOnly ? `${asOf}-01` : asOf.slice(0, 10)}T00:00:00Z`);
+    if (Number.isNaN(date.getTime())) return asOf;
+    return monthOnly
+        ? I18n.monthYear(date)
+        : date.toLocaleDateString(I18n.language === 'es' ? 'es-US' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+async function refreshAnnuityRate() {
+    const box = document.getElementById('annuity-rate');
+    const el = form.elements;
+    const request = ++annuityRateRequest;
+    if (!el['includeAnnuity'].checked || !Paywall.can('annuity')) {
+        box.hidden = true;
+        return;
+    }
+    if (el['annuityType'].value !== 'spia') {
+        annuityRate = { kind: 'dia' };
+        renderAnnuityRate();
+        return;
+    }
+    const age = annuityPurchaseAge();
+    if (age === null) {
+        box.hidden = true;
+        return;
+    }
+    const sex = Paywall.can('annuity-gender') ? el['annuitySex'].value : 'male';
+    try {
+        const response = await fetch(`/api/spia-rate?age=${age.toFixed(2)}&sex=${sex}`);
+        if (request !== annuityRateRequest) return;
+        if (!response.ok) {
+            box.hidden = true;
+            return;
+        }
+        annuityRate = { kind: 'rate', ...(await response.json()) };
+    } catch {
+        if (request === annuityRateRequest) box.hidden = true;
+        return;
+    }
+    if (request === annuityRateRequest) renderAnnuityRate();
+}
+
+function renderAnnuityRate() {
+    const box = document.getElementById('annuity-rate');
+    const text = document.getElementById('annuity-rate-text');
+    const use = document.getElementById('annuity-rate-use');
+    const source = document.getElementById('annuity-rate-source');
+    const rate = annuityRate;
+    if (!rate) return;
+    box.hidden = false;
+    if (rate.kind === 'dia') {
+        text.textContent = t('runner.rate.dia');
+        use.hidden = true;
+        source.innerHTML = '';
+        return;
+    }
+    const asOf = formatAsOf(rate.asOf);
+    const links = {
+        index: `<a href="${escapeHtml(rate.sourceUrl)}" target="_blank" rel="noopener">LifeAnnuities.us SPIA Payout Index</a>`,
+        license: `<a href="${escapeHtml(rate.licenseUrl)}" target="_blank" rel="noopener">CC BY 4.0</a>`,
+    };
+    if (rate.monthlyPer100k === null) {
+        text.textContent = t('runner.rate.noAge', { age: rate.age, asOf });
+        use.hidden = true;
+        source.innerHTML = t('runner.rate.sourcePublished', links);
+        return;
+    }
+    const investment = parseNumber(form.elements['annuityInvestment'].value) || 0;
+    const monthly = Math.round(rate.monthlyPer100k * investment / 100_000);
+    text.textContent = t(rate.estimated ? 'runner.rate.estimated' : 'runner.rate.published', {
+        who: t(rate.sex === 'female' ? 'runner.rate.woman' : 'runner.rate.man'),
+        age: rate.age,
+        asOf,
+        per: formatCurrency(rate.monthlyPer100k),
+        amount: formatCurrency(monthly),
+        investment: formatCurrency(investment),
+    });
+    use.hidden = !(monthly > 0);
+    use.dataset.amount = String(monthly);
+    source.innerHTML = t(rate.estimated ? 'runner.rate.sourceEstimated' : 'runner.rate.sourcePublished', links);
+}
+
+function initAnnuityRate() {
+    const el = form.elements;
+    [el['includeAnnuity'], ...el['annuityType'], ...el['annuitySex'], el['birthdate'], el['retirementDate']]
+        .forEach((input) => input.addEventListener('change', refreshAnnuityRate));
+    // The amount scales with the investment; the rate per $100,000 doesn't change
+    el['annuityInvestment'].addEventListener('input', renderAnnuityRate);
+    document.getElementById('annuity-rate-use').addEventListener('click', (e) => {
+        const payment = el['annuityMonthlyAmount'];
+        payment.value = formatWithCommas(e.currentTarget.dataset.amount);
+        payment.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    document.addEventListener('paywall:change', refreshAnnuityRate);
+    document.addEventListener('i18n:change', renderAnnuityRate);
+    Paywall.ready.then(refreshAnnuityRate);
+}
+
 // User-supplied text is echoed back into the change-request result panel, so it has to be
 // escaped rather than interpolated raw.
 function escapeHtml(value) {
@@ -897,6 +1010,7 @@ Inputs.initFilingStatus(form);
 Inputs.sizeInputs(form);
 initSocialSecurityDefault();
 initAnnuity();
+initAnnuityRate();
 Inputs.initCollapsibleInputs(form);
 initRunToggles();
 initFootnotes();

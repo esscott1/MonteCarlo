@@ -14,9 +14,11 @@ namespace MonteCarloSimulation.Web
         // The Scenario runner's Annuity tab, and its cost-of-living increase
         public const string Annuity = "annuity";
         public const string AnnuityCola = "annuity-cola";
+        // The annuitant's sex for the Annuity tab's suggested SPIA rate (without it, the male rate)
+        public const string AnnuityGender = "annuity-gender";
 
         public static IReadOnlyList<string> All { get; } =
-            [AccountBasisSplit, RothConversions, CustomReturns, StandardDeduction, Inheritance, TaxDetail, OptimizerFull, Annuity, AnnuityCola];
+            [AccountBasisSplit, RothConversions, CustomReturns, StandardDeduction, Inheritance, TaxDetail, OptimizerFull, Annuity, AnnuityCola, AnnuityGender];
     }
 
     public enum Tier { Free, Plus, Pro }

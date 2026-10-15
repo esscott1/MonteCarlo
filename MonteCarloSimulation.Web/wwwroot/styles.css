@@ -313,7 +313,8 @@ body.wide {
     margin-bottom: 0;
 }
 
-.tab-panel > .span-all {
+.tab-panel > .span-all,
+.annuity-details > .span-all {
     grid-column: 1 / -1;
 }
 
@@ -346,6 +347,35 @@ body.wide {
 
 #panel-annuity label[hidden] {
     display: none;
+}
+
+/* The suggested SPIA rate (app.js initAnnuityRate): the rate with its as-of date, Use this rate, and the source */
+.annuity-rate {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--page);
+    font-size: 0.85rem;
+}
+
+.annuity-rate[hidden] {
+    display: none;
+}
+
+.annuity-rate p {
+    margin: 0 0 0.4rem;
+}
+
+.annuity-rate .secondary-button {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+}
+
+.annuity-rate .annuity-rate-source {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.8rem;
 }
 
 .tabs-tile select {

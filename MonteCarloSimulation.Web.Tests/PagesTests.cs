@@ -139,7 +139,7 @@ namespace MonteCarloSimulation.Web.Tests
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-money")));
             Assert.All(new[] { "socialSecurityMonthlyAmount", "socialSecurityStartDate", "annualStandardDeduction", "newMoney", "yearNewMoney" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
-            Assert.All(new[] { "includeAnnuity", "annuityMonthlyAmount", "annuityInvestment", "annuityType", "annuityStartDate", "annuityTaxDeferred", "annuityCola", "annuityColaRate" },
+            Assert.All(new[] { "includeAnnuity", "annuityMonthlyAmount", "annuityInvestment", "annuityType", "annuityStartDate", "annuityTaxDeferred", "annuityCola", "annuityColaRate", "annuitySex" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-annuity")));
 
             // Asset Classes: each class's allocation (60/30/10), return and std. dev. (8/19, 4.5/4, 3.5/1),
@@ -300,6 +300,7 @@ namespace MonteCarloSimulation.Web.Tests
             {
                 Assert.Matches(@"name=""includeAnnuity""[^>]*data-requires=""annuity"" data-free-value=""false""", html);
                 Assert.Matches(@"name=""annuityCola""[^>]*data-requires=""annuity-cola"" data-free-value=""false""", html);
+                Assert.Matches(@"name=""annuitySex"" value=""male"" checked data-requires=""annuity-gender""", html);
             }
             // A married household's default (inputs.js moves the field to it when Married is chosen)
             Assert.Matches($@"name=""annualStandardDeduction""[^>]*data-married-value=""{free.StandardDeductionMarried.ToString("N0", CultureInfo.InvariantCulture)}""", html);
@@ -423,6 +424,7 @@ namespace MonteCarloSimulation.Web.Tests
             // The annuity's badge beside "Include an annuity", the COLA's beside its checkbox
             Assert.Matches(@"name=""includeAnnuity""[^>]*>\s*<span data-i18n=""runner.annuity.include"">[^<]*</span><sup class=""form-note-ref"">\*</sup>\s*<span class=""paid-badge"" data-feature=""annuity"" hidden></span>", runner);
             Assert.Matches(@"name=""annuityCola""[^>]*>\s*<span data-i18n=""runner.annuity.cola"">[^<]*</span>\s*<span class=""paid-badge"" data-feature=""annuity-cola"" hidden></span>", runner);
+            Assert.Matches(@"<legend><span data-i18n=""runner.annuity.gender"">[^<]*</span> <span class=""paid-badge"" data-feature=""annuity-gender"" hidden></span></legend>", runner);
         }
 
         // The Annuity tab: Include (off), then the payment ($2,600) and investment ($400,000), SPIA or DIA (SPIA chosen;
@@ -447,6 +449,12 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains(@"<option value=""0.02"" selected>", panel);
             foreach (var marker in new[] { "*", "1", "2", "3" })
                 Assert.Matches($@"<p><sup>{Regex.Escape(marker)}</sup> <span data-i18n=""runner.annuity.note\w+"">", panel);
+
+            // The gender (Pro) only sets the suggested SPIA rate, whose block app.js fills: hidden until there is one
+            Assert.Contains(@"name=""annuitySex"" value=""male"" checked", panel);
+            Assert.Matches(@"name=""annuitySex"" value=""female""(?![^>]*checked)", panel);
+            Assert.Contains(@"<div class=""annuity-rate span-all"" id=""annuity-rate"" aria-live=""polite"" hidden>", panel);
+            Assert.Contains(@"id=""annuity-rate-use""", panel);
         }
 
         [Fact]

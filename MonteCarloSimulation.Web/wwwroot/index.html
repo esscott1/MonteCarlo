@@ -221,6 +221,11 @@
                         <label><span data-i18n="runner.annuity.investment">Investment Amount</span>
                             <input type="text" inputmode="decimal" class="money-input" name="annuityInvestment" pattern="[0-9,]*\.?[0-9]*" value="400,000" data-i18n-title="runner.annuity.investmentTitle" title="What you paid for the annuity: its tax basis, returned tax-free over its first 26 years of payments. Ignored when it's in a tax-deferred account." required data-requires="annuity">
                         </label>
+                        <div class="annuity-rate span-all" id="annuity-rate" aria-live="polite" hidden>
+                            <p id="annuity-rate-text"></p>
+                            <button type="button" class="secondary-button" id="annuity-rate-use" data-i18n="runner.rate.use">Use this rate</button>
+                            <p class="annuity-rate-source" id="annuity-rate-source"></p>
+                        </div>
                         <fieldset class="subgroup">
                             <legend data-i18n="runner.annuity.type">Type</legend>
                             <label class="checkbox-label"><input type="radio" name="annuityType" value="spia" checked data-requires="annuity"> <span>SPIA</span><sup class="form-note-ref">1</sup></label>
@@ -228,6 +233,12 @@
                             <label id="annuity-start" hidden><span data-i18n="runner.annuity.start">Payments start</span>
                                 <input type="date" name="annuityStartDate" data-i18n-title="runner.annuity.startTitle" title="The date of the first payment: at least 2 years from today." required disabled data-requires="annuity">
                             </label>
+                        </fieldset>
+                        <fieldset class="subgroup">
+                            <legend><span data-i18n="runner.annuity.gender">Gender</span> <span class="paid-badge" data-feature="annuity-gender" hidden></span></legend>
+                            <label class="checkbox-label"><input type="radio" name="annuitySex" value="male" checked data-requires="annuity-gender"> <span data-i18n="runner.annuity.male">Male</span></label>
+                            <label class="checkbox-label"><input type="radio" name="annuitySex" value="female" data-requires="annuity-gender"> <span data-i18n="runner.annuity.female">Female</span></label>
+                            <p class="subgroup-hint" data-i18n="runner.annuity.genderHint">Sets the suggested SPIA rate only.</p>
                         </fieldset>
                         <fieldset class="subgroup">
                             <legend data-i18n="runner.annuity.taxesAndIncreases">Taxes and increases</legend>
