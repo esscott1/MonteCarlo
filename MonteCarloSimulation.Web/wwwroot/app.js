@@ -529,6 +529,22 @@ function annuityLine(parameters) {
     })}</p>`;
 }
 
+// The results summary: its first sentence (how many runs survived) always shows, with a caret that unfolds the details
+// under it. Folded at first; once opened or closed it stays that way while the page is open, through new runs and
+// language switches (which redraw it).
+let summaryExpanded = false;
+
+function summaryBox(kind, headline, details) {
+    return `
+        <div class="summary-box ${kind}">
+            <details class="summary-details"${summaryExpanded ? ' open' : ''}>
+                <summary><span class="summary-caret" aria-hidden="true"></span>${headline}</summary>
+                ${details}
+            </details>
+        </div>
+    `;
+}
+
 function renderSummary(parameters, output) {
     const result = output.result;
     const totalAvgRate = output.allRates.reduce((a, b) => a + b, 0) / output.allRates.length;
@@ -555,29 +571,32 @@ function renderSummary(parameters, output) {
         const survival = 1 - (result.outOfMoneyCount / parameters.iterations);
         const avgFailureYear = result.yearsOutOfMoney.reduce((a, b) => a + b, 0) / result.yearsOutOfMoney.length;
         const avgFailureReturn = result.failedScenarioAverages.reduce((a, b) => a + b, 0) / result.failedScenarioAverages.length;
-        return `
-            <div class="summary-box ${survival > 0.8 ? 'ok' : 'warn'}">
-                <p><strong>${survival > 0.8 ? '🙂' : '🙁'} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}</p>
-                ${scenarioLine}
+        return summaryBox(
+            survival > 0.8 ? 'ok' : 'warn',
+            `<strong>${survival > 0.8 ? '🙂' : '🙁'} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}`,
+            `${scenarioLine}
                 <p>${t('runner.realized', { mean: formatPercent(totalAvgRate), stdDev: stdDev.toFixed(4) })}</p>
                 <p>${t('runner.inheritance', { amount: formatCurrency(parameters.newMoney), year: new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney })}</p>
                 <p>${t('runner.avgFailure', { year: avgFailureYear.toFixed(0), rate: formatPercent(avgFailureReturn) })}</p>
                 ${lifetimeTaxLine}
-                ${accountChoiceLine(parameters, output)}
-            </div>
-        `;
+                ${accountChoiceLine(parameters, output)}`);
     }
 
     const avgBalance = result.successMoneyRemaining.reduce((a, b) => a + b, 0) / result.successMoneyRemaining.length;
-    return `
-        <div class="summary-box ok">
-            <p><strong>🙂 ${t('runner.allSurvived')}</strong></p>
-            ${scenarioLine}
+    return summaryBox(
+        'ok',
+        `<strong>🙂 ${t('runner.allSurvived')}</strong>`,
+        `${scenarioLine}
             <p>${t('runner.avgBalance', { amount: formatCurrency(avgBalance) })}</p>
             ${lifetimeTaxLine}
-            ${accountChoiceLine(parameters, output)}
-        </div>
-    `;
+            ${accountChoiceLine(parameters, output)}`);
+}
+
+// Remembers the summary's folded or unfolded state (toggle doesn't bubble, so it's caught on the way down)
+function initSummaryToggle() {
+    results.addEventListener('toggle', (e) => {
+        if (e.target.classList?.contains('summary-details')) summaryExpanded = e.target.open;
+    }, true);
 }
 
 // Every failed run's years, as plain text. Built here from the run data (rather than the server's own trace) so it reads
@@ -1046,4 +1065,5 @@ Inputs.initCollapsibleInputs(form);
 initRunToggles();
 initFootnotes();
 initFormFootnotes();
+initSummaryToggle();
 initEditFlyout();
