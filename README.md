@@ -231,3 +231,5 @@ No secret is committed to this repo. Each one lives in exactly one of the four p
 This repository is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). You may read, run and modify the code for noncommercial purposes such as personal study, research and hobby projects. Commercial use, including offering this software or a modified version of it as a paid or hosted service, is not permitted without separate written permission from the copyright holder.
 
 Required Notice: Copyright (c) 2026 Eric Scott (https://montecarlo.otsconsulting.ai)
+
+Third-party material keeps its own license: the committed copy of the LifeAnnuities.us SPIA Payout Index ([SpiaPayoutIndex.seed.json](MonteCarloSimulation.Web/SpiaPayoutIndex.seed.json)) is under CC BY 4.0, not the PolyForm license. See [NOTICE.md](NOTICE.md).
