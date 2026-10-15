@@ -6,7 +6,7 @@ using MonteCarloSimulation.Optimizer;
 namespace MonteCarloSimulation.Web
 {
     // The Optimal page's results, streamed as they're computed: newline-delimited JSON, one event per line, flushed as
-    // each is written. A run is `start`, then `progress` after each claiming age, then `result` (the recommendation and
+    // each is written. A run is `start`, then `progress` after each step (SpendingOptimizer.TotalSteps), then `result` (the recommendation and
     // every claiming age) and `done` - or `error` if the computation fails after the stream has started. If the client
     // disconnects, the request's token stops the optimizer. For a visitor without the full Optimizer, `teaser` (the
     // recommended monthly spend as a $500 range) replaces `result`.
@@ -29,7 +29,7 @@ namespace MonteCarloSimulation.Web
             var events = Channel.CreateUnbounded<OptimalStreamEvent>(new UnboundedChannelOptions { SingleReader = true });
             var listener = new OptimizationListener
             {
-                ClaimingAgeDone = (completed, total) => events.Writer.TryWrite(new OptimalProgressEvent(completed, total))
+                StepDone = (completed, total) => events.Writer.TryWrite(new OptimalProgressEvent(completed, total))
             };
             // A dedicated thread, not a thread-pool one: the pool must stay free to write the stream and serve requests
             _ = Task.Factory.StartNew(() =>
@@ -53,7 +53,7 @@ namespace MonteCarloSimulation.Web
             {
                 await WriteAsync(response, new OptimalStartEvent(
                     inputs.Paths,
-                    SpendingOptimizer.ClaimingAges.Count,
+                    SpendingOptimizer.TotalSteps(inputs),
                     SpendingOptimizer.BenefitByAge(inputs.SocialSecurity)), cancellationToken);
 
                 await foreach (var optimalEvent in events.Reader.ReadAllAsync(cancellationToken))
@@ -82,8 +82,9 @@ namespace MonteCarloSimulation.Web
 
     public abstract record OptimalStreamEvent(string Type);
 
-    // What the page needs before any results: how many claiming ages will report progress, and the benefit at each age.
-    public sealed record OptimalStartEvent(int Paths, int TotalClaimingAges, IReadOnlyList<BenefitAtAge> BenefitByAge)
+    // What the page needs before any results: how many steps will report progress (SpendingOptimizer.TotalSteps), and
+    // the benefit at each age.
+    public sealed record OptimalStartEvent(int Paths, int TotalSteps, IReadOnlyList<BenefitAtAge> BenefitByAge)
         : OptimalStreamEvent("start");
 
     public sealed record OptimalProgressEvent(int Completed, int Total) : OptimalStreamEvent("progress");

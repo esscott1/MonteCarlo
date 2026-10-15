@@ -19,7 +19,7 @@ let view = null;
 // sessionStorage key for handing the result to the Scenario runner (app.js reads it once and runs it).
 const SIMULATOR_HANDOFF_KEY = 'simulatorHandoff';
 
-const { parseNumber } = Inputs;
+const { parseNumber, formatAsOf } = Inputs;
 
 function formatCurrency(value) {
     return Number(value).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -125,12 +125,29 @@ function renderCard(optimum) {
             <p>${t('optimal.startSs', { age: r.age, date: formatMonthYear(r.startDate), benefit: formatCurrency(r.monthlyBenefit), total: formatCurrency(r.totalSocialSecurity) })}</p>
             <p>${t('optimal.survival', { amount: perMonth(r.spendAtMidpoint), rate: formatPercent(optimum.verifiedSurvivalRate) })}</p>
             <p>${t('optimal.accounts', { order: t(`order.${r.withdrawalStrategy}`), conversions: t(`target.phrase.${r.rothConversionTarget}`) })} (<a href="model-info.html" class="summary-link">${t('common.why')}</a>)</p>
+            ${purchaseLine(optimum.purchase)}
             ${bandNote}
             <p class="simulator-actions">
                 <button type="button" class="run-in-simulator">${t('optimal.runInScenarioRunner')}</button>
                 <span class="simulator-message" role="alert"></span>
             </p>
         </div>`;
+}
+
+// What the Optimizer decided about buying an annuity with Tax Deferred money (Plus), when it weighed one
+function purchaseLine(purchase) {
+    if (!purchase) return '';
+    const asOf = formatAsOf(purchase.rateAsOf);
+    if (!(purchase.amount > 0)) return `<p>${t('optimal.purchaseNone', { count: purchase.amountsConsidered, asOf })}</p>`;
+    return `<p>${t('optimal.purchase', {
+        amount: formatCurrency(purchase.amount),
+        payment: formatCurrency(purchase.monthlyPayment),
+        asOf,
+        without: perMonth(purchase.spendWithout),
+        with: perMonth(purchase.spendWith),
+        leftWithout: formatCurrency(purchase.moneyLeftWithout),
+        leftWith: formatCurrency(purchase.moneyLeftWith),
+    })}</p>`;
 }
 
 function renderBenefitCurve(benefits) {
@@ -236,7 +253,7 @@ optimalForm.addEventListener('submit', async (e) => {
                 case 'start':
                     started = true;
                     lastRequest = request;
-                    view = { kind: 'stream', start: event, progress: { completed: 0, total: event.totalClaimingAges }, optimum: null, teaser: null, done: false, stopped: false };
+                    view = { kind: 'stream', start: event, progress: { completed: 0, total: event.totalSteps }, optimum: null, teaser: null, done: false, stopped: false };
                     render();
                     break;
                 case 'progress':
@@ -269,6 +286,8 @@ optimalForm.addEventListener('submit', async (e) => {
 function simulatorHandoff(optimum) {
     const r = optimum.recommended;
     const q = lastRequest;
+    // A suggested annuity was bought with Tax Deferred money: the runner starts with what's left, and the annuity
+    const bought = optimum.purchase?.amount > 0 ? optimum.purchase : null;
     return {
         version: 2,
         recommendedAge: r.age,
@@ -279,7 +298,7 @@ function simulatorHandoff(optimum) {
         years: q.years,
         birthdate: q.birthdate,
         retirementDate: q.retirementDate,
-        initialTaxableBalance: q.initialTaxableBalance,
+        initialTaxableBalance: q.initialTaxableBalance - (bought ? bought.amount : 0),
         initialRothBasis: q.initialRothBasis,
         initialRothUnrealizedGain: q.initialRothUnrealizedGain,
         initialBrokerageBasis: q.initialBrokerageBasis,
@@ -289,6 +308,7 @@ function simulatorHandoff(optimum) {
         annualStandardDeduction: q.annualStandardDeduction,
         filingStatus: q.filingStatus,
         enableRothConversions: q.enableRothConversions,
+        annuity: bought ? { investment: bought.amount, monthlyPayment: bought.monthlyPayment } : null,
         assetMix: {
             stockAllocation: q.stockAllocation,
             bondAllocation: q.bondAllocation,

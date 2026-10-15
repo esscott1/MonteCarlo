@@ -72,6 +72,16 @@ namespace MonteCarloSimulation.Web
             return errors;
         }
 
+        // The Optimizer's suggested annuity: the rate for a woman needs annuity-gender (Pro). Only asked of a visitor
+        // with the annuity feature: without it there's no purchase search, so the choice doesn't matter.
+        public static Dictionary<string, string> LockedOptimizerAnnuity(OptimalRequest request, Access access)
+        {
+            var errors = new Dictionary<string, string>();
+            if (access.Can(Features.Annuity) && request.AnnuitantIsFemale && !access.Can(Features.AnnuityGender))
+                errors["annuitySex"] = "Choosing the annuitant's gender is a Pro feature.";
+            return errors;
+        }
+
         public const string CustomReturnsMessage = "Changing returns, std. devs and the correlation is a Plus feature.";
 
         // A Free visitor enters one total per account, so whatever split the request carries, the server splits each total

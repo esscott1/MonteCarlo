@@ -8,7 +8,7 @@ let view = null;
 let handoff = null;
 
 // The inputs tile's shared code (tabs, money fields, the Asset Classes table, balance totals) is in inputs.js
-const { parseNumber, formatWithCommas, formatAllocation } = Inputs;
+const { parseNumber, formatWithCommas, formatAllocation, formatAsOf } = Inputs;
 const updateAllocation = () => Inputs.updateAllocation(form);
 const updateBalanceTotals = () => Inputs.updateBalanceTotals(form);
 
@@ -99,16 +99,6 @@ function annuityPurchaseAge() {
     const retirement = form.elements['retirementDate'].value;
     if (!birthdate || !retirement) return null;
     return (Date.parse(retirement) - Date.parse(birthdate)) / (365.25 * 86_400_000);
-}
-
-// "2026-10-01" as "Oct 1, 2026" (a month-only "2026-10" as "Oct 2026")
-function formatAsOf(asOf) {
-    const monthOnly = /^\d{4}-\d{2}$/.test(asOf);
-    const date = new Date(`${monthOnly ? `${asOf}-01` : asOf.slice(0, 10)}T00:00:00Z`);
-    if (Number.isNaN(date.getTime())) return asOf;
-    return monthOnly
-        ? I18n.monthYear(date)
-        : date.toLocaleDateString(I18n.language === 'es' ? 'es-US' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
 async function refreshAnnuityRate() {
@@ -1011,9 +1001,7 @@ function applySimulatorHandoff() {
         .forEach((name) => setMoney(name, h[name]));
     set('yearNewMoney', h.yearNewMoney);
     form.elements['enableRothConversions'].checked = h.enableRothConversions;
-    // The Optimal page has no annuity, so the run leaves it out too
-    form.elements['includeAnnuity'].checked = false;
-    form.elements['includeAnnuity'].dispatchEvent(new Event('change'));
+    applyHandoffAnnuity(h.annuity);
     Inputs.setAssetMix(form, h.assetMix);
     updateBalanceTotals();
     Inputs.refreshAccountTotals(form);
@@ -1022,6 +1010,23 @@ function applySimulatorHandoff() {
     renderHandoffNote();
     form.requestSubmit();
     document.getElementById('handoff-note').scrollIntoView({ block: 'start' });
+}
+
+// The annuity the Optimizer decided to buy (with Tax Deferred money: the hand-off's Tax Deferred balance is already
+// what's left), as this page's own: a SPIA from the Retire On date in a tax-deferred account, no COLA. Without one, the
+// Annuity tab is left off.
+function applyHandoffAnnuity(annuity) {
+    const el = form.elements;
+    el['includeAnnuity'].checked = !!annuity;
+    if (annuity) {
+        el['annuityMonthlyAmount'].value = formatWithCommas(String(annuity.monthlyPayment));
+        el['annuityInvestment'].value = formatWithCommas(String(annuity.investment));
+        el['annuityType'].value = 'spia';
+        el['annuityTaxDeferred'].checked = true;
+        el['annuityCola'].checked = false;
+    }
+    // The tab redraws from all its fields (the DIA date, the COLA rate, the suggested rate) on this one change
+    el['includeAnnuity'].dispatchEvent(new Event('change'));
 }
 
 function renderHandoffNote() {

@@ -146,6 +146,7 @@ app.MapPost("/api/optimal", async (
     OptimalRequest request,
     HttpContext context,
     FeatureAccess features,
+    SpiaPayoutIndex spiaIndex,
     IOptionsMonitor<FreeDefaultsOptions> freeDefaults,
     IOptions<JsonOptions> jsonOptions) =>
 {
@@ -157,10 +158,15 @@ app.MapPost("/api/optimal", async (
         return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
 
     var locked = FreeTier.LockedInputs(request, access, freeDefaults.CurrentValue);
+    foreach (var (key, message) in FreeTier.LockedOptimizerAnnuity(request, access)) locked[key] = message;
     if (locked.Count > 0) return FreeTier.Refused(locked);
     FreeTier.SplitAccounts(request, access, freeDefaults.CurrentValue);
 
-    return new OptimalStream(request.ToInputs(), jsonOptions.Value.SerializerOptions, teaser: !access.Can(Features.OptimizerFull));
+    // With the annuity feature, the Optimizer also weighs buying a SPIA with Tax Deferred money, at today's rate
+    var purchase = access.Can(Features.Annuity)
+        ? request.PurchaseOptions(await spiaIndex.CurrentAsync(context.RequestAborted))
+        : null;
+    return new OptimalStream(request.ToInputs(purchase), jsonOptions.Value.SerializerOptions, teaser: !access.Can(Features.OptimizerFull));
 });
 
 // Checks run cheapest-first: shape, then passphrase, and only then the paid agent call.

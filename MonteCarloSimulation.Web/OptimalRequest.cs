@@ -26,6 +26,10 @@ namespace MonteCarloSimulation.Web
         public double AnnualStandardDeduction { get; set; }
         public bool EnableRothConversions { get; set; }
         public int? Paths { get; set; }
+        // The annuitant for a suggested annuity's rate: "male" (or omitted) or "female", which needs annuity-gender (Pro)
+        public string? AnnuitySex { get; set; }
+
+        public bool AnnuitantIsFemale => string.Equals(AnnuitySex?.Trim(), "female", StringComparison.OrdinalIgnoreCase);
 
         public Dictionary<string, string> Validate()
         {
@@ -52,10 +56,24 @@ namespace MonteCarloSimulation.Web
             if (Paths is int paths && !SpendingOptimizer.PathChoices.Contains(paths))
                 errors["paths"] = $"Simulated markets must be one of {string.Join(", ", SpendingOptimizer.PathChoices)}.";
             ValidateAssetMix(errors);
+            if (!string.IsNullOrWhiteSpace(AnnuitySex) && !AnnuitantIsFemale
+                && !string.Equals(AnnuitySex.Trim(), "male", StringComparison.OrdinalIgnoreCase))
+                errors["annuitySex"] = "Gender must be male or female.";
             return errors;
         }
 
-        public OptimizationInputs ToInputs()
+        // The age on the Retire On date, when a suggested annuity would be bought (as the SPIA rate takes it)
+        public double AgeAtRetirement => (RetirementDate.DayNumber - Birthdate.DayNumber) / 365.25;
+
+        // The annuity purchases to consider: none without figures, or when the index has no rate for that age
+        public AnnuityPurchaseOptions? PurchaseOptions(SpiaFigures? figures)
+        {
+            if (figures?.Model.MonthlyPer100k(AgeAtRetirement, AnnuitantIsFemale ? AnnuitantSex.Female : AnnuitantSex.Male) is not { } rate)
+                return null;
+            return new AnnuityPurchaseOptions(rate.Monthly, figures.AsOf);
+        }
+
+        public OptimizationInputs ToInputs(AnnuityPurchaseOptions? purchase = null)
         {
             var mix = ToAssetMix();
             return new OptimizationInputs
@@ -82,7 +100,8 @@ namespace MonteCarloSimulation.Web
                     ScenarioDescription = MixDescription()
                 },
                 SocialSecurity = new SocialSecurityCurve(SocialSecurityAt62, SocialSecurityAt67, SocialSecurityAt70),
-                Paths = Paths ?? SpendingOptimizer.DefaultPaths
+                Paths = Paths ?? SpendingOptimizer.DefaultPaths,
+                Purchase = purchase
             };
         }
     }

@@ -48,7 +48,9 @@ namespace MonteCarloSimulation.Optimizer
 
             double assets = _parameters.InitialTaxableBalance + _parameters.InitialRothBasis + _parameters.InitialRothUnrealizedGain
                 + _parameters.InitialBrokerageBasis + _parameters.InitialBrokerageUnrealizedGain + Math.Max(0, _parameters.NewMoney);
-            _initialUpperBound = Math.Max(1_000, assets + 12 * monthlyBenefit * _parameters.Years);
+            // An annuity's payments over the window too (0 without one)
+            double annuity = _timeline.Sum(year => year.AnnuityIncome);
+            _initialUpperBound = Math.Max(1_000, assets + 12 * monthlyBenefit * _parameters.Years + annuity);
         }
 
         public double TotalSocialSecurity { get; }

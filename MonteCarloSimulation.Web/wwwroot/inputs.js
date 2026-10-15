@@ -325,6 +325,16 @@ window.Inputs = (() => {
         radio.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    // "2026-10-01" as "Oct 1, 2026" (a month-only "2026-10" as "Oct 2026")
+    function formatAsOf(asOf) {
+        const monthOnly = /^\d{4}-\d{2}$/.test(asOf);
+        const date = new Date(`${monthOnly ? `${asOf}-01` : asOf.slice(0, 10)}T00:00:00Z`);
+        if (Number.isNaN(date.getTime())) return asOf;
+        return monthOnly
+            ? I18n.monthYear(date)
+            : date.toLocaleDateString(I18n.language === 'es' ? 'es-US' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    }
+
     return {
         parseNumber,
         formatWithCommas,
@@ -343,5 +353,6 @@ window.Inputs = (() => {
         initFilingStatus,
         setFilingStatus,
         sizeInputs,
+        formatAsOf,
     };
 })();

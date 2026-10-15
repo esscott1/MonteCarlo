@@ -142,14 +142,17 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal("result", TypeOf(events[^2]));
             Assert.All(events.Skip(1).SkipLast(2), e => Assert.Equal("progress", TypeOf(e)));
 
-            var inputs = request.ToInputs();
+            // A Plus visitor: the Optimizer also weighs buying an annuity with Tax Deferred money, at the app's current rate
+            var inputs = request.ToInputs(await TestSpiaRates.PurchaseFor(factory, request));
+            Assert.NotNull(inputs.Purchase);
             Assert.Equal(paths ?? SpendingOptimizer.DefaultPaths, inputs.Paths);
-            int total = SpendingOptimizer.ClaimingAges.Count;
+            int total = SpendingOptimizer.TotalSteps(inputs);
+            Assert.Equal(9 + 1 + 2 * 9, total); // without a purchase, the screen, then two finalist sizes
             var start = events[0];
             Assert.Equal(inputs.Paths, start.GetProperty("paths").GetInt32());
-            Assert.Equal(total, start.GetProperty("totalClaimingAges").GetInt32());
+            Assert.Equal(total, start.GetProperty("totalSteps").GetInt32());
 
-            // One progress event per claiming age, each count once (worker threads may report slightly out of order)
+            // One progress event per step, each count once (worker threads may report slightly out of order)
             var progress = events.Where(e => TypeOf(e) == "progress").ToList();
             Assert.Equal(Enumerable.Range(1, total), progress.Select(p => p.GetProperty("completed").GetInt32()).Order());
             Assert.All(progress, p => Assert.Equal(total, p.GetProperty("total").GetInt32()));
