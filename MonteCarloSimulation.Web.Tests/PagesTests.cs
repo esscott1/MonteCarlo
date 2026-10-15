@@ -422,14 +422,15 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Matches(@"<legend><span data-i18n=""optimal.markets"">[^<]*</span> <span class=""paid-badge"" data-feature=""optimizer-full"" hidden></span></legend>", optimal);
             Assert.Contains("data-feature=\"tax-detail\"", await GetAsync("/app.js"));
             // The annuity's badge beside "Include an annuity", the COLA's beside its checkbox
-            Assert.Matches(@"name=""includeAnnuity""[^>]*>\s*<span data-i18n=""runner.annuity.include"">[^<]*</span><sup class=""form-note-ref"">\*</sup>\s*<span class=""paid-badge"" data-feature=""annuity"" hidden></span>", runner);
+            Assert.Matches(@"name=""includeAnnuity""[^>]*>\s*<span data-i18n=""runner.annuity.include"">[^<]*</span><sup class=""footnote"">.*?</sup>\s*<span class=""paid-badge"" data-feature=""annuity"" hidden></span>", runner);
             Assert.Matches(@"name=""annuityCola""[^>]*>\s*<span data-i18n=""runner.annuity.cola"">[^<]*</span>\s*<span class=""paid-badge"" data-feature=""annuity-cola"" hidden></span>", runner);
             Assert.Matches(@"<legend><span data-i18n=""runner.annuity.gender"">[^<]*</span> <span class=""paid-badge"" data-feature=""annuity-gender"" hidden></span></legend>", runner);
         }
 
         // The Annuity tab: Include (off), then the payment ($2,600) and investment ($400,000), SPIA or DIA (SPIA chosen;
         // the DIA's date hidden until chosen, its minimum set by app.js), tax-deferred, and the COLA's 1/2/3% (2% chosen).
-        // Its fields sit in a fieldset that stays disabled until Include is ticked, and its notes explain the * and 1-3.
+        // Its fields sit in a fieldset that stays disabled until Include is ticked; the * and 1-3 are footnotes like the year
+        // tables': a superscript link whose tooltip holds the note.
         [Fact]
         public async Task ScenarioRunner_AnnuityTab_HasItsDefaultsAndNotes()
         {
@@ -448,7 +449,8 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(new[] { "0.01", "0.02", "0.03" }, Regex.Matches(panel, @"<option value=""([\d.]+)""").Select(m => m.Groups[1].Value));
             Assert.Contains(@"<option value=""0.02"" selected>", panel);
             foreach (var marker in new[] { "*", "1", "2", "3" })
-                Assert.Matches($@"<p><sup>{Regex.Escape(marker)}</sup> <span data-i18n=""runner.annuity.note\w+"">", panel);
+                Assert.Matches($@"<sup class=""footnote""><a href=""#"" class=""footnote-ref"" aria-label=""[^""]+"" data-i18n-aria-label=""runner.annuity.note\w+Aria"">{Regex.Escape(marker)}</a><span class=""footnote-tip"" role=""tooltip"" data-i18n=""runner.annuity.note\w+"">", panel);
+            Assert.DoesNotContain("form-notes", panel);
 
             // The gender (Pro) only sets the suggested SPIA rate, whose block app.js fills: hidden until there is one
             Assert.Contains(@"name=""annuitySex"" value=""male"" checked", panel);

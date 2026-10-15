@@ -648,6 +648,37 @@ function initFootnotes() {
     });
 }
 
+// The Annuity tab's footnotes, like the year tables': hover or focus shows a note, a tap toggles it, and a note that would
+// run past the window's right edge moves left to fit. Cancelling the click also stops a footnote inside a label from
+// ticking its checkbox or radio.
+function initFormFootnotes() {
+    form.addEventListener('click', (e) => {
+        const ref = e.target.closest('.footnote-ref');
+        if (!ref) return;
+        e.preventDefault();
+        const note = ref.parentElement;
+        const open = !note.classList.contains('open');
+        note.classList.add('open');
+        placeFootnoteTip(note);
+        note.classList.toggle('open', open);
+    });
+    ['mouseover', 'focusin'].forEach((type) => form.addEventListener(type, (e) => {
+        const note = e.target.closest?.('.footnote');
+        if (note) placeFootnoteTip(note);
+    }));
+}
+
+// Measured while the tip shows (hover, focus or open): a tip that would run past the window's right edge moves left just
+// enough to fit, but never past the left edge
+function placeFootnoteTip(note) {
+    const tip = note.querySelector('.footnote-tip');
+    if (!tip) return;
+    tip.style.left = '';
+    const box = tip.getBoundingClientRect();
+    const overflow = box.right - (document.documentElement.clientWidth - 4);
+    if (overflow > 0) tip.style.left = `${-Math.min(overflow, box.left - 4)}px`;
+}
+
 function initRunToggles() {
     results.addEventListener('click', (e) => {
         const button = e.target.closest('.run-toggle');
@@ -1014,4 +1045,5 @@ initAnnuityRate();
 Inputs.initCollapsibleInputs(form);
 initRunToggles();
 initFootnotes();
+initFormFootnotes();
 initEditFlyout();

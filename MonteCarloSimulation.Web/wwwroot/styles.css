@@ -386,19 +386,6 @@ body.wide {
     color: var(--text);
 }
 
-.form-note-ref {
-    color: var(--muted);
-}
-
-/* Footnotes under a tab's fields */
-.form-notes {
-    font-size: 0.8rem;
-    color: var(--muted);
-}
-
-.form-notes p {
-    margin: 0 0 0.25rem;
-}
 
 .asset-table {
     border-collapse: collapse;
@@ -1288,7 +1275,7 @@ details.observe-section {
     font-weight: 600;
 }
 
-/* Superscript footnote with a hover/focus/tap tooltip (main page year tables) */
+/* Superscript footnote with a hover/focus/tap tooltip (main page year tables, the Annuity tab) */
 .footnote {
     position: relative;
     margin-left: 0.15em;
