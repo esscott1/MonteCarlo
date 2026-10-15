@@ -32,60 +32,175 @@ namespace MonteCarloSimulation.Optimizer
 
         public static OptimizationResult Optimize(OptimizationInputs inputs) => Optimize(inputs, null, CancellationToken.None);
 
-        // The same result, reporting as it goes: `listener` hears each finished claiming age (from worker threads), and
+        // How many screened purchase sizes get a full search.
+        internal const int PurchaseFinalists = 2;
+
+        // How many steps Optimize reports: 9 claiming ages for the plan without a purchase, and with purchase sizes to
+        // try, one for screening them and 9 for each finalist.
+        public static int TotalSteps(OptimizationInputs inputs)
+        {
+            int sizes = inputs.Purchase is { } options ? AnnuityPurchase.Amounts(inputs.Template, options).Count : 0;
+            return ClaimingAges.Count * (1 + Math.Min(PurchaseFinalists, sizes)) + (sizes > 0 ? 1 : 0);
+        }
+
+        // The same result, reporting as it goes: `listener` hears each finished step (from worker threads), and
         // cancelling the token stops the work, throwing OperationCanceledException.
+        //
+        // With purchase options, the plan without a purchase is searched first (exactly as without options), then every
+        // purchase size is screened at that plan's recommended spend - at each claiming age, with that age's order and
+        // conversion target, the sizes that let the most paths survive (then the most after-tax money left) - and the top
+        // PurchaseFinalists sizes are searched in full. The plan with the highest midpoint spend wins; a purchase is
+        // recommended only if it beats the plan without one.
         public static OptimizationResult Optimize(OptimizationInputs inputs, OptimizationListener? listener, CancellationToken cancellationToken)
         {
             var template = inputs.Template;
-            var curve = inputs.SocialSecurity;
-            var ages = ClaimingAges;
-
-            var byAge = new ClaimingAgeResult[ages.Count];
-            int completed = 0;
-            // The app's Automatic choices expand to every (order, conversion target) pair, up to 8.
-            var candidates = AutomaticStrategy.Candidates(template);
-            // The market's paths, drawn once for every spend, claiming age and candidate
+            // The market's paths, drawn once for every spend, claiming age, candidate and purchase
             var paths = PathSimulator.SeededPaths(template, inputs.Paths);
+            var options = inputs.Purchase;
+            var amounts = options is null ? [] : AnnuityPurchase.Amounts(template, options);
+            var progress = new Progress(listener, TotalSteps(inputs));
 
             try
             {
-                // NoBuffering hands out the claiming ages one at a time, in order. Capped at one worker per core:
-                // uncapped, the loop takes every thread-pool thread it can get, starving the web server's own work
-                // (including streaming these results) until it finishes.
-                Parallel.ForEach(
-                    Partitioner.Create(Enumerable.Range(0, ages.Count), EnumerablePartitionerOptions.NoBuffering),
-                    new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount },
-                    i =>
-                    {
-                        int age = ages[i];
-                        var start = template.Birthdate.AddYears(age);
-                        double monthly = curve.MonthlyBenefitAtAge(age);
-                        byAge[i] = BestCandidate(inputs, age, start, monthly, candidates, paths, cancellationToken);
-                        listener?.ClaimingAgeDone?.Invoke(Interlocked.Increment(ref completed), ages.Count);
-                    });
+                var without = Plan(inputs, template, paths, progress, cancellationToken);
+                if (options is null || amounts.Count == 0)
+                    return new OptimizationResult(without.Optimum, BenefitByAge(inputs.SocialSecurity), inputs.Paths);
+
+                var finalists = ScreenPurchases(inputs, options, amounts, without, paths, cancellationToken);
+                progress.Done();
+
+                var best = without;
+                double bought = 0;
+                foreach (double amount in finalists)
+                {
+                    var with = Plan(inputs, AnnuityPurchase.Apply(template, options, amount), paths, progress, cancellationToken);
+                    if (with.Optimum.Recommended.SpendAtMidpoint > best.Optimum.Recommended.SpendAtMidpoint)
+                        (best, bought) = (with, amount);
+                }
+
+                var decision = new AnnuityPurchaseDecision(
+                    bought,
+                    bought > 0 ? AnnuityPurchase.MonthlyPayment(options, bought) : 0,
+                    options.MonthlyPer100k,
+                    options.RateAsOf,
+                    without.Optimum.Recommended.SpendAtMidpoint,
+                    best.Optimum.Recommended.SpendAtMidpoint,
+                    without.MoneyLeft,
+                    best.MoneyLeft,
+                    amounts.Count);
+                return new OptimizationResult(best.Optimum with { Purchase = decision }, BenefitByAge(inputs.SocialSecurity), inputs.Paths);
             }
             catch (AggregateException e) when (cancellationToken.IsCancellationRequested
                 && e.Flatten().InnerExceptions.All(inner => inner is OperationCanceledException))
             {
                 throw new OperationCanceledException(cancellationToken);
             }
+        }
 
-            return new OptimizationResult(OptimumFor(inputs, byAge, paths), BenefitByAge(curve), inputs.Paths);
+        // Counts finished steps for the listener, from any thread
+        private sealed class Progress(OptimizationListener? listener, int total)
+        {
+            private int _completed;
+            public void Done() => listener?.StepDone?.Invoke(Interlocked.Increment(ref _completed), total);
+        }
+
+        // One plan searched: its recommendation and the median money left at its recommended spend
+        private sealed record PlanResult(SpendOptimum Optimum, double MoneyLeft);
+
+        // Every claiming age's best spend for this template (one step each), then its recommendation
+        private static PlanResult Plan(
+            OptimizationInputs inputs, SimulationParameters template, double[][] paths, Progress progress, CancellationToken cancellationToken)
+        {
+            var curve = inputs.SocialSecurity;
+            var ages = ClaimingAges;
+            var byAge = new ClaimingAgeResult[ages.Count];
+            // The app's Automatic choices expand to every (order, conversion target) pair, up to 8.
+            var candidates = AutomaticStrategy.Candidates(template);
+
+            // NoBuffering hands out the claiming ages one at a time, in order. Capped at one worker per core:
+            // uncapped, the loop takes every thread-pool thread it can get, starving the web server's own work
+            // (including streaming these results) until it finishes.
+            Parallel.ForEach(
+                Partitioner.Create(Enumerable.Range(0, ages.Count), EnumerablePartitionerOptions.NoBuffering),
+                new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount },
+                i =>
+                {
+                    int age = ages[i];
+                    var start = template.Birthdate.AddYears(age);
+                    double monthly = curve.MonthlyBenefitAtAge(age);
+                    byAge[i] = BestCandidate(inputs, template, age, start, monthly, candidates, paths, cancellationToken);
+                    progress.Done();
+                });
+
+            return OptimumFor(inputs, template, byAge, paths);
+        }
+
+        // The purchase sizes worth a full search: each size at each claiming age (that age's order and conversion target
+        // in the plan without a purchase), every path run at that plan's recommended spend. Ranked by the most paths
+        // surviving at any one age, then the after-tax money left there.
+        private static IReadOnlyList<double> ScreenPurchases(
+            OptimizationInputs inputs, AnnuityPurchaseOptions options, IReadOnlyList<double> amounts, PlanResult without,
+            double[][] paths, CancellationToken cancellationToken)
+        {
+            double probe = without.Optimum.Recommended.SpendAtMidpoint;
+            var ages = without.Optimum.ClaimingAges;
+            var scores = new (int Survivors, double AfterTaxLeft)[amounts.Count, ages.Count];
+
+            Parallel.For(0, amounts.Count * ages.Count,
+                new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount },
+                k =>
+                {
+                    int a = k / ages.Count, i = k % ages.Count;
+                    var age = ages[i];
+                    var simulator = new PathSimulator(AnnuityPurchase.Apply(inputs.Template, options, amounts[a]),
+                        age.StartDate, age.MonthlyBenefit, age.WithdrawalStrategy, age.RothConversionTarget, paths);
+                    int survivors = 0;
+                    double left = 0;
+                    for (int path = 0; path < inputs.Paths; path++)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var (survived, afterTax) = simulator.Probe(probe, path);
+                        if (!survived) continue;
+                        survivors++;
+                        left += afterTax;
+                    }
+                    scores[a, i] = (survivors, left);
+                });
+
+            return Enumerable.Range(0, amounts.Count)
+                .Select(a => (Amount: amounts[a], Best: Enumerable.Range(0, ages.Count).Select(i => scores[a, i])
+                    .OrderByDescending(s => s.Survivors).ThenByDescending(s => s.AfterTaxLeft).First()))
+                .OrderByDescending(x => x.Best.Survivors).ThenByDescending(x => x.Best.AfterTaxLeft)
+                .Take(PurchaseFinalists)
+                .Select(x => x.Amount)
+                .ToList();
         }
 
         // The recommendation from the claiming ages: the highest midpoint spend (ties go to the earlier age),
-        // re-simulated on every path to report the share that really survives at that spend.
-        private static SpendOptimum OptimumFor(OptimizationInputs inputs, IReadOnlyList<ClaimingAgeResult> claimingAges, double[][] paths)
+        // re-simulated on every path to report the share that really survives at that spend and the median after-tax
+        // money left (a failed path counting as 0).
+        private static PlanResult OptimumFor(
+            OptimizationInputs inputs, SimulationParameters template, IReadOnlyList<ClaimingAgeResult> claimingAges, double[][] paths)
         {
             var recommended = claimingAges[0];
             foreach (var candidate in claimingAges.Skip(1))
                 if (candidate.SpendAtMidpoint > recommended.SpendAtMidpoint) recommended = candidate;
 
-            var check = new PathSimulator(inputs.Template, recommended.StartDate, recommended.MonthlyBenefit,
+            var check = new PathSimulator(template, recommended.StartDate, recommended.MonthlyBenefit,
                 recommended.WithdrawalStrategy, recommended.RothConversionTarget, paths);
-            int survivors = Enumerable.Range(0, inputs.Paths).Count(path => check.Survives(recommended.SpendAtMidpoint, path));
+            var left = new double[inputs.Paths];
+            int survivors = 0;
+            for (int path = 0; path < inputs.Paths; path++)
+            {
+                var (survived, afterTax) = check.Probe(recommended.SpendAtMidpoint, path);
+                if (survived) survivors++;
+                left[path] = afterTax;
+            }
+            Array.Sort(left);
+            int n = inputs.Paths;
+            double median = n % 2 == 1 ? left[n / 2] : (left[n / 2 - 1] + left[n / 2]) / 2;
 
-            return new SpendOptimum(recommended, (double)survivors / inputs.Paths, claimingAges);
+            return new PlanResult(new SpendOptimum(recommended, (double)survivors / n, claimingAges), median);
         }
 
         // How many screened candidates get a full break-even search besides the first.
@@ -97,13 +212,13 @@ namespace MonteCarloSimulation.Optimizer
         // screened with one run per path at that spend (survivors, then after-tax money left); the top Finalists
         // are searched in full, warm-started from the first candidate's break-evens on the same paths.
         private static ClaimingAgeResult BestCandidate(
-            OptimizationInputs inputs, int age, DateOnly start, double monthly,
+            OptimizationInputs inputs, SimulationParameters template, int age, DateOnly start, double monthly,
             IReadOnlyList<(WithdrawalStrategy Order, RothConversionTarget Target)> candidates, double[][] paths,
             CancellationToken cancellationToken)
         {
             ClaimingAgeResult FullSearch((WithdrawalStrategy Order, RothConversionTarget Target) c, double[]? hints, out double[] breakEvens)
             {
-                var simulator = new PathSimulator(inputs.Template, start, monthly, c.Order, c.Target, paths);
+                var simulator = new PathSimulator(template, start, monthly, c.Order, c.Target, paths);
                 breakEvens = new double[inputs.Paths];
                 for (int path = 0; path < inputs.Paths; path++)
                 {
@@ -127,7 +242,7 @@ namespace MonteCarloSimulation.Optimizer
             var finalists = candidates.Skip(1)
                 .Select(c =>
                 {
-                    var simulator = new PathSimulator(inputs.Template, start, monthly, c.Order, c.Target, paths);
+                    var simulator = new PathSimulator(template, start, monthly, c.Order, c.Target, paths);
                     int survivors = 0;
                     double afterTaxLeft = 0;
                     for (int path = 0; path < inputs.Paths; path++)

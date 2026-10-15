@@ -14,6 +14,7 @@ namespace MonteCarloSimulation.Web.Tests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseSetting("SiteFlags:Path", TempSiteFlags.NewPath());
+            TestSpiaRates.Use(builder);
             builder.ConfigureTestServices(services => services.AddSingleton<IEntitlements>(new FixedEntitlements(Tier.Plus)));
         }
     }

@@ -37,6 +37,7 @@
                     <button type="button" role="tab" id="tab-assets" aria-controls="panel-assets" aria-selected="false" tabindex="-1" data-i18n="runner.tab.assets">Asset Classes</button>
                     <button type="button" role="tab" id="tab-money" aria-controls="panel-money" aria-selected="false" tabindex="-1" data-i18n="runner.tab.money">Your Money</button>
                     <button type="button" role="tab" id="tab-income" aria-controls="panel-income" aria-selected="false" tabindex="-1" data-i18n="runner.tab.income">Other Income</button>
+                    <button type="button" role="tab" id="tab-annuity" aria-controls="panel-annuity" aria-selected="false" tabindex="-1"><span data-i18n="runner.tab.annuity">Annuity</span> <span class="paid-badge tab-badge" data-feature="annuity" data-display-only hidden></span></button>
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-demographics" aria-labelledby="tab-demographics">
@@ -113,6 +114,7 @@
                         <label><span data-i18n="form.balance">Balance</span>
                             <input type="text" inputmode="decimal" class="money-input" name="initialTaxableBalance" pattern="[0-9,]*\.?[0-9]*" value="1,000,000" required>
                         </label>
+                        <p class="subgroup-hint" id="td-purchase-note" hidden></p>
                         <label class="checkbox-label">
                             <input type="checkbox" name="enableRothConversions" checked data-requires="roth-conversions" data-free-value="false">
                             <span data-i18n="form.allowRoth">Allow Roth conversions</span>
@@ -175,6 +177,35 @@
                         <label><span data-i18n="optimal.whenYears">When (years after retiring)</span>
                             <input type="number" name="yearNewMoney" min="0" step="1" value="10" required data-requires="inheritance">
                         </label>
+                    </fieldset>
+                </div>
+
+                <div class="tab-panel field-grid" role="tabpanel" id="panel-annuity" aria-labelledby="tab-annuity" hidden>
+                    <p class="subgroup-hint span-all"><span data-i18n="optimal.annuity.intro">The Optimizer decides whether buying an annuity with Tax Deferred money raises your spend, and shows what it bought here. You can't enter an annuity on this page.</span> <span class="paid-badge" data-feature="annuity" hidden></span></p>
+                    <label class="checkbox-label span-all">
+                        <input type="checkbox" name="considerAnnuities" checked data-requires="annuity" data-free-value="true">
+                        <span data-i18n="optimal.annuity.consider">Consider buying an annuity</span>
+                    </label>
+                    <p class="annuity-status span-all" id="annuity-not-yet" data-i18n="optimal.annuity.notYet">Nothing considered yet: select Find optimal.</p>
+                    <p class="annuity-status span-all" id="annuity-off" data-i18n="optimal.annuity.off" hidden>Annuity purchases are off: the Optimizer won't consider buying one.</p>
+                    <p class="annuity-status span-all" id="annuity-status" hidden></p>
+                    <label><span data-i18n="optimal.annuity.bought">Annuity bought</span>
+                        <input type="text" class="display-only" name="annuityInvestment" value="0" data-size-as="1,000,000" readonly>
+                    </label>
+                    <label><span data-i18n="runner.annuity.monthly">Return (monthly $)</span>
+                        <input type="text" class="display-only" name="annuityMonthlyAmount" value="0" data-size-as="10,000.00" readonly>
+                    </label>
+                    <fieldset class="subgroup">
+                        <legend data-i18n="runner.annuity.type">Type</legend>
+                        <label class="checkbox-label"><input type="radio" name="annuityType" value="spia" checked disabled> <span>SPIA</span><sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note 1: SPIA" data-i18n-aria-label="runner.annuity.noteSpiaAria">1</a><span class="footnote-tip" role="tooltip" data-i18n="runner.annuity.noteSpia">Single Premium Immediate Annuity: payments start on your Retire On Date.</span></sup></label>
+                        <label class="checkbox-label"><input type="radio" name="annuityType" value="dia" disabled> <span>DIA</span><sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note 2: DIA" data-i18n-aria-label="runner.annuity.noteDiaAria">2</a><span class="footnote-tip" role="tooltip" data-i18n="optimal.annuity.noteDia">Deferred Income Annuity: not considered, since today's rates are for immediate annuities only.</span></sup></label>
+                        <label class="checkbox-label"><input type="checkbox" name="annuityTaxDeferred" checked disabled> <span><span data-i18n="runner.annuity.taxDeferred">In a tax-deferred account</span><sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note 3: how the payments are taxed" data-i18n-aria-label="runner.annuity.noteTaxDeferredAria">3</a><span class="footnote-tip" role="tooltip" data-i18n="optimal.annuity.noteTaxDeferred">The Optimizer buys the annuity with Tax Deferred money, so it stays in a tax-deferred account and every payment is taxed 100% as ordinary income.</span></sup></span></label>
+                    </fieldset>
+                    <fieldset class="subgroup">
+                        <legend><span data-i18n="runner.annuity.gender">Gender</span> <span class="paid-badge" data-feature="annuity-gender" hidden></span></legend>
+                        <label class="checkbox-label"><input type="radio" name="annuitySex" value="male" checked data-requires="annuity-gender"> <span data-i18n="runner.annuity.male">Male</span></label>
+                        <label class="checkbox-label"><input type="radio" name="annuitySex" value="female" data-requires="annuity-gender"> <span data-i18n="runner.annuity.female">Female</span></label>
+                        <p class="subgroup-hint" data-i18n="optimal.annuity.genderHint">Sets the rate the Optimizer buys at.</p>
                     </fieldset>
                 </div>
             </div>

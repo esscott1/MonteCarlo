@@ -285,8 +285,9 @@ window.Inputs = (() => {
     }
 
     // Fits each text and number field on the input tabs to its default value plus two more digits: 110% of that text's
-    // width in the field's own font, plus its padding and borders (and the arrows, on a number field). Longer values
-    // still fit; they scroll inside the field. The Asset Classes table's fields share the widest, so its columns line
+    // width in the field's own font, plus its padding and borders (and the arrows, on a number field). A field the page
+    // fills in itself (data-size-as="1,000,000") is sized for that text instead. Longer values still fit; they scroll
+    // inside the field. The Asset Classes table's fields share the widest, so its columns line
     // up. Date fields keep their own width.
     const NUMBER_ARROWS = 20; // px
     let measure;
@@ -300,7 +301,7 @@ window.Inputs = (() => {
     function fittedWidth(input) {
         const style = getComputedStyle(input);
         const px = (name) => parseFloat(style[name]) || 0;
-        return Math.ceil(1.1 * textWidth(`${input.defaultValue}00`, style))
+        return Math.ceil(1.1 * textWidth(`${input.dataset.sizeAs ?? input.defaultValue}00`, style))
             + px('paddingLeft') + px('paddingRight') + px('borderLeftWidth') + px('borderRightWidth')
             + (input.type === 'number' ? NUMBER_ARROWS : 0);
     }
@@ -325,6 +326,47 @@ window.Inputs = (() => {
         radio.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    // The Annuity tab's footnotes, like the year tables': hover or focus shows a note, a tap toggles it, and a note that
+    // would run past the window's right edge moves left to fit. Cancelling the click also stops a footnote inside a label
+    // from ticking its checkbox or radio.
+    function initFormFootnotes(form) {
+        form.addEventListener('click', (e) => {
+            const ref = e.target.closest('.footnote-ref');
+            if (!ref) return;
+            e.preventDefault();
+            const note = ref.parentElement;
+            const open = !note.classList.contains('open');
+            note.classList.add('open');
+            placeFootnoteTip(note);
+            note.classList.toggle('open', open);
+        });
+        ['mouseover', 'focusin'].forEach((type) => form.addEventListener(type, (e) => {
+            const note = e.target.closest?.('.footnote');
+            if (note) placeFootnoteTip(note);
+        }));
+    }
+
+    // Measured while the tip shows (hover, focus or open): a tip that would run past the window's right edge moves left
+    // just enough to fit, but never past the left edge
+    function placeFootnoteTip(note) {
+        const tip = note.querySelector('.footnote-tip');
+        if (!tip) return;
+        tip.style.left = '';
+        const box = tip.getBoundingClientRect();
+        const overflow = box.right - (document.documentElement.clientWidth - 4);
+        if (overflow > 0) tip.style.left = `${-Math.min(overflow, box.left - 4)}px`;
+    }
+
+    // "2026-10-01" as "Oct 1, 2026" (a month-only "2026-10" as "Oct 2026")
+    function formatAsOf(asOf) {
+        const monthOnly = /^\d{4}-\d{2}$/.test(asOf);
+        const date = new Date(`${monthOnly ? `${asOf}-01` : asOf.slice(0, 10)}T00:00:00Z`);
+        if (Number.isNaN(date.getTime())) return asOf;
+        return monthOnly
+            ? I18n.monthYear(date)
+            : date.toLocaleDateString(I18n.language === 'es' ? 'es-US' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    }
+
     return {
         parseNumber,
         formatWithCommas,
@@ -343,5 +385,7 @@ window.Inputs = (() => {
         initFilingStatus,
         setFilingStatus,
         sizeInputs,
+        formatAsOf,
+        initFormFootnotes,
     };
 })();

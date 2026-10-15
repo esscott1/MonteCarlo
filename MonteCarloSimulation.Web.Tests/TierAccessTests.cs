@@ -26,6 +26,7 @@ namespace MonteCarloSimulation.Web.Tests
             new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {
                 builder.UseSetting("SiteFlags:Path", TempSiteFlags.NewPath());
+                TestSpiaRates.Use(builder);
                 builder.ConfigureAppConfiguration((_, config) =>
                 {
                     var settings = new Dictionary<string, string?>
@@ -691,6 +692,16 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(teaser.MonthlyLow, events[^2].GetProperty("monthlyLow").GetDouble());
             Assert.Equal(teaser.MonthlyHigh, events[^2].GetProperty("monthlyHigh").GetDouble());
             Assert.True(teaser.MonthlyLow <= optimum.Recommended.SpendAtMidpoint / 12 && optimum.Recommended.SpendAtMidpoint / 12 < teaser.MonthlyHigh);
+
+            // While Plus offers annuities, the teaser also weighs buying one (a man's rate) and says what it might add -
+            // the Optimizer's own gain, rounded down to $100 - and nothing else about it
+            var withPurchase = SpendingOptimizer.Optimize(expected.ToInputs(await TestSpiaRates.PurchaseFor(app, expected))).Optimum;
+            var expectedTeaser = OptimalTeaserEvent.For(withPurchase);
+            Assert.Equal(SpendingOptimizer.ClaimingAges.Count * 3 + 1, events[0].GetProperty("totalSteps").GetInt32());
+            Assert.NotNull(expectedTeaser.AnnuityGainMonthly);
+            Assert.Equal(expectedTeaser.AnnuityGainMonthly!.Value, events[^2].GetProperty("annuityGainMonthly").GetDouble());
+            Assert.Equal(teaser.MonthlyLow, expectedTeaser.MonthlyLow);
+            Assert.Equal(new[] { "annuityGainMonthly", "monthlyHigh", "monthlyLow", "type" }, events[^2].EnumerateObject().Select(p => p.Name).Order());
         }
 
         [Fact]
@@ -704,9 +715,123 @@ namespace MonteCarloSimulation.Web.Tests
             var events = await EventsAsync(await PostAsync(app, "/api/optimal", request, cookie));
 
             Assert.Equal("result", events[^2].GetProperty("type").GetString());
-            Assert.Equal(JsonSerializer.Serialize(SpendingOptimizer.Optimize(request.ToInputs()).Optimum,
+            // With the annuity feature the Optimizer also weighs buying an annuity, at the app's current rate
+            var purchase = await TestSpiaRates.PurchaseFor(app, request);
+            Assert.NotNull(purchase);
+            Assert.Equal(JsonSerializer.Serialize(SpendingOptimizer.Optimize(request.ToInputs(purchase)).Optimum,
                     app.Services.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions),
                 events[^2].GetProperty("optimum").GetRawText());
+        }
+
+        // --- The Optimizer's suggested annuity: Plus; the annuitant's gender for its rate, Pro ---
+
+        [Fact]
+        public async Task InFreeOnly_TheTeaserWeighsNoAnnuity()
+        {
+            using var app = App(tierPlus: false, tierPro: false);
+
+            var events = await EventsAsync(await PostAsync(app, "/api/optimal", FreeOptimalRequest()));
+
+            Assert.Equal(SpendingOptimizer.ClaimingAges.Count, events[0].GetProperty("totalSteps").GetInt32());
+            Assert.Equal(JsonValueKind.Null, events[^2].GetProperty("annuityGainMonthly").ValueKind);
+        }
+
+        [Fact]
+        public async Task APlusVisitorWhoUnticksConsiderBuyingAnAnnuity_GetsThePlainSearch()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+            var request = FreeOptimalRequest();
+            request.Paths = 167;
+            request.ConsiderAnnuities = false;
+
+            var events = await EventsAsync(await PostAsync(app, "/api/optimal", request, cookie));
+
+            Assert.Equal(SpendingOptimizer.ClaimingAges.Count, events[0].GetProperty("totalSteps").GetInt32());
+            var optimum = events[^2].GetProperty("optimum");
+            Assert.Equal(JsonValueKind.Null, optimum.GetProperty("purchase").ValueKind);
+            Assert.Equal(JsonSerializer.Serialize(SpendingOptimizer.Optimize(request.ToInputs()).Optimum,
+                    app.Services.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions),
+                optimum.GetRawText());
+        }
+
+        [Fact]
+        public async Task APlusVisitorsOptimizer_SaysWhatItDecidedAboutBuyingAnAnnuity()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+            var request = FreeOptimalRequest();
+            request.Paths = 167;
+
+            var events = await EventsAsync(await PostAsync(app, "/api/optimal", request, cookie));
+
+            var decision = events[^2].GetProperty("optimum").GetProperty("purchase");
+            Assert.Equal(JsonValueKind.Object, decision.ValueKind);
+            Assert.Equal(10, decision.GetProperty("amountsConsidered").GetInt32()); // $100,000 steps of $1,000,000 Tax Deferred
+            Assert.False(string.IsNullOrEmpty(decision.GetProperty("rateAsOf").GetString()));
+            var purchase = await TestSpiaRates.PurchaseFor(app, request);
+            Assert.Equal(purchase!.MonthlyPer100k, decision.GetProperty("monthlyPer100k").GetDouble());
+        }
+
+        [Fact]
+        public async Task OnlyPro_MayAskForAWomansRate_AndFreeVisitorsChoiceIsIgnored()
+        {
+            using var app = App();
+            var client = Client(app);
+            string plus = await UnlockAsync(client, "plus", PlusCode);
+            var request = FreeOptimalRequest();
+            request.Paths = 167;
+            request.AnnuitySex = "female";
+
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/optimal", request, plus), HttpStatusCode.Forbidden);
+            Assert.Equal("Choosing the annuitant's gender is a Pro feature.", errors.GetProperty("annuitySex")[0].GetString());
+
+            string pro = await UnlockAsync(client, "pro", ProCode);
+            var events = await EventsAsync(await PostAsync(app, "/api/optimal", request, pro));
+            double woman = events[^2].GetProperty("optimum").GetProperty("purchase").GetProperty("monthlyPer100k").GetDouble();
+            request.AnnuitySex = "male";
+            Assert.True(woman < (await TestSpiaRates.PurchaseFor(app, request))!.MonthlyPer100k);
+
+            // Free runs no purchase search, so the choice doesn't matter there
+            var free = FreeOptimalRequest();
+            free.AnnuitySex = "female";
+            var teaser = await EventsAsync(await PostAsync(app, "/api/optimal", free));
+            Assert.Equal("teaser", teaser[^2].GetProperty("type").GetString());
+        }
+
+        [Fact]
+        public async Task AnUnknownAnnuitantGender_IsA400()
+        {
+            using var app = App();
+            string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
+            var request = FreeOptimalRequest();
+            request.AnnuitySex = "other";
+
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/optimal", request, cookie), HttpStatusCode.BadRequest);
+
+            Assert.True(errors.TryGetProperty("annuitySex", out _));
+        }
+
+        private static SpendOptimum Decided(double spendWithout, double spendWith, double amount)
+        {
+            var age = new ClaimingAgeResult(67, new DateOnly(2036, 7, 7), 3_900, 0, spendWith, spendWith, spendWith,
+                Core.WithdrawalStrategy.TaxOptimized, Core.RothConversionTarget.Bracket12);
+            var decision = new AnnuityPurchaseDecision(amount, amount * 0.00612, 612, "2026-10-01", spendWithout, spendWith, 2e6, 1e6, 10);
+            return new SpendOptimum(age, 0.825, [age], decision);
+        }
+
+        [Theory]
+        [InlineData(96_000, 103_320, 400_000, 600.0)]   // $610 a month more: about $600
+        [InlineData(96_000, 97_000, 400_000, null)]     // $83 a month more: under $100, no figure
+        [InlineData(96_000, 96_000, 0, null)]           // none bought
+        public void TheFreeTeasersAnnuityGain_IsRoundedDownTo100_AndItsRangeIsThePlanWithoutAPurchase(
+            double without, double with, double amount, double? gain)
+        {
+            var teaser = OptimalTeaserEvent.For(Decided(without, with, amount));
+
+            Assert.Equal(gain, teaser.AnnuityGainMonthly);
+            Assert.Equal(8_000, teaser.MonthlyLow); // $96,000 a year without the purchase
+            Assert.Equal(8_500, teaser.MonthlyHigh);
         }
 
         [Theory]

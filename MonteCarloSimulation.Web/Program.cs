@@ -146,6 +146,7 @@ app.MapPost("/api/optimal", async (
     OptimalRequest request,
     HttpContext context,
     FeatureAccess features,
+    SpiaPayoutIndex spiaIndex,
     IOptionsMonitor<FreeDefaultsOptions> freeDefaults,
     IOptions<JsonOptions> jsonOptions) =>
 {
@@ -157,10 +158,22 @@ app.MapPost("/api/optimal", async (
         return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
 
     var locked = FreeTier.LockedInputs(request, access, freeDefaults.CurrentValue);
+    foreach (var (key, message) in FreeTier.LockedOptimizerAnnuity(request, access)) locked[key] = message;
     if (locked.Count > 0) return FreeTier.Refused(locked);
     FreeTier.SplitAccounts(request, access, freeDefaults.CurrentValue);
 
-    return new OptimalStream(request.ToInputs(), jsonOptions.Value.SerializerOptions, teaser: !access.Can(Features.OptimizerFull));
+    // The Optimizer also weighs buying a SPIA with Tax Deferred money, at today's rate: for a visitor with the annuity
+    // feature unless they untick "Consider buying an annuity", and for the Free teaser (a man's rate) while a paid tier
+    // offers annuities, so it can say how much one might add
+    bool teaser = !access.Can(Features.OptimizerFull);
+    bool weighPurchase = access.Can(Features.Annuity)
+        ? request.ConsiderAnnuities
+        : teaser && access.Offers.Any(offer => offer.Features.Contains(Features.Annuity));
+    var purchase = weighPurchase
+        ? request.PurchaseOptions(await spiaIndex.CurrentAsync(context.RequestAborted),
+            female: request.AnnuitantIsFemale && access.Can(Features.AnnuityGender))
+        : null;
+    return new OptimalStream(request.ToInputs(purchase), jsonOptions.Value.SerializerOptions, teaser);
 });
 
 // Checks run cheapest-first: shape, then passphrase, and only then the paid agent call.

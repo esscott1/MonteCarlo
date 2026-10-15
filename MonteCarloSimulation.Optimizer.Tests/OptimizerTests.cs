@@ -284,6 +284,125 @@ namespace MonteCarloSimulation.Optimizer.Tests
             }
         }
 
+        // --- Annuity purchases ---
+
+        // A household the purchase search has room to work with: $900,000 in Tax Deferred, retiring at 60
+        private static OptimizationInputs WithPurchase(double monthlyPer100k, int paths = 60) => new()
+        {
+            Template = Mixed(),
+            SocialSecurity = Defaults,
+            Paths = paths,
+            Purchase = new AnnuityPurchaseOptions(monthlyPer100k, "2026-10-01")
+        };
+
+        [Fact]
+        public void APurchase_ComesOutOfTaxDeferred_AndPaysTheRateForItsSize()
+        {
+            var options = new AnnuityPurchaseOptions(612, "2026-10-01");
+            var template = Mixed();
+
+            var bought = AnnuityPurchase.Apply(template, options, 400_000);
+
+            Assert.Equal(500_000, bought.InitialTaxableBalance);
+            Assert.Equal(900_000, template.InitialTaxableBalance); // the template itself is untouched
+            Assert.Equal(2_448, bought.Annuity!.MonthlyPayment);
+            Assert.Equal(template.RetirementDate, bought.Annuity.FirstPayment); // from the Retire On date, like the runner's SPIA
+            Assert.Equal(0, bought.Annuity.Basis); // qualified: every payment is ordinary income
+            Assert.Equal(0, bought.Annuity.AnnualIncrease);
+            Assert.Equal(template.InitialBrokerageBasis, bought.InitialBrokerageBasis);
+            Assert.Equal(Enumerable.Range(1, 9).Select(k => k * 100_000.0), AnnuityPurchase.Amounts(template, options));
+        }
+
+        [Fact]
+        public void NoSizesToTry_WithAnOwnedAnnuity_ARateOfZero_OrNoTaxDeferred()
+        {
+            var options = new AnnuityPurchaseOptions(612, "2026-10-01");
+            var owned = Mixed();
+            owned.Annuity = new Annuity { MonthlyPayment = 1_000, FirstPayment = owned.RetirementDate };
+            var empty = Mixed();
+            empty.InitialTaxableBalance = 99_000;
+
+            Assert.Empty(AnnuityPurchase.Amounts(owned, options));
+            Assert.Empty(AnnuityPurchase.Amounts(Mixed(), options with { MonthlyPer100k = 0 }));
+            Assert.Empty(AnnuityPurchase.Amounts(empty, options));
+        }
+
+        [Fact]
+        public void WithoutSizesToTry_TheResultIsExactlyTheSearchWithoutPurchases()
+        {
+            var plain = SpendingOptimizer.Optimize(new OptimizationInputs { Template = Mixed(), SocialSecurity = Defaults, Paths = 60 }).Optimum;
+            var zeroRate = SpendingOptimizer.Optimize(WithPurchase(0)).Optimum;
+
+            Assert.Null(plain.Purchase);
+            Assert.Null(zeroRate.Purchase);
+            Assert.Equal(plain.Recommended, zeroRate.Recommended);
+            Assert.Equal(plain.VerifiedSurvivalRate, zeroRate.VerifiedSurvivalRate);
+            Assert.Equal(plain.ClaimingAges, zeroRate.ClaimingAges);
+        }
+
+        [Fact]
+        public void AGoodRate_SuggestsAPurchase_ThatRaisesTheSpend_AndThePlanIsThatPurchasesOwnSearch()
+        {
+            var inputs = WithPurchase(700);
+
+            var optimum = SpendingOptimizer.Optimize(inputs).Optimum;
+            var decision = optimum.Purchase!;
+
+            Assert.True(decision.Amount > 0);
+            Assert.Equal(0, decision.Amount % 100_000);
+            Assert.Equal(700 * decision.Amount / 100_000, decision.MonthlyPayment, 6);
+            Assert.True(decision.SpendWith > decision.SpendWithout);
+            Assert.Equal(optimum.Recommended.SpendAtMidpoint, decision.SpendWith);
+            Assert.Equal(9, decision.AmountsConsidered);
+            Assert.Equal("2026-10-01", decision.RateAsOf);
+
+            // The recommendation is what searching the purchased plan on its own finds
+            var bought = AnnuityPurchase.Apply(inputs.Template, inputs.Purchase!, decision.Amount);
+            var alone = SpendingOptimizer.Optimize(new OptimizationInputs { Template = bought, SocialSecurity = Defaults, Paths = 60 }).Optimum;
+            Assert.Equal(alone.Recommended, optimum.Recommended);
+            Assert.Equal(alone.ClaimingAges, optimum.ClaimingAges);
+            Assert.Equal(alone.VerifiedSurvivalRate, optimum.VerifiedSurvivalRate);
+
+            // And the plan without it is the plain search's
+            var plain = SpendingOptimizer.Optimize(new OptimizationInputs { Template = Mixed(), SocialSecurity = Defaults, Paths = 60 }).Optimum;
+            Assert.Equal(plain.Recommended.SpendAtMidpoint, decision.SpendWithout);
+            Assert.True(decision.MoneyLeftWithout > 0 && decision.MoneyLeftWith > 0);
+        }
+
+        [Fact]
+        public void APoorRate_SuggestsNothing_AndKeepsThePlanWithoutAPurchase()
+        {
+            var optimum = SpendingOptimizer.Optimize(WithPurchase(1)).Optimum;
+            var plain = SpendingOptimizer.Optimize(new OptimizationInputs { Template = Mixed(), SocialSecurity = Defaults, Paths = 60 }).Optimum;
+
+            var decision = optimum.Purchase!;
+            Assert.Equal(0, decision.Amount);
+            Assert.Equal(0, decision.MonthlyPayment);
+            Assert.Equal(decision.SpendWithout, decision.SpendWith);
+            Assert.Equal(decision.MoneyLeftWithout, decision.MoneyLeftWith);
+            Assert.Equal(plain.Recommended, optimum.Recommended);
+            Assert.Equal(plain.ClaimingAges, optimum.ClaimingAges);
+        }
+
+        [Fact]
+        public void WithPurchases_TheListenerHearsEveryStep_AndTheResultIsRepeatable()
+        {
+            var inputs = WithPurchase(700, paths: 40);
+            var progress = new List<(int Completed, int Total)>();
+            var listener = new OptimizationListener { StepDone = (completed, total) => { lock (progress) progress.Add((completed, total)); } };
+
+            var reported = SpendingOptimizer.Optimize(inputs, listener, CancellationToken.None).Optimum;
+            var again = SpendingOptimizer.Optimize(inputs).Optimum;
+
+            // 9 claiming ages without a purchase, the screen, then 9 for each of the 2 finalists
+            int total = SpendingOptimizer.TotalSteps(inputs);
+            Assert.Equal(9 + 1 + 2 * 9, total);
+            Assert.Equal(Enumerable.Range(1, total), progress.Select(p => p.Completed).Order());
+            Assert.All(progress, p => Assert.Equal(total, p.Total));
+            Assert.Equal(again, reported with { ClaimingAges = again.ClaimingAges });
+            Assert.Equal(again.ClaimingAges, reported.ClaimingAges);
+        }
+
         // --- Reporting progress and cancelling ---
 
         [Fact]
@@ -293,7 +412,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
             var progress = new List<(int Completed, int Total)>();
             var listener = new OptimizationListener
             {
-                ClaimingAgeDone = (completed, total) => { lock (progress) progress.Add((completed, total)); }
+                StepDone = (completed, total) => { lock (progress) progress.Add((completed, total)); }
             };
 
             var reported = SpendingOptimizer.Optimize(inputs, listener, CancellationToken.None);
@@ -328,7 +447,7 @@ namespace MonteCarloSimulation.Optimizer.Tests
             int completed = 0;
             var listener = new OptimizationListener
             {
-                ClaimingAgeDone = (done, _) =>
+                StepDone = (done, _) =>
                 {
                     Interlocked.Increment(ref completed);
                     cancel.Cancel();

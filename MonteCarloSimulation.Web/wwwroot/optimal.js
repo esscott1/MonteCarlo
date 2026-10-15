@@ -19,7 +19,7 @@ let view = null;
 // sessionStorage key for handing the result to the Scenario runner (app.js reads it once and runs it).
 const SIMULATOR_HANDOFF_KEY = 'simulatorHandoff';
 
-const { parseNumber } = Inputs;
+const { parseNumber, formatWithCommas, formatAsOf } = Inputs;
 
 function formatCurrency(value) {
     return Number(value).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -43,13 +43,18 @@ function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// The annuity the last result bought, shown in the inputs: Tax Deferred lowered by its cost, the Annuity tab filled in.
+// { decision, fullTaxDeferred }, or null before a result that weighed a purchase.
+let bought = null;
+
 function readRequest() {
     const data = new FormData(optimalForm);
     return {
         years: Number(data.get('years')),
         birthdate: data.get('birthdate'),
         retirementDate: data.get('retirementDate'),
-        initialTaxableBalance: parseNumber(data.get('initialTaxableBalance')),
+        // Each run decides afresh: the Tax Deferred field holds what's left after the last purchase, so it's added back
+        initialTaxableBalance: parseNumber(data.get('initialTaxableBalance')) + (bought?.decision.amount ?? 0),
         initialRothBasis: parseNumber(data.get('initialRothBasis')),
         initialRothUnrealizedGain: parseNumber(data.get('initialRothUnrealizedGain')),
         initialBrokerageBasis: parseNumber(data.get('initialBrokerageBasis')),
@@ -63,8 +68,60 @@ function readRequest() {
         filingStatus: data.get('filingStatus'),
         enableRothConversions: data.get('enableRothConversions') === 'on',
         paths: Number(data.get('paths')),
+        // The rate a suggested annuity is bought at: a man's unless a Pro visitor chose Female (a disabled radio
+        // isn't in FormData, so it's read from the element)
+        annuitySex: Paywall.can('annuity-gender') ? optimalForm.elements['annuitySex'].value : 'male',
+        // Unticked (Plus), the Optimizer skips the purchase search; a Free visitor's stays ticked
+        considerAnnuities: optimalForm.elements['considerAnnuities'].checked,
         ...Inputs.readAssetMix(optimalForm),
     };
+}
+
+// A result's annuity decision, put into the inputs. With a purchase: Tax Deferred shows what's left, with a note, and the
+// Annuity tab shows what was bought. Without one (none helped, or none was weighed): the full balance and an empty tab.
+function applyPurchase(decision, fullTaxDeferred) {
+    const el = optimalForm.elements;
+    bought = decision ? { decision, fullTaxDeferred } : null;
+    const amount = decision?.amount > 0 ? decision.amount : 0;
+    el['initialTaxableBalance'].value = formatWithCommas(String(fullTaxDeferred - amount));
+    el['initialTaxableBalance'].dispatchEvent(new Event('input', { bubbles: true }));
+    el['annuityInvestment'].value = formatWithCommas(String(amount));
+    el['annuityMonthlyAmount'].value = formatWithCommas(String(amount > 0 ? decision.monthlyPayment : 0));
+    renderPurchaseNotes();
+}
+
+// The Annuity tab's status line and the note under Tax Deferred, in the page's language
+function renderPurchaseNotes() {
+    const status = document.getElementById('annuity-status');
+    const note = document.getElementById('td-purchase-note');
+    const decision = bought?.decision;
+    const result = !!view?.optimum || !!view?.teaser;
+    const off = !optimalForm.elements['considerAnnuities'].checked;
+    document.getElementById('annuity-not-yet').hidden = result || off;
+    document.getElementById('annuity-off').hidden = result || !off;
+    status.hidden = !result;
+    note.hidden = !(decision?.amount > 0);
+    if (view?.teaser) {
+        status.innerHTML = annuityTeaserLine(view.teaser);
+        Paywall.decorate(status);
+        return;
+    }
+    if (!decision) {
+        status.innerHTML = t('optimal.annuity.notConsidered');
+        return;
+    }
+    const asOf = formatAsOf(decision.rateAsOf);
+    if (decision.amount > 0) {
+        status.innerHTML = t('optimal.annuity.statusBought', {
+            amount: formatCurrency(decision.amount),
+            payment: formatCurrency(decision.monthlyPayment),
+            per: formatCurrency(decision.monthlyPer100k),
+            asOf,
+        });
+        note.textContent = t('optimal.tdPurchaseNote', { amount: formatCurrency(decision.amount), full: formatCurrency(bought.fullTaxDeferred) });
+    } else {
+        status.innerHTML = t('optimal.annuity.statusNone', { count: decision.amountsConsidered, asOf });
+    }
 }
 
 function renderErrors(errors) {
@@ -110,8 +167,18 @@ function renderTeaser(teaser) {
     return `
         <div class="summary-box ok">
             <p>${t('optimal.teaser', { low: formatCurrency(teaser.monthlyLow), high: formatCurrency(teaser.monthlyHigh) })}</p>
+            <p>${annuityTeaserLine(teaser)}</p>
             ${more}
         </div>`;
+}
+
+// The Free teaser's nudge toward annuities (Plus), always shown: with the gain when buying one would add $100 a month or
+// more (the server rounds it down to $100), else just the suggestion
+function annuityTeaserLine(teaser) {
+    const text = teaser.annuityGainMonthly
+        ? t('optimal.teaserAnnuityGain', { gain: formatCurrency(teaser.annuityGainMonthly) })
+        : t('optimal.teaserAnnuity');
+    return `${text} <span class="paid-badge" data-feature="annuity" hidden></span>`;
 }
 
 // The recommendation card in the tile beside the inputs
@@ -121,6 +188,7 @@ function renderCard(optimum) {
     const bandNote = inBand ? '' : `<p><em>${t('optimal.bandNote')}</em></p>`;
     return `
         <div class="summary-box ${inBand ? 'ok' : 'warn'}">
+            ${purchaseLine(optimum.purchase)}
             <p>${t('optimal.spendAbout', { amount: perMonth(r.spendAtMidpoint), at85: perMonth(r.spendAt85), at80: perMonth(r.spendAt80) })}</p>
             <p>${t('optimal.startSs', { age: r.age, date: formatMonthYear(r.startDate), benefit: formatCurrency(r.monthlyBenefit), total: formatCurrency(r.totalSocialSecurity) })}</p>
             <p>${t('optimal.survival', { amount: perMonth(r.spendAtMidpoint), rate: formatPercent(optimum.verifiedSurvivalRate) })}</p>
@@ -131,6 +199,22 @@ function renderCard(optimum) {
                 <span class="simulator-message" role="alert"></span>
             </p>
         </div>`;
+}
+
+// What the Optimizer decided about buying an annuity with Tax Deferred money (Plus), when it weighed one
+function purchaseLine(purchase) {
+    if (!purchase) return '';
+    const asOf = formatAsOf(purchase.rateAsOf);
+    if (!(purchase.amount > 0)) return `<p>${t('optimal.purchaseNone', { count: purchase.amountsConsidered, asOf })}</p>`;
+    return `<p>${t('optimal.purchase', {
+        amount: formatCurrency(purchase.amount),
+        payment: formatCurrency(purchase.monthlyPayment),
+        asOf,
+        without: perMonth(purchase.spendWithout),
+        with: perMonth(purchase.spendWith),
+        leftWithout: formatCurrency(purchase.moneyLeftWithout),
+        leftWith: formatCurrency(purchase.moneyLeftWith),
+    })}</p>`;
 }
 
 function renderBenefitCurve(benefits) {
@@ -236,7 +320,7 @@ optimalForm.addEventListener('submit', async (e) => {
                 case 'start':
                     started = true;
                     lastRequest = request;
-                    view = { kind: 'stream', start: event, progress: { completed: 0, total: event.totalClaimingAges }, optimum: null, teaser: null, done: false, stopped: false };
+                    view = { kind: 'stream', start: event, progress: { completed: 0, total: event.totalSteps }, optimum: null, teaser: null, done: false, stopped: false };
                     render();
                     break;
                 case 'progress':
@@ -244,10 +328,12 @@ optimalForm.addEventListener('submit', async (e) => {
                     break;
                 case 'result':
                     view.optimum = event.optimum;
+                    applyPurchase(event.optimum.purchase ?? null, request.initialTaxableBalance);
                     render();
                     break;
                 case 'teaser':
                     view.teaser = event;
+                    applyPurchase(null, request.initialTaxableBalance);
                     render();
                     break;
                 case 'done':
@@ -269,6 +355,8 @@ optimalForm.addEventListener('submit', async (e) => {
 function simulatorHandoff(optimum) {
     const r = optimum.recommended;
     const q = lastRequest;
+    // A suggested annuity was bought with Tax Deferred money: the runner starts with what's left, and the annuity
+    const bought = optimum.purchase?.amount > 0 ? optimum.purchase : null;
     return {
         version: 2,
         recommendedAge: r.age,
@@ -279,7 +367,7 @@ function simulatorHandoff(optimum) {
         years: q.years,
         birthdate: q.birthdate,
         retirementDate: q.retirementDate,
-        initialTaxableBalance: q.initialTaxableBalance,
+        initialTaxableBalance: q.initialTaxableBalance - (bought ? bought.amount : 0),
         initialRothBasis: q.initialRothBasis,
         initialRothUnrealizedGain: q.initialRothUnrealizedGain,
         initialBrokerageBasis: q.initialBrokerageBasis,
@@ -289,6 +377,7 @@ function simulatorHandoff(optimum) {
         annualStandardDeduction: q.annualStandardDeduction,
         filingStatus: q.filingStatus,
         enableRothConversions: q.enableRothConversions,
+        annuity: bought ? { investment: bought.amount, monthlyPayment: bought.monthlyPayment } : null,
         assetMix: {
             stockAllocation: q.stockAllocation,
             bondAllocation: q.bondAllocation,
@@ -326,6 +415,7 @@ document.addEventListener('i18n:change', () => {
     Inputs.updateAllocation(optimalForm);
     Inputs.updateBalanceTotals(optimalForm);
     render();
+    renderPurchaseNotes();
 });
 
 Inputs.initTabs(optimalForm, 'optimalTab');
@@ -336,4 +426,6 @@ Inputs.initAccountTotals(optimalForm);
 Inputs.initFilingStatus(optimalForm);
 Inputs.sizeInputs(optimalForm);
 Inputs.initCollapsibleInputs(optimalForm);
+Inputs.initFormFootnotes(optimalForm);
+optimalForm.elements['considerAnnuities'].addEventListener('change', renderPurchaseNotes);
 initRunInSimulator();

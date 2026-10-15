@@ -11,6 +11,8 @@
 // Markup it reads:
 //   <span class="paid-badge" data-feature="custom-returns" hidden></span>   a badge: the offer while the feature is
 //       locked, "✓ {tier}" while the visitor's tier has it
+//   <span class="paid-badge" data-feature="..." data-display-only hidden>   the same pill, but only to look at: no
+//       flyout and nothing to click or focus (inside a tab's label, which is already a button)
 //   data-requires="custom-returns" on an input                            locked at its Free value while locked:
 //       data-free-value="0" (or "false" for a checkbox), else the value the page loaded with; outlined in the
 //       visitor's tier colour (data-enabled-tier) while their tier has it
@@ -72,12 +74,27 @@ window.Paywall = (function () {
             + `</span>`;
     }
 
+    // A badge only to look at: the pill alone, hidden from screen readers (the label it sits in keeps its own name)
+    function displayOnlyHtml(feature) {
+        if (can(feature)) {
+            return enabledTier()
+                ? `<span class="paid-badge-button enabled ${enabledTier()}" aria-hidden="true">&#10003; ${escapeHtml(me.tier)}</span>`
+                : '';
+        }
+        const offer = offersFor(feature)[0];
+        if (!offer) return '';
+        const tierClass = offer.tier.toLowerCase();
+        return `<span class="paid-badge-button ${tierClass}" aria-hidden="true">${SYMBOLS[tierClass] ?? SYMBOLS.plus} ${escapeHtml(offer.tier)}</span>`;
+    }
+
     // Fills the badges under root: the offer for a locked feature, "✓ {tier}" for one the visitor's tier has; a badge
     // with neither (Free Only, or nothing on offer with that feature) is hidden
     function decorate(root = document) {
         root.querySelectorAll('.paid-badge[data-feature]').forEach((badge) => {
             const feature = badge.dataset.feature;
-            const html = can(feature) ? (enabledTier() ? enabledHtml() : '') : badgeHtml(feature);
+            const html = badge.dataset.displayOnly !== undefined
+                ? displayOnlyHtml(feature)
+                : can(feature) ? (enabledTier() ? enabledHtml() : '') : badgeHtml(feature);
             badge.hidden = html === '';
             if (badge.dataset.rendered !== html) {
                 badge.innerHTML = html;
@@ -256,7 +273,8 @@ window.Paywall = (function () {
             if (!e.target.closest('a')) e.preventDefault();
             return;
         }
-        const button = e.target.closest('.paid-badge-button');
+        // A display-only badge (in a tab's label) has no flyout: its click is the tab's
+        const button = e.target.closest('.paid-badge:not([data-display-only]) .paid-badge-button');
         if (!button) {
             closeAll(null);
             return;

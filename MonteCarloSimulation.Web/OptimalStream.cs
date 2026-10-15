@@ -6,7 +6,7 @@ using MonteCarloSimulation.Optimizer;
 namespace MonteCarloSimulation.Web
 {
     // The Optimal page's results, streamed as they're computed: newline-delimited JSON, one event per line, flushed as
-    // each is written. A run is `start`, then `progress` after each claiming age, then `result` (the recommendation and
+    // each is written. A run is `start`, then `progress` after each step (SpendingOptimizer.TotalSteps), then `result` (the recommendation and
     // every claiming age) and `done` - or `error` if the computation fails after the stream has started. If the client
     // disconnects, the request's token stops the optimizer. For a visitor without the full Optimizer, `teaser` (the
     // recommended monthly spend as a $500 range) replaces `result`.
@@ -29,7 +29,7 @@ namespace MonteCarloSimulation.Web
             var events = Channel.CreateUnbounded<OptimalStreamEvent>(new UnboundedChannelOptions { SingleReader = true });
             var listener = new OptimizationListener
             {
-                ClaimingAgeDone = (completed, total) => events.Writer.TryWrite(new OptimalProgressEvent(completed, total))
+                StepDone = (completed, total) => events.Writer.TryWrite(new OptimalProgressEvent(completed, total))
             };
             // A dedicated thread, not a thread-pool one: the pool must stay free to write the stream and serve requests
             _ = Task.Factory.StartNew(() =>
@@ -38,7 +38,7 @@ namespace MonteCarloSimulation.Web
                 {
                     var result = SpendingOptimizer.Optimize(inputs, listener, cancellationToken);
                     events.Writer.TryWrite(teaser
-                        ? OptimalTeaserEvent.For(result.Optimum.Recommended.SpendAtMidpoint)
+                        ? OptimalTeaserEvent.For(result.Optimum)
                         : new OptimalResultEvent(result.Optimum));
                     events.Writer.TryWrite(new OptimalDoneEvent());
                     events.Writer.TryComplete();
@@ -53,7 +53,7 @@ namespace MonteCarloSimulation.Web
             {
                 await WriteAsync(response, new OptimalStartEvent(
                     inputs.Paths,
-                    SpendingOptimizer.ClaimingAges.Count,
+                    SpendingOptimizer.TotalSteps(inputs),
                     SpendingOptimizer.BenefitByAge(inputs.SocialSecurity)), cancellationToken);
 
                 await foreach (var optimalEvent in events.Reader.ReadAllAsync(cancellationToken))
@@ -82,23 +82,37 @@ namespace MonteCarloSimulation.Web
 
     public abstract record OptimalStreamEvent(string Type);
 
-    // What the page needs before any results: how many claiming ages will report progress, and the benefit at each age.
-    public sealed record OptimalStartEvent(int Paths, int TotalClaimingAges, IReadOnlyList<BenefitAtAge> BenefitByAge)
+    // What the page needs before any results: how many steps will report progress (SpendingOptimizer.TotalSteps), and
+    // the benefit at each age.
+    public sealed record OptimalStartEvent(int Paths, int TotalSteps, IReadOnlyList<BenefitAtAge> BenefitByAge)
         : OptimalStreamEvent("start");
 
     public sealed record OptimalProgressEvent(int Completed, int Total) : OptimalStreamEvent("progress");
 
     public sealed record OptimalResultEvent(SpendOptimum Optimum) : OptimalStreamEvent("result");
 
-    // The Free Optimizer's answer: the recommended (82.5%) spend per month, as the $500 range it falls in
-    public sealed record OptimalTeaserEvent(double MonthlyLow, double MonthlyHigh) : OptimalStreamEvent("teaser")
+    // The Free Optimizer's answer: the recommended (82.5%) spend per month, as the $500 range it falls in - the plan
+    // without an annuity purchase, which a Free visitor can act on - and, when buying an annuity would add $100 a month or
+    // more, that gain rounded down to $100 (AnnuityGainMonthly; null otherwise). Nothing else about the purchase.
+    public sealed record OptimalTeaserEvent(double MonthlyLow, double MonthlyHigh, double? AnnuityGainMonthly = null)
+        : OptimalStreamEvent("teaser")
     {
         public const double Step = 500;
+        public const double GainStep = 100;
 
         public static OptimalTeaserEvent For(double annualSpend)
         {
             double low = Math.Floor(annualSpend / 12 / Step) * Step;
             return new OptimalTeaserEvent(low, low + Step);
+        }
+
+        public static OptimalTeaserEvent For(SpendOptimum optimum)
+        {
+            var purchase = optimum.Purchase;
+            var range = For(purchase?.SpendWithout ?? optimum.Recommended.SpendAtMidpoint);
+            if (purchase is not { Amount: > 0 }) return range;
+            double gain = Math.Floor((purchase.SpendWith - purchase.SpendWithout) / 12 / GainStep) * GainStep;
+            return range with { AnnuityGainMonthly = gain >= GainStep ? gain : null };
         }
     }
 
