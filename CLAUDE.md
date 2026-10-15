@@ -53,6 +53,8 @@ dotnet run -c Release --project MonteCarloSimulation.StrategyLab -- --set schedu
 
 Never delete a branch whose PR is still open or that isn't contained in `master` (e.g. `feature/change-request-status-spinner`, PR #22, open) — ask the user instead. The same applies to stale branches found during other branch work: `git fetch --prune`, then delete local branches whose remote-tracking branch is gone (`git branch -vv` shows `: gone]`) with `git branch -d`, confirming with the user before deleting anything that isn't obviously merged.
 
+**Tags** are kebab-case (lowercase words joined by hyphens: `annuity-intro`, never spaces, capitals or underscores). When the user names a tag in words ("Annuity Intro"), the tag is the kebab-case form and the user's words are its message: an annotated tag, `git tag -a annuity-intro -m "Annuity Intro" <commit>`, then `git push origin annuity-intro`. Tag the commit the user means (for a PR, its latest commit); PRs here merge with merge commits, so a tag on a PR branch's commit stays in `master`'s history after the merge.
+
 Source files are UTF-8 with CRLF line endings in the working copy (`core.autocrlf=true`; the repo stores LF). BOM use is mixed — most `.cs` files have none, the `.csproj` files do — so preserve each file's existing BOM state and give new `.cs` files none. `git add` will warn `LF will be replaced by CRLF`; that's expected and harmless. Note that `sed -i` in Git Bash rewrites files with LF; restore CRLF afterwards.
 
 ## Deployment
