@@ -325,8 +325,9 @@ body.wide {
     border-radius: 4px;
 }
 
-/* Free inputs (no paid feature on them or around them): a dark green border, for every visitor */
-.tabs-tile input:is([type="text"], [type="number"], [type="date"]):not([data-requires]):not([data-requires] input) {
+/* Free inputs (no paid feature on them or around them): a dark green border, for every visitor. Not the fields a page
+   fills in itself (.display-only, the Optimizer's Annuity tab), which nobody types in */
+.tabs-tile input:is([type="text"], [type="number"], [type="date"]):not([data-requires]):not([data-requires] input):not(.display-only) {
     border: 1px solid var(--free);
     border-radius: 4px;
 }
@@ -347,6 +348,19 @@ body.wide {
 
 #panel-annuity label[hidden] {
     display: none;
+}
+
+/* The Optimizer's read-only Annuity tab: what it decided, shown in fields nobody edits */
+.tabs-tile input.display-only {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--soft);
+    color: var(--text);
+}
+
+.annuity-status {
+    margin: 0;
+    font-size: 0.9rem;
 }
 
 /* The suggested SPIA rate (app.js initAnnuityRate): the rate with its as-of date, Use this rate, and the source */

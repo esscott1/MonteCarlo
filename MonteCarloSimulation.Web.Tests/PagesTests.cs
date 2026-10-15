@@ -71,10 +71,10 @@ namespace MonteCarloSimulation.Web.Tests
         {
             string html = await GetAsync("/optimal.html");
 
-            // The runner's four tabs, in order; the first is selected
+            // The runner's five tabs, in order; the first is selected
             var tabs = Regex.Matches(html, @"role=""tab"" id=""(tab-\w+)"" aria-controls=""(panel-\w+)"" aria-selected=""(\w+)""");
-            Assert.Equal(new[] { "tab-demographics", "tab-assets", "tab-money", "tab-income" }, tabs.Select(m => m.Groups[1].Value));
-            Assert.Equal(new[] { "true", "false", "false", "false" }, tabs.Select(m => m.Groups[3].Value));
+            Assert.Equal(new[] { "tab-demographics", "tab-assets", "tab-money", "tab-income", "tab-annuity" }, tabs.Select(m => m.Groups[1].Value));
+            Assert.Equal(new[] { "true", "false", "false", "false", "false" }, tabs.Select(m => m.Groups[3].Value));
 
             string Panel(string id) => Regex.Match(html, $@"id=""{id}""(.*?)(?=<div class=""tab-panel|<section class=""graph-tile)", RegexOptions.Singleline).Groups[1].Value;
             Assert.All(new[] { "retirementDate", "birthdate", "years" }, name => Assert.Contains($@"name=""{name}""", Panel("panel-demographics")));
@@ -84,6 +84,20 @@ namespace MonteCarloSimulation.Web.Tests
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-money")));
             Assert.All(new[] { "socialSecurityAt62", "socialSecurityAt67", "socialSecurityAt70", "annualStandardDeduction", "newMoney", "yearNewMoney" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
+
+            // The Annuity tab only shows what the Optimizer decided: nothing to enter (every field read-only or disabled)
+            // but the Pro gender choice, which sets the rate it buys at
+            string annuity = Regex.Match(html, @"id=""panel-annuity""(.*?)(?=<section class=""graph-tile)", RegexOptions.Singleline).Groups[1].Value;
+            Assert.Matches(@"name=""annuityInvestment""[^>]*readonly", annuity);
+            Assert.Matches(@"name=""annuityMonthlyAmount""[^>]*readonly", annuity);
+            Assert.Matches(@"name=""annuityType"" value=""spia"" checked disabled", annuity);
+            Assert.Matches(@"name=""annuityType"" value=""dia"" disabled", annuity);
+            Assert.Matches(@"name=""annuityTaxDeferred"" checked disabled", annuity);
+            Assert.DoesNotContain("includeAnnuity", annuity);
+            Assert.DoesNotContain("annuityCola", annuity);
+            Assert.Equal(new[] { "annuity-gender", "annuity-gender" }, Regex.Matches(annuity, @"data-requires=""([\w-]+)""").Select(m => m.Groups[1].Value));
+            Assert.Contains(@"<span class=""paid-badge"" data-feature=""annuity"" hidden></span>", annuity);
+            Assert.Contains(@"id=""td-purchase-note"" hidden", Panel("panel-money"));
 
             // The Optimizer finds the spend, so there's no withdrawal to enter; and there are no preset scenarios to pick
             Assert.DoesNotContain(@"name=""withdrawal""", html);
@@ -300,8 +314,9 @@ namespace MonteCarloSimulation.Web.Tests
             {
                 Assert.Matches(@"name=""includeAnnuity""[^>]*data-requires=""annuity"" data-free-value=""false""", html);
                 Assert.Matches(@"name=""annuityCola""[^>]*data-requires=""annuity-cola"" data-free-value=""false""", html);
-                Assert.Matches(@"name=""annuitySex"" value=""male"" checked data-requires=""annuity-gender""", html);
             }
+            // Both pages: the annuitant's gender (Pro) locks at Male
+            Assert.Matches(@"name=""annuitySex"" value=""male"" checked data-requires=""annuity-gender""", html);
             // A married household's default (inputs.js moves the field to it when Married is chosen)
             Assert.Matches($@"name=""annualStandardDeduction""[^>]*data-married-value=""{free.StandardDeductionMarried.ToString("N0", CultureInfo.InvariantCulture)}""", html);
         }
