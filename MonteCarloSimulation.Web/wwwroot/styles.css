@@ -313,7 +313,8 @@ body.wide {
     margin-bottom: 0;
 }
 
-.tab-panel > .span-all {
+.tab-panel > .span-all,
+.annuity-details > .span-all {
     grid-column: 1 / -1;
 }
 
@@ -348,6 +349,35 @@ body.wide {
     display: none;
 }
 
+/* The suggested SPIA rate (app.js initAnnuityRate): the rate with its as-of date, Use this rate, and the source */
+.annuity-rate {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--page);
+    font-size: 0.85rem;
+}
+
+.annuity-rate[hidden] {
+    display: none;
+}
+
+.annuity-rate p {
+    margin: 0 0 0.4rem;
+}
+
+.annuity-rate .secondary-button {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+}
+
+.annuity-rate .annuity-rate-source {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
 .tabs-tile select {
     padding: 0.2rem 0.35rem;
     border: 1px solid var(--border);
@@ -356,19 +386,6 @@ body.wide {
     color: var(--text);
 }
 
-.form-note-ref {
-    color: var(--muted);
-}
-
-/* Footnotes under a tab's fields */
-.form-notes {
-    font-size: 0.8rem;
-    color: var(--muted);
-}
-
-.form-notes p {
-    margin: 0 0 0.25rem;
-}
 
 .asset-table {
     border-collapse: collapse;
@@ -777,6 +794,43 @@ button[type="submit"]:hover {
 
 .summary-box p {
     margin: 0.3rem 0;
+}
+
+/* The Scenario runner's summary: the first sentence with a caret that unfolds the details (app.js summaryBox) */
+.summary-details > summary {
+    cursor: pointer;
+    list-style: none;
+    margin: 0.3rem 0;
+}
+
+.summary-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.summary-caret::before {
+    content: "\25B8";
+    display: inline-block;
+    width: 1em;
+    margin-right: 0.3rem;
+    font-size: 1.15em;
+    text-align: center;
+    color: var(--accent);
+    transition: transform 0.15s;
+}
+
+.summary-details[open] > summary .summary-caret::before {
+    transform: rotate(90deg);
+}
+
+/* The details line up under the headline's text, past the caret */
+.summary-details > p {
+    padding-left: 1.45em;
+}
+
+.summary-details > summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
 }
 
 .run-table {
@@ -1258,7 +1312,7 @@ details.observe-section {
     font-weight: 600;
 }
 
-/* Superscript footnote with a hover/focus/tap tooltip (main page year tables) */
+/* Superscript footnote with a hover/focus/tap tooltip (main page year tables, the Annuity tab) */
 .footnote {
     position: relative;
     margin-left: 0.15em;

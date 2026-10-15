@@ -61,6 +61,17 @@ namespace MonteCarloSimulation.Web
             return errors;
         }
 
+        // The Annuity tab's suggested SPIA rate: the annuity is Plus, choosing the annuitant's gender Pro
+        public static Dictionary<string, string> LockedSpiaRate(AnnuitantSex sex, Access access)
+        {
+            var errors = new Dictionary<string, string>();
+            if (!access.Can(Features.Annuity))
+                errors["includeAnnuity"] = "Annuities are a Plus feature.";
+            else if (sex == AnnuitantSex.Female && !access.Can(Features.AnnuityGender))
+                errors["annuitySex"] = "Choosing the annuitant's gender is a Pro feature.";
+            return errors;
+        }
+
         public const string CustomReturnsMessage = "Changing returns, std. devs and the correlation is a Plus feature.";
 
         // A Free visitor enters one total per account, so whatever split the request carries, the server splits each total

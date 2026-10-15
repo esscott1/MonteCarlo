@@ -88,6 +88,119 @@ function annuityRequest() {
     };
 }
 
+// The Annuity tab's suggested SPIA rate (Plus; choosing the gender is Pro, else the male rate): the best current payout
+// per $100,000 for the age at the Retire On Date, from the LifeAnnuities.us SPIA Payout Index by way of /api/spia-rate,
+// with the figures' as-of date. Shown for a SPIA only. The last answer is kept, so a language switch redraws it.
+let annuityRate = null;
+let annuityRateRequest = 0;
+
+function annuityPurchaseAge() {
+    const birthdate = form.elements['birthdate'].value;
+    const retirement = form.elements['retirementDate'].value;
+    if (!birthdate || !retirement) return null;
+    return (Date.parse(retirement) - Date.parse(birthdate)) / (365.25 * 86_400_000);
+}
+
+// "2026-10-01" as "Oct 1, 2026" (a month-only "2026-10" as "Oct 2026")
+function formatAsOf(asOf) {
+    const monthOnly = /^\d{4}-\d{2}$/.test(asOf);
+    const date = new Date(`${monthOnly ? `${asOf}-01` : asOf.slice(0, 10)}T00:00:00Z`);
+    if (Number.isNaN(date.getTime())) return asOf;
+    return monthOnly
+        ? I18n.monthYear(date)
+        : date.toLocaleDateString(I18n.language === 'es' ? 'es-US' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+async function refreshAnnuityRate() {
+    const box = document.getElementById('annuity-rate');
+    const el = form.elements;
+    const request = ++annuityRateRequest;
+    if (!el['includeAnnuity'].checked || !Paywall.can('annuity')) {
+        box.hidden = true;
+        return;
+    }
+    if (el['annuityType'].value !== 'spia') {
+        annuityRate = { kind: 'dia' };
+        renderAnnuityRate();
+        return;
+    }
+    const age = annuityPurchaseAge();
+    if (age === null) {
+        box.hidden = true;
+        return;
+    }
+    const sex = Paywall.can('annuity-gender') ? el['annuitySex'].value : 'male';
+    try {
+        const response = await fetch(`/api/spia-rate?age=${age.toFixed(2)}&sex=${sex}`);
+        if (request !== annuityRateRequest) return;
+        if (!response.ok) {
+            box.hidden = true;
+            return;
+        }
+        annuityRate = { kind: 'rate', ...(await response.json()) };
+    } catch {
+        if (request === annuityRateRequest) box.hidden = true;
+        return;
+    }
+    if (request === annuityRateRequest) renderAnnuityRate();
+}
+
+function renderAnnuityRate() {
+    const box = document.getElementById('annuity-rate');
+    const text = document.getElementById('annuity-rate-text');
+    const use = document.getElementById('annuity-rate-use');
+    const source = document.getElementById('annuity-rate-source');
+    const rate = annuityRate;
+    if (!rate) return;
+    box.hidden = false;
+    if (rate.kind === 'dia') {
+        text.textContent = t('runner.rate.dia');
+        use.hidden = true;
+        source.innerHTML = '';
+        return;
+    }
+    const asOf = formatAsOf(rate.asOf);
+    const links = {
+        index: `<a href="${escapeHtml(rate.sourceUrl)}" target="_blank" rel="noopener">LifeAnnuities.us SPIA Payout Index</a>`,
+        license: `<a href="${escapeHtml(rate.licenseUrl)}" target="_blank" rel="noopener">CC BY 4.0</a>`,
+    };
+    if (rate.monthlyPer100k === null) {
+        text.textContent = t('runner.rate.noAge', { age: rate.age, asOf });
+        use.hidden = true;
+        source.innerHTML = t('runner.rate.sourcePublished', links);
+        return;
+    }
+    const investment = parseNumber(form.elements['annuityInvestment'].value) || 0;
+    const monthly = Math.round(rate.monthlyPer100k * investment / 100_000);
+    text.textContent = t(rate.estimated ? 'runner.rate.estimated' : 'runner.rate.published', {
+        who: t(rate.sex === 'female' ? 'runner.rate.woman' : 'runner.rate.man'),
+        age: rate.age,
+        asOf,
+        per: formatCurrency(rate.monthlyPer100k),
+        amount: formatCurrency(monthly),
+        investment: formatCurrency(investment),
+    });
+    use.hidden = !(monthly > 0);
+    use.dataset.amount = String(monthly);
+    source.innerHTML = t(rate.estimated ? 'runner.rate.sourceEstimated' : 'runner.rate.sourcePublished', links);
+}
+
+function initAnnuityRate() {
+    const el = form.elements;
+    [el['includeAnnuity'], ...el['annuityType'], ...el['annuitySex'], el['birthdate'], el['retirementDate']]
+        .forEach((input) => input.addEventListener('change', refreshAnnuityRate));
+    // The amount scales with the investment; the rate per $100,000 doesn't change
+    el['annuityInvestment'].addEventListener('input', renderAnnuityRate);
+    document.getElementById('annuity-rate-use').addEventListener('click', (e) => {
+        const payment = el['annuityMonthlyAmount'];
+        payment.value = formatWithCommas(e.currentTarget.dataset.amount);
+        payment.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    document.addEventListener('paywall:change', refreshAnnuityRate);
+    document.addEventListener('i18n:change', renderAnnuityRate);
+    Paywall.ready.then(refreshAnnuityRate);
+}
+
 // User-supplied text is echoed back into the change-request result panel, so it has to be
 // escaped rather than interpolated raw.
 function escapeHtml(value) {
@@ -416,6 +529,22 @@ function annuityLine(parameters) {
     })}</p>`;
 }
 
+// The results summary: its first sentence (how many runs survived) always shows, with a caret that unfolds the details
+// under it. Folded at first; once opened or closed it stays that way while the page is open, through new runs and
+// language switches (which redraw it).
+let summaryExpanded = false;
+
+function summaryBox(kind, headline, details) {
+    return `
+        <div class="summary-box ${kind}">
+            <details class="summary-details"${summaryExpanded ? ' open' : ''}>
+                <summary><span class="summary-caret" aria-hidden="true"></span>${headline}</summary>
+                ${details}
+            </details>
+        </div>
+    `;
+}
+
 function renderSummary(parameters, output) {
     const result = output.result;
     const totalAvgRate = output.allRates.reduce((a, b) => a + b, 0) / output.allRates.length;
@@ -442,29 +571,32 @@ function renderSummary(parameters, output) {
         const survival = 1 - (result.outOfMoneyCount / parameters.iterations);
         const avgFailureYear = result.yearsOutOfMoney.reduce((a, b) => a + b, 0) / result.yearsOutOfMoney.length;
         const avgFailureReturn = result.failedScenarioAverages.reduce((a, b) => a + b, 0) / result.failedScenarioAverages.length;
-        return `
-            <div class="summary-box ${survival > 0.8 ? 'ok' : 'warn'}">
-                <p><strong>${survival > 0.8 ? '🙂' : '🙁'} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}</p>
-                ${scenarioLine}
+        return summaryBox(
+            survival > 0.8 ? 'ok' : 'warn',
+            `<strong>${survival > 0.8 ? '🙂' : '🙁'} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}`,
+            `${scenarioLine}
                 <p>${t('runner.realized', { mean: formatPercent(totalAvgRate), stdDev: stdDev.toFixed(4) })}</p>
                 <p>${t('runner.inheritance', { amount: formatCurrency(parameters.newMoney), year: new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney })}</p>
                 <p>${t('runner.avgFailure', { year: avgFailureYear.toFixed(0), rate: formatPercent(avgFailureReturn) })}</p>
                 ${lifetimeTaxLine}
-                ${accountChoiceLine(parameters, output)}
-            </div>
-        `;
+                ${accountChoiceLine(parameters, output)}`);
     }
 
     const avgBalance = result.successMoneyRemaining.reduce((a, b) => a + b, 0) / result.successMoneyRemaining.length;
-    return `
-        <div class="summary-box ok">
-            <p><strong>🙂 ${t('runner.allSurvived')}</strong></p>
-            ${scenarioLine}
+    return summaryBox(
+        'ok',
+        `<strong>🙂 ${t('runner.allSurvived')}</strong>`,
+        `${scenarioLine}
             <p>${t('runner.avgBalance', { amount: formatCurrency(avgBalance) })}</p>
             ${lifetimeTaxLine}
-            ${accountChoiceLine(parameters, output)}
-        </div>
-    `;
+            ${accountChoiceLine(parameters, output)}`);
+}
+
+// Remembers the summary's folded or unfolded state (toggle doesn't bubble, so it's caught on the way down)
+function initSummaryToggle() {
+    results.addEventListener('toggle', (e) => {
+        if (e.target.classList?.contains('summary-details')) summaryExpanded = e.target.open;
+    }, true);
 }
 
 // Every failed run's years, as plain text. Built here from the run data (rather than the server's own trace) so it reads
@@ -533,6 +665,37 @@ function initFootnotes() {
         e.preventDefault();
         ref.parentElement.classList.toggle('open');
     });
+}
+
+// The Annuity tab's footnotes, like the year tables': hover or focus shows a note, a tap toggles it, and a note that would
+// run past the window's right edge moves left to fit. Cancelling the click also stops a footnote inside a label from
+// ticking its checkbox or radio.
+function initFormFootnotes() {
+    form.addEventListener('click', (e) => {
+        const ref = e.target.closest('.footnote-ref');
+        if (!ref) return;
+        e.preventDefault();
+        const note = ref.parentElement;
+        const open = !note.classList.contains('open');
+        note.classList.add('open');
+        placeFootnoteTip(note);
+        note.classList.toggle('open', open);
+    });
+    ['mouseover', 'focusin'].forEach((type) => form.addEventListener(type, (e) => {
+        const note = e.target.closest?.('.footnote');
+        if (note) placeFootnoteTip(note);
+    }));
+}
+
+// Measured while the tip shows (hover, focus or open): a tip that would run past the window's right edge moves left just
+// enough to fit, but never past the left edge
+function placeFootnoteTip(note) {
+    const tip = note.querySelector('.footnote-tip');
+    if (!tip) return;
+    tip.style.left = '';
+    const box = tip.getBoundingClientRect();
+    const overflow = box.right - (document.documentElement.clientWidth - 4);
+    if (overflow > 0) tip.style.left = `${-Math.min(overflow, box.left - 4)}px`;
 }
 
 function initRunToggles() {
@@ -897,7 +1060,10 @@ Inputs.initFilingStatus(form);
 Inputs.sizeInputs(form);
 initSocialSecurityDefault();
 initAnnuity();
+initAnnuityRate();
 Inputs.initCollapsibleInputs(form);
 initRunToggles();
 initFootnotes();
+initFormFootnotes();
+initSummaryToggle();
 initEditFlyout();

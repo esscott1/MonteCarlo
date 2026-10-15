@@ -10,6 +10,11 @@
     <PackageReference Include="Microsoft.FeatureManagement.AspNetCore" Version="4.8.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The SPIA payout index's committed copy, used until a fetch succeeds (SpiaPayoutIndex) -->
+    <Content Update="SpiaPayoutIndex.seed.json" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

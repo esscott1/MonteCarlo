@@ -44,6 +44,10 @@ builder.Services.AddSingleton<FeatureAccess>();
 // The Observe page's Visits section: visits per day, kept in a file (VisitCounter)
 builder.Services.AddSingleton<VisitCounter>();
 
+// The Annuity tab's suggested SPIA rate: the LifeAnnuities.us payout index, fetched at most weekly (SpiaPayoutIndex)
+builder.Services.AddHttpClient(SpiaPayoutIndex.HttpClientName, client => client.Timeout = SpiaPayoutIndex.FetchTimeout);
+builder.Services.AddSingleton<SpiaPayoutIndex>();
+
 // The Scenario runner's results are large JSON (about 2.7 MB for 99 runs of 30 years) that shrinks about 5x, so
 // /api/run's response is compressed (Brotli or gzip, as the browser accepts). Only that endpoint: /api/optimal streams
 // its results line by line, which compression would hold back, and leaving the passphrase and token responses alone
@@ -307,6 +311,7 @@ app.MapGet("/api/observe-access/verify", (HttpContext ctx, IConfiguration config
 app.MapTierAccess();
 app.MapSiteFlags();
 app.MapVisits();
+app.MapSpiaRate();
 
 app.Run();
 

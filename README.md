@@ -24,6 +24,14 @@ the exclusion ratio applies: the investment amount (default $400,000) comes back
 first 312 payments (26 years), and after that every payment is ordinary income ([Annuity.cs](MonteCarloSimulation.Core/Annuity.cs)).
 The Optimizer doesn't model an annuity yet.
 
+For a SPIA, the tab suggests a current payment (**Use this rate** fills it in): the best payout per $100,000 for the age
+at the Retire On date, with its as-of date, from the [LifeAnnuities.us SPIA Payout Index](https://lifeannuities.us/rates/spia-payout-index/)
+(CC BY 4.0). The index has only a few ages (men 65, 70 and 75, women 65), so other ages from 55 to 80 are estimated with
+a standard annuity-pricing formula fitted to them ([SpiaPayoutModel.cs](MonteCarloSimulation.Web/SpiaPayoutModel.cs)):
+within about 3.5% of the site's published table at every age. Plus gets a man's rate; choosing the gender is Pro. The
+app fetches the index at most once a week, on the first rate request after Monday 6:00 AM Mountain time, and keeps the
+last figures if that fails ([SpiaPayoutIndex.cs](MonteCarloSimulation.Web/SpiaPayoutIndex.cs)).
+
 ## Secondary purpose: illustrating Claude AI and CI/CD concepts
 
 Beyond the retirement simulation itself, this repo doubles as a small, direct illustration of several Claude AI and CI/CD concepts, each implemented as simply as possible rather than abstracted into a reusable framework:
@@ -223,3 +231,5 @@ No secret is committed to this repo. Each one lives in exactly one of the four p
 This repository is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). You may read, run and modify the code for noncommercial purposes such as personal study, research and hobby projects. Commercial use, including offering this software or a modified version of it as a paid or hosted service, is not permitted without separate written permission from the copyright holder.
 
 Required Notice: Copyright (c) 2026 Eric Scott (https://montecarlo.otsconsulting.ai)
+
+Third-party material keeps its own license: the committed copy of the LifeAnnuities.us SPIA Payout Index ([SpiaPayoutIndex.seed.json](MonteCarloSimulation.Web/SpiaPayoutIndex.seed.json)) is under CC BY 4.0, not the PolyForm license. See [NOTICE.md](NOTICE.md).
