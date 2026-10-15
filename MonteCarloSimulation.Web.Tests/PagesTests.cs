@@ -75,6 +75,9 @@ namespace MonteCarloSimulation.Web.Tests
             var tabs = Regex.Matches(html, @"role=""tab"" id=""(tab-\w+)"" aria-controls=""(panel-\w+)"" aria-selected=""(\w+)""");
             Assert.Equal(new[] { "tab-demographics", "tab-assets", "tab-money", "tab-income", "tab-annuity" }, tabs.Select(m => m.Groups[1].Value));
             Assert.Equal(new[] { "true", "false", "false", "false", "false" }, tabs.Select(m => m.Groups[3].Value));
+            // The Annuity tab is Plus: a pill in its label, only to look at (the tab is already a button); its text in a
+            // span, so switching language doesn't replace the pill
+            Assert.Matches(@"id=""tab-annuity""[^>]*><span data-i18n=""runner.tab.annuity"">[^<]*</span> <span class=""paid-badge tab-badge"" data-feature=""annuity"" data-display-only hidden></span></button>", html);
 
             string Panel(string id) => Regex.Match(html, $@"id=""{id}""(.*?)(?=<div class=""tab-panel|<section class=""graph-tile)", RegexOptions.Singleline).Groups[1].Value;
             Assert.All(new[] { "retirementDate", "birthdate", "years" }, name => Assert.Contains($@"name=""{name}""", Panel("panel-demographics")));
@@ -145,6 +148,9 @@ namespace MonteCarloSimulation.Web.Tests
             var tabs = Regex.Matches(html, @"role=""tab"" id=""(tab-\w+)"" aria-controls=""(panel-\w+)"" aria-selected=""(\w+)""");
             Assert.Equal(new[] { "tab-demographics", "tab-assets", "tab-money", "tab-income", "tab-annuity" }, tabs.Select(m => m.Groups[1].Value));
             Assert.Equal(new[] { "true", "false", "false", "false", "false" }, tabs.Select(m => m.Groups[3].Value));
+            // The Annuity tab is Plus: a pill in its label, only to look at (the tab is already a button); its text in a
+            // span, so switching language doesn't replace the pill
+            Assert.Matches(@"id=""tab-annuity""[^>]*><span data-i18n=""runner.tab.annuity"">[^<]*</span> <span class=""paid-badge tab-badge"" data-feature=""annuity"" data-display-only hidden></span></button>", html);
             foreach (Match tab in tabs)
                 Assert.True(HasId(html, tab.Groups[2].Value));
 

@@ -1391,6 +1391,18 @@ details.observe-section {
     white-space: nowrap;
 }
 
+/* A pill in a tab's label (data-display-only): smaller, and a click on it is a click on the tab */
+.tab-badge {
+    font-size: 0.7rem;
+    margin-left: 0.15rem;
+    pointer-events: none;
+}
+
+.tab-badge .paid-badge-button {
+    padding: 0.05rem 0.4rem;
+    cursor: inherit;
+}
+
 .paid-badge-button:hover,
 .paid-badge-button:focus-visible,
 .paid-badge.open .paid-badge-button {
