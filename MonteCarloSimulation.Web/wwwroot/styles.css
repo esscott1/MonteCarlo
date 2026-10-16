@@ -1600,7 +1600,8 @@ input[type="checkbox"].locked[data-locked-tier="pro"] {
     border-left: none;
 }
 
-/* "Plus" / "Pro" in the header while a paid tier is on, beside the language button */
+/* "Plus · Change" / "Pro · Change" in the header while a paid tier is on, beside the language button: a link to the
+   access page, where the visitor can switch tiers or go back to Free */
 .tier-marker {
     margin-left: auto;
     padding: 0.2rem 0.6rem;
@@ -1615,6 +1616,13 @@ input[type="checkbox"].locked[data-locked-tier="pro"] {
 .tier-marker.pro {
     background: var(--pro);
     color: var(--pro-text);
+}
+
+/* "· Change": lighter, so the pill reads as something to select rather than only a label */
+.tier-marker-action {
+    font-weight: 400;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
 }
 
 .tier-marker + .lang-toggle {

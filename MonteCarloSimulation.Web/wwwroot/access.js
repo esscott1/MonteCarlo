@@ -1,8 +1,12 @@
 // The access-code page (access.html), opened in a new tab from a paid-feature badge's flyout via /billing/subscribe.
 // While access codes stand in for sign-in and payment, entering a tier's code here (POST /api/tier-access) sets a signed
 // cookie for this browser, and "Use the Free version" (DELETE) clears it. Either way the page broadcasts on the
-// 'tier-access' channel, so the tab the visitor came from unlocks (or locks) in place. Text comes from i18n.js (t).
+// 'tier-access' channel, so the tab the visitor came from unlocks (or locks) in place. When the link said which page that
+// was (return=, from paywall.js), the page then says it's taking the visitor back and, 2.5 seconds later, closes this
+// tab so they land on that page; a browser that won't let it close the tab gets the page here instead. Opened directly
+// (no return=), it stays put. Text comes from i18n.js (t).
 (function () {
+    const RETURN_DELAY_MS = 2500;
     const form = document.getElementById('access-form');
     const status = document.getElementById('access-status');
     const tierChoices = document.getElementById('access-tiers');
@@ -21,12 +25,36 @@
     });
 
     let requested = (new URLSearchParams(location.search).get('tier') || '').toLowerCase();
+    const returnTo = returnPage(new URLSearchParams(location.search).get('return'));
     let me = null;
     // The last message shown under the form, kept so switching language can re-word it: { key, values } or { errors }
     let message = null;
 
     function escapeHtml(value) {
         return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // The page to go back to: one of this site's pages, never another site or the access flow itself (the server checks
+    // the same for /billing/subscribe - ReturnPath - but this page can be opened with any query string), else null
+    function returnPage(value) {
+        if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return null;
+        try {
+            const url = new URL(value, location.origin);
+            if (url.origin !== location.origin) return null;
+            if (url.pathname.startsWith('/access.html') || url.pathname.startsWith('/billing/')) return null;
+            return url.pathname + url.search + url.hash;
+        } catch {
+            return null;
+        }
+    }
+
+    // Close this tab, which a link opened, so the visitor lands on the page they came from - it has already unlocked (or
+    // locked) itself from the broadcast. A browser that won't let a page close its tab gets the page here instead.
+    function returnToPage() {
+        window.close();
+        setTimeout(() => {
+            if (!window.closed) location.replace(returnTo);
+        }, 300);
     }
 
     function announce() {
@@ -114,9 +142,10 @@
             }
             form.elements.code.value = '';
             requested = tier;
-            message = { key: 'access.success', values: { tier: data.tier } };
+            message = { key: returnTo ? 'access.successReturning' : 'access.success', values: { tier: data.tier } };
             announce();
             await load();
+            if (returnTo) setTimeout(returnToPage, RETURN_DELAY_MS);
         } catch (err) {
             message = { errors: [err.message] };
         } finally {
@@ -129,9 +158,10 @@
         useFree.disabled = true;
         try {
             await fetch('/api/tier-access', { method: 'DELETE' });
-            message = { key: 'access.backToFree' };
+            message = { key: returnTo ? 'access.backToFreeReturning' : 'access.backToFree' };
             announce();
             await load();
+            if (returnTo) setTimeout(returnToPage, RETURN_DELAY_MS);
         } catch (err) {
             message = { errors: [err.message] };
         } finally {
