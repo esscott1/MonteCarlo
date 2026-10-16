@@ -188,10 +188,9 @@ function renderCard(optimum) {
     const bandNote = inBand ? '' : `<p><em>${t('optimal.bandNote')}</em></p>`;
     return `
         <div class="summary-box ${inBand ? 'ok' : 'warn'}">
-            ${purchaseLine(optimum.purchase)}
             <p>${t('optimal.spendAbout', { amount: perMonth(r.spendAtMidpoint), at85: perMonth(r.spendAt85), at80: perMonth(r.spendAt80) })}</p>
+            ${purchaseLine(optimum.purchase)}
             <p>${t('optimal.startSs', { age: r.age, date: formatMonthYear(r.startDate), benefit: formatCurrency(r.monthlyBenefit), total: formatCurrency(r.totalSocialSecurity) })}</p>
-            <p>${t('optimal.survival', { amount: perMonth(r.spendAtMidpoint), rate: formatPercent(optimum.verifiedSurvivalRate) })}</p>
             <p>${t('optimal.accounts', { order: t(`order.${r.withdrawalStrategy}`), conversions: t(`target.phrase.${r.rothConversionTarget}`) })} (<a href="model-info.html" class="summary-link">${t('common.why')}</a>)</p>
             ${bandNote}
             <p class="simulator-actions">
@@ -212,8 +211,6 @@ function purchaseLine(purchase) {
         asOf,
         without: perMonth(purchase.spendWithout),
         with: perMonth(purchase.spendWith),
-        leftWithout: formatCurrency(purchase.moneyLeftWithout),
-        leftWith: formatCurrency(purchase.moneyLeftWith),
     })}</p>`;
 }
 
