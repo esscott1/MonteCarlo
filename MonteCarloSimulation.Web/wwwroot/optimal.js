@@ -188,10 +188,9 @@ function renderCard(optimum) {
     const bandNote = inBand ? '' : `<p><em>${t('optimal.bandNote')}</em></p>`;
     return `
         <div class="summary-box ${inBand ? 'ok' : 'warn'}">
-            ${purchaseLine(optimum.purchase)}
             <p>${t('optimal.spendAbout', { amount: perMonth(r.spendAtMidpoint), at85: perMonth(r.spendAt85), at80: perMonth(r.spendAt80) })}</p>
+            ${purchaseLine(optimum.purchase)}
             <p>${t('optimal.startSs', { age: r.age, date: formatMonthYear(r.startDate), benefit: formatCurrency(r.monthlyBenefit), total: formatCurrency(r.totalSocialSecurity) })}</p>
-            <p>${t('optimal.survival', { amount: perMonth(r.spendAtMidpoint), rate: formatPercent(optimum.verifiedSurvivalRate) })}</p>
             <p>${t('optimal.accounts', { order: t(`order.${r.withdrawalStrategy}`), conversions: t(`target.phrase.${r.rothConversionTarget}`) })} (<a href="model-info.html" class="summary-link">${t('common.why')}</a>)</p>
             ${bandNote}
             <p class="simulator-actions">
@@ -212,8 +211,6 @@ function purchaseLine(purchase) {
         asOf,
         without: perMonth(purchase.spendWithout),
         with: perMonth(purchase.spendWith),
-        leftWithout: formatCurrency(purchase.moneyLeftWithout),
-        leftWith: formatCurrency(purchase.moneyLeftWith),
     })}</p>`;
 }
 
@@ -240,7 +237,7 @@ function render() {
     let card = '';
     let detail = '';
     if (view?.kind === 'calculating') {
-        card = `<p class="chart-note">${t('optimal.calculating')}</p>`;
+        card = `<p class="optimal-progress">${t('optimal.calculating')}</p>`;
     } else if (view?.kind === 'errors') {
         detail = renderErrors(view.errors);
     } else if (view?.kind === 'failed') {
@@ -250,7 +247,7 @@ function render() {
         if (optimum) card = renderCard(optimum);
         else if (teaser) card = renderTeaser(teaser);
         else if (stopped) card = `<div class="error-box"><p>${t('optimal.streamStopped')}</p></div>`;
-        else card = `<p class="chart-note" id="optimal-progress">${progressText(progress.completed, progress.total)}</p>`;
+        else card = `<p class="optimal-progress" id="optimal-progress">${progressText(progress.completed, progress.total)}</p>`;
         // The claiming-age comparison and the benefit curve are the full Optimizer's
         detail = `
             <p class="page-intro">${t('optimal.basedOn', { paths: start.paths })}${lastRequest?.filingStatus === 'married' ? ` ${t('runner.filingMarried')}` : ''}</p>
