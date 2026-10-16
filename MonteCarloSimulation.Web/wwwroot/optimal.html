@@ -28,6 +28,28 @@
     <p class="page-intro" data-i18n="optimal.intro">How much can you spend each month and still have the money last in 80&ndash;85% of simulated markets &mdash; and when should you start Social Security? Spending is shown per month in today's dollars, inflated each year; balances are as of your retirement date.</p>
 
     <form id="optimal-form">
+        <!-- Find optimal and the market count sit above the inputs: in view on every tab, and when they're folded -->
+        <div class="submit-row">
+            <button type="submit" id="optimal-submit" data-i18n="optimal.submit">Find optimal</button>
+            <p class="subgroup-hint markets-free" data-free-only="optimizer-full" hidden><span data-i18n="optimal.marketsFree">167 simulated markets.</span> <span class="paid-badge" data-feature="optimizer-full" hidden></span></p>
+            <fieldset class="markets-choice" data-requires="optimizer-full" data-locked="hide">
+                <legend><span data-i18n="optimal.markets">Simulated markets</span> <span class="paid-badge" data-feature="optimizer-full" hidden></span></legend>
+                <label class="checkbox-label">
+                    <input type="radio" name="paths" value="500" checked>
+                    <span data-i18n="optimal.paths500">500 &mdash; most precise</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="radio" name="paths" value="333">
+                    333
+                </label>
+                <label class="checkbox-label">
+                    <input type="radio" name="paths" value="167">
+                    <span data-i18n="optimal.paths167">167 &mdash; fastest</span>
+                </label>
+                <p class="subgroup-hint" data-i18n="optimal.pathsHint">Fewer markets finish sooner but pin the 80&ndash;85% band less precisely.</p>
+            </fieldset>
+        </div>
+
         <details id="inputs-section" class="inputs-section" open>
         <summary data-i18n="runner.yourInputs">Your inputs</summary>
         <div class="inputs-layout">
@@ -121,7 +143,7 @@
                             <span class="paid-badge" data-feature="roth-conversions" hidden></span>
                         </label>
                     </fieldset>
-                    <fieldset class="subgroup">
+                    <fieldset class="subgroup span-two-rows">
                         <legend><span data-i18n="form.roth">Roth Accts</span> <span class="paid-badge" data-feature="account-basis-split" hidden></span></legend>
                         <label data-free-only="account-basis-split" hidden><span data-i18n="form.total">Total</span>
                             <input type="text" inputmode="decimal" class="money-input" name="rothTotal" pattern="[0-9,]*\.?[0-9]*" value="20,000" required>
@@ -153,7 +175,7 @@
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-income" aria-labelledby="tab-income" hidden>
-                    <fieldset class="subgroup">
+                    <fieldset class="subgroup span-two-rows">
                         <legend><span data-i18n="optimal.ssLegend">Social Security (monthly, today's $)</span> <span class="paid-badge" data-feature="optimizer-full" hidden></span></legend>
                         <p class="subgroup-hint" data-free-only="optimizer-full" hidden data-i18n="optimal.ssFreeHint">Enter your benefit at 67 from your SSA statement; the amounts at other ages follow SSA's rules.</p>
                         <label data-requires="optimizer-full" data-locked="hide"><span data-i18n="optimal.atAge62">At age 62</span>
@@ -165,9 +187,6 @@
                         <label data-requires="optimizer-full" data-locked="hide"><span data-i18n="optimal.atAge70">At age 70</span>
                             <input type="text" inputmode="decimal" class="money-input" name="socialSecurityAt70" pattern="[0-9,]*\.?[0-9]*" value="4,800" required>
                         </label>
-                        <label><span class="label-row"><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span> <span class="paid-badge" data-feature="standard-deduction" hidden></span></span>
-                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" data-married-value="32,000" required data-requires="standard-deduction">
-                        </label>
                     </fieldset>
                     <fieldset class="subgroup">
                         <legend><span data-i18n="form.inheritance">Inheritance</span> <span class="paid-badge" data-feature="inheritance" hidden></span></legend>
@@ -176,6 +195,12 @@
                         </label>
                         <label><span data-i18n="optimal.whenYears">When (years after retiring)</span>
                             <input type="number" name="yearNewMoney" min="0" step="1" value="10" required data-requires="inheritance">
+                        </label>
+                    </fieldset>
+                    <fieldset class="subgroup">
+                        <legend data-i18n="form.taxesLegend">Taxes</legend>
+                        <label><span class="label-row"><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span> <span class="paid-badge" data-feature="standard-deduction" hidden></span></span>
+                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" data-married-value="32,000" required data-requires="standard-deduction">
                         </label>
                     </fieldset>
                 </div>
@@ -217,27 +242,6 @@
             </section>
         </div>
         </details>
-
-        <div class="submit-row">
-            <button type="submit" id="optimal-submit" data-i18n="optimal.submit">Find optimal</button>
-            <p class="subgroup-hint markets-free" data-free-only="optimizer-full" hidden><span data-i18n="optimal.marketsFree">167 simulated markets.</span> <span class="paid-badge" data-feature="optimizer-full" hidden></span></p>
-            <fieldset class="markets-choice" data-requires="optimizer-full" data-locked="hide">
-                <legend><span data-i18n="optimal.markets">Simulated markets</span> <span class="paid-badge" data-feature="optimizer-full" hidden></span></legend>
-                <label class="checkbox-label">
-                    <input type="radio" name="paths" value="500" checked>
-                    <span data-i18n="optimal.paths500">500 &mdash; most precise</span>
-                </label>
-                <label class="checkbox-label">
-                    <input type="radio" name="paths" value="333">
-                    333
-                </label>
-                <label class="checkbox-label">
-                    <input type="radio" name="paths" value="167">
-                    <span data-i18n="optimal.paths167">167 &mdash; fastest</span>
-                </label>
-                <p class="subgroup-hint" data-i18n="optimal.pathsHint">Fewer markets finish sooner but pin the 80&ndash;85% band less precisely.</p>
-            </fieldset>
-        </div>
     </form>
 
     <section id="optimal-results" aria-live="polite"></section>

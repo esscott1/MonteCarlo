@@ -239,6 +239,60 @@ fieldset {
     margin-bottom: 0.75rem;
 }
 
+/* The Scenario runner's Monthly Withdrawal: the plan's focal point, large, above the foldable inputs */
+.withdrawal-focus {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    background: var(--surface);
+}
+
+.withdrawal-focus > label {
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.withdrawal-amount {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: clamp(1rem, 3vw, 1.5rem);
+    font-weight: 700;
+}
+
+.withdrawal-amount input {
+    width: 7.5ch;
+    padding: 0.1rem 0.4rem;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--free);
+    border-radius: 6px;
+}
+
+.withdrawal-hint {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+/* Beside Run: the run in progress, then the link down to its results */
+.run-status {
+    font-size: 0.95rem;
+}
+
+.run-status .see-results {
+    color: var(--accent);
+    font-weight: 600;
+}
+
 /* The Scenario runner: wider, so the inputs tile and the chart sit side by side */
 body.wide {
     max-width: 1200px;
@@ -336,6 +390,12 @@ body.wide {
     display: none;
 }
 
+/* A box beside two shorter ones takes both their rows, so they stack with no gap: Roth on Your Money (Tax Deferred,
+   then Brokerage, in the first column) and Social Security on Other Income (Inheritance, then Taxes, in the second) */
+.field-grid .span-two-rows {
+    grid-row: span 2;
+}
+
 /* The Annuity tab. Its fields join the panel's grid: the fieldset around them is only there to disable them all while
    "Include an annuity" is off, greying their labels too. The DIA start date and the COLA rate show only when chosen. */
 .annuity-details {
@@ -346,7 +406,7 @@ body.wide {
     color: var(--muted);
 }
 
-#panel-annuity label[hidden] {
+#panel-annuity :is(label, fieldset)[hidden] {
     display: none;
 }
 

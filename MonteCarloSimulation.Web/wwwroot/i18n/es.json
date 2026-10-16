@@ -41,6 +41,7 @@
   "form.brokerage": "Cuentas de corretaje",
   "form.inheritance": "Herencia",
   "form.newMoney": "Dinero nuevo",
+  "form.taxesLegend": "Impuestos",
 
   "order.TaxOptimized": "optimizado para impuestos",
   "order.ProRata": "proporcional",
@@ -307,6 +308,8 @@
   "runner.detail.failed": "Mostrar el detalle año por año de las simulaciones fallidas",
   "runner.detail.lastSuccess": "Mostrar el detalle año por año de la última simulación exitosa",
   "runner.running": "Ejecutando la simulación&hellip;",
+  "runner.seeResults": "Ver resultados",
+  "runner.seeProblem": "Ver qué salió mal",
   "runner.handoff": "Cargado desde la página del optimizador, con la misma combinación de activos: Seguro Social a los {age} años, <strong>{amount}/mes</strong> &mdash; el gasto que sobrevivió en el 82.5% de sus mercados simulados. Esta simulación usa {iterations} mercados aleatorios nuevos, así que su tasa de supervivencia será cercana al 82.5%, no exacta. También vuelve a elegir el orden de retiro y la línea de conversión para estos datos.",
 
   "flyout.toggleLabel": "Solicitud de cambio",
