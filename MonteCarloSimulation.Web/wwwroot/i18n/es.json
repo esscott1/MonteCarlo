@@ -104,7 +104,7 @@
   "optimal.runInScenarioRunner": "Probar en el simulador de escenarios",
   "optimal.compareAges": "Comparar edades de inicio del Seguro Social",
   "optimal.benefitCurve": "Beneficio mensual del Seguro Social según la edad de inicio (estimado a partir de sus tres montos)",
-  "optimal.progress": "Calculando&hellip; {completed} de {total} revisiones hechas (cada edad de inicio del Seguro Social y, cuando podría ayudar, la compra de una anualidad).",
+  "optimal.progress": "Calculando&hellip; {completed} de {total} revisiones hechas.",
   "optimal.calculating": "Calculando&hellip;",
   "optimal.basedOn": "Basado en {paths} trayectorias de mercado simuladas para su combinación de activos. \"Supervivencia\" significa que el dinero alcanza para todo el horizonte.",
   "optimal.streamStopped": "El cálculo se detuvo antes de terminar. Inténtelo de nuevo.",

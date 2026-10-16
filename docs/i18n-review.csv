@@ -197,7 +197,7 @@
 "optimal.runInScenarioRunner","optimal.js (landing page results)","Run in Scenario runner","Probar en el simulador de escenarios",""
 "optimal.compareAges","optimal.js (landing page results)","Compare Social Security start ages","Comparar edades de inicio del Seguro Social",""
 "optimal.benefitCurve","optimal.js (landing page results)","Monthly Social Security benefit by start age (estimated from your three amounts)","Beneficio mensual del Seguro Social según la edad de inicio (estimado a partir de sus tres montos)",""
-"optimal.progress","optimal.js (landing page results)","Calculating&hellip; {completed} of {total} checks done (each Social Security start age, and buying an annuity when that could help).","Calculando&hellip; {completed} de {total} revisiones hechas (cada edad de inicio del Seguro Social y, cuando podría ayudar, la compra de una anualidad).",""
+"optimal.progress","optimal.js (landing page results)","Calculating&hellip; {completed} of {total} checks done.","Calculando&hellip; {completed} de {total} revisiones hechas.",""
 "optimal.calculating","optimal.js (landing page results)","Calculating&hellip;","Calculando&hellip;",""
 "optimal.basedOn","optimal.js (landing page results)","Based on {paths} simulated market paths for your asset mix. ""Survival"" means the money lasts the full horizon.","Basado en {paths} trayectorias de mercado simuladas para su combinación de activos. ""Supervivencia"" significa que el dinero alcanza para todo el horizonte.",""
 "optimal.streamStopped","optimal.js (landing page results)","The calculation stopped before it finished. Please try again.","El cálculo se detuvo antes de terminar. Inténtelo de nuevo.",""

@@ -53,7 +53,7 @@
   "optimal.runInScenarioRunner": "Run in Scenario runner",
   "optimal.compareAges": "Compare Social Security start ages",
   "optimal.benefitCurve": "Monthly Social Security benefit by start age (estimated from your three amounts)",
-  "optimal.progress": "Calculating&hellip; {completed} of {total} checks done (each Social Security start age, and buying an annuity when that could help).",
+  "optimal.progress": "Calculating&hellip; {completed} of {total} checks done.",
   "optimal.calculating": "Calculating&hellip;",
   "optimal.basedOn": "Based on {paths} simulated market paths for your asset mix. \"Survival\" means the money lasts the full horizon.",
   "optimal.streamStopped": "The calculation stopped before it finished. Please try again.",

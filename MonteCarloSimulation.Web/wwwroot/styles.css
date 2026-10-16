@@ -479,6 +479,21 @@ body.wide {
     margin-bottom: 0;
 }
 
+/* The card is a size container, so the calculating line below scales with the tile, not the window */
+#optimal-card {
+    container-type: inline-size;
+}
+
+/* "Calculating… 12 of 28 checks done." while the Optimizer runs: very large and bold, across most of the tile */
+.optimal-progress {
+    margin: 0.5rem 0;
+    font-size: clamp(1.75rem, 4.6cqi, 3.5rem);
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text);
+    text-wrap: balance;
+}
+
 /* Optimal page: Find optimal, with the Simulated markets choice beside it */
 .submit-row {
     display: flex;

@@ -240,7 +240,7 @@ function render() {
     let card = '';
     let detail = '';
     if (view?.kind === 'calculating') {
-        card = `<p class="chart-note">${t('optimal.calculating')}</p>`;
+        card = `<p class="optimal-progress">${t('optimal.calculating')}</p>`;
     } else if (view?.kind === 'errors') {
         detail = renderErrors(view.errors);
     } else if (view?.kind === 'failed') {
@@ -250,7 +250,7 @@ function render() {
         if (optimum) card = renderCard(optimum);
         else if (teaser) card = renderTeaser(teaser);
         else if (stopped) card = `<div class="error-box"><p>${t('optimal.streamStopped')}</p></div>`;
-        else card = `<p class="chart-note" id="optimal-progress">${progressText(progress.completed, progress.total)}</p>`;
+        else card = `<p class="optimal-progress" id="optimal-progress">${progressText(progress.completed, progress.total)}</p>`;
         // The claiming-age comparison and the benefit curve are the full Optimizer's
         detail = `
             <p class="page-intro">${t('optimal.basedOn', { paths: start.paths })}${lastRequest?.filingStatus === 'married' ? ` ${t('runner.filingMarried')}` : ''}</p>
