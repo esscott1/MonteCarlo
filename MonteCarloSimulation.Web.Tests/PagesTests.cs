@@ -487,8 +487,13 @@ namespace MonteCarloSimulation.Web.Tests
         {
             string script = await GetAsync("/paywall.js");
 
-            Assert.Contains("href=\"/billing/subscribe?tier=", script);
+            // Both offer links (a badge's flyout, Upgrade to Pro) are subscribeHref, carrying this page as return=
+            Assert.Contains("`/billing/subscribe?tier=${encodeURIComponent(tier.toLowerCase())}&return=${returnParam()}`", script);
+            Assert.Equal(2, Regex.Matches(script, Regex.Escape("<a href=\"${subscribeHref(")).Count);
+            Assert.DoesNotContain("href=\"/billing/subscribe", script);
             Assert.Contains("target=\"_blank\" rel=\"noopener\"", script);
+            // The header's tier marker goes to the access page the same way
+            Assert.Contains("marker.href = `/access.html?return=${returnParam()}`;", script);
         }
 
         [Fact]

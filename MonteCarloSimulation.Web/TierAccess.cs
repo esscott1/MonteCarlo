@@ -80,10 +80,15 @@ namespace MonteCarloSimulation.Web
                 return Results.NoContent();
             });
 
-            app.MapGet("/billing/subscribe", (string? tier) =>
-                Results.Redirect(TierNames.TryParse(tier, out var t) && t != Tier.Free
-                    ? $"/access.html?tier={t.ToString().ToLowerInvariant()}"
-                    : "/access.html"));
+            // The page the visitor came from rides along as return= when it's one of this site's pages, so the access page
+            // can bring them back after a code (access.js)
+            app.MapGet("/billing/subscribe", (string? tier, string? @return) =>
+            {
+                var query = new List<string>();
+                if (TierNames.TryParse(tier, out var t) && t != Tier.Free) query.Add($"tier={t.ToString().ToLowerInvariant()}");
+                if (ReturnPath.IsLocal(@return)) query.Add($"return={Uri.EscapeDataString(@return!)}");
+                return Results.Redirect(query.Count > 0 ? $"/access.html?{string.Join('&', query)}" : "/access.html");
+            });
         }
 
         private static CookieOptions CookieOptions(DateTimeOffset? expires) => new()

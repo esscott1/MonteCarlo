@@ -22,7 +22,9 @@
 //
 // A badge's link opens the access-code page (/billing/subscribe, which becomes Stripe Checkout later) in a new tab, so
 // the visitor keeps their place. Entering a code there broadcasts on the 'tier-access' channel; this tab then re-reads
-// /api/me (it also does when the tab regains focus) and unlocks in place: nothing reloads and no input changes.
+// /api/me (it also does when the tab regains focus) and unlocks in place: nothing reloads and no input changes. The
+// links carry this page as return=, so the access page can close itself 2.5 seconds after a code and land the visitor
+// back here (access.js).
 // Pages listen for 'paywall:change' to redraw anything that depends on access.
 window.Paywall = (function () {
     let me = { mode: 'FreeOnly', tier: 'Free', features: [], offers: [] };
@@ -41,6 +43,10 @@ window.Paywall = (function () {
     const lockTier = (feature) => offersFor(feature)[0]?.tier.toLowerCase() ?? '';
 
     const SYMBOLS = { plus: '&#10022;', pro: '&#9670;' };
+
+    // This page, for the access page's links to come back to (return=)
+    const returnParam = () => encodeURIComponent(location.pathname + location.search + location.hash);
+    const subscribeHref = (tier) => `/billing/subscribe?tier=${encodeURIComponent(tier.toLowerCase())}&return=${returnParam()}`;
 
     // The visitor's tier as a class name ("plus", "pro"), or '' on Free
     const enabledTier = () => (me.tier === 'Free' ? '' : me.tier.toLowerCase());
@@ -70,7 +76,7 @@ window.Paywall = (function () {
             + `<span class="paid-tip" role="dialog">`
             + `<strong>${t('paywall.tierFeature', { tier })}</strong> &middot; ${escapeHtml(first.priceLabel)}${alsoIn}`
             + `<span class="paid-tip-adds">${t('paywall.adds')}</span>`
-            + `<a href="/billing/subscribe?tier=${encodeURIComponent(first.tier.toLowerCase())}" target="_blank" rel="noopener">${link}</a>`
+            + `<a href="${subscribeHref(first.tier)}" target="_blank" rel="noopener">${link}</a>`
             + `</span>`;
     }
 
@@ -167,11 +173,12 @@ window.Paywall = (function () {
             + `<span class="paid-tip" role="dialog">`
             + `<strong>${escapeHtml(pro.tier)}</strong> &middot; ${escapeHtml(pro.priceLabel)}`
             + (adds ? `<span class="paid-tip-adds">${t('paywall.comingSoon', { tier: escapeHtml(pro.tier), list: adds })}</span>` : '')
-            + `<a href="/billing/subscribe?tier=${encodeURIComponent(pro.tier.toLowerCase())}" target="_blank" rel="noopener">${link}</a>`
+            + `<a href="${subscribeHref(pro.tier)}" target="_blank" rel="noopener">${link}</a>`
             + `</span>`;
     }
 
-    // "Plus" / "Pro" in the header while a paid tier is on, linking to the access-code page (to switch, or go back to Free)
+    // "Plus · Change" / "Pro · Change" in the header while a paid tier is on, linking to the access-code page (to switch,
+    // or go back to Free), which brings the visitor back here afterwards
     function renderTierMarker() {
         const header = document.querySelector('.page-header');
         if (!header) return;
@@ -184,12 +191,12 @@ window.Paywall = (function () {
         if (!marker) {
             marker = document.createElement('a');
             marker.className = 'tier-marker';
-            marker.href = '/access.html';
             marker.target = '_blank';
             marker.rel = 'noopener';
             header.insertBefore(marker, header.querySelector('.lang-toggle'));
         }
-        marker.textContent = me.tier;
+        marker.href = `/access.html?return=${returnParam()}`;
+        marker.innerHTML = `${escapeHtml(me.tier)} <span class="tier-marker-action">&middot; ${escapeHtml(t('paywall.markerChange'))}</span>`;
         marker.classList.toggle('pro', me.tier === 'Pro');
         marker.title = t('paywall.markerTitle', { tier: me.tier });
         renderUpgrade(header, marker);

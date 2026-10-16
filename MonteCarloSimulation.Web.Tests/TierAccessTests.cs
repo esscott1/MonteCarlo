@@ -278,6 +278,16 @@ namespace MonteCarloSimulation.Web.Tests
         [InlineData("/billing/subscribe?tier=pro", "/access.html?tier=pro")]
         [InlineData("/billing/subscribe?tier=free", "/access.html")]
         [InlineData("/billing/subscribe", "/access.html")]
+        // The page the badge was on comes along, so the access page can bring the visitor back...
+        [InlineData("/billing/subscribe?tier=plus&return=%2Findex.html", "/access.html?tier=plus&return=%2Findex.html")]
+        [InlineData("/billing/subscribe?tier=pro&return=%2Foptimal.html%3Fx%3D1", "/access.html?tier=pro&return=%2Foptimal.html%3Fx%3D1")]
+        [InlineData("/billing/subscribe?return=%2F", "/access.html?return=%2F")]
+        // ...but only a page on this site, never another site or the access flow itself
+        [InlineData("/billing/subscribe?tier=plus&return=https%3A%2F%2Fevil.example%2F", "/access.html?tier=plus")]
+        [InlineData("/billing/subscribe?tier=plus&return=%2F%2Fevil.example", "/access.html?tier=plus")]
+        [InlineData("/billing/subscribe?tier=plus&return=%2F%5Cevil.example", "/access.html?tier=plus")]
+        [InlineData("/billing/subscribe?tier=plus&return=%2Faccess.html", "/access.html?tier=plus")]
+        [InlineData("/billing/subscribe?tier=plus&return=%2Fbilling%2Fsubscribe", "/access.html?tier=plus")]
         public async Task TheBadgesSubscribeLink_GoesToTheAccessCodePage(string path, string location)
         {
             using var app = App();
@@ -286,6 +296,32 @@ namespace MonteCarloSimulation.Web.Tests
 
             Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
             Assert.Equal(location, response.Headers.Location?.OriginalString);
+        }
+
+        [Theory]
+        [InlineData("/", true)]
+        [InlineData("/index.html", true)]
+        [InlineData("/optimal.html?tab=money#results", true)]
+        [InlineData(null, false)]
+        [InlineData("", false)]
+        [InlineData("index.html", false)]                 // not a path from the site's root
+        [InlineData("https://evil.example/", false)]
+        [InlineData("//evil.example", false)]             // a scheme-relative URL: another site
+        [InlineData("/\\evil.example", false)]            // browsers read /\ like //
+        [InlineData("/index.html\nSet-Cookie: x", false)] // no control characters
+        [InlineData("/access.html?tier=plus", false)]     // the access flow itself would go in a circle
+        [InlineData("/ACCESS.HTML", false)]
+        [InlineData("/billing/subscribe", false)]
+        public void ReturnPath_IsOnlyALocalPageOutsideTheAccessFlow(string? path, bool local)
+        {
+            Assert.Equal(local, ReturnPath.IsLocal(path));
+        }
+
+        [Fact]
+        public void ReturnPath_RefusesAnOverlongPath()
+        {
+            Assert.True(ReturnPath.IsLocal("/" + new string('a', ReturnPath.MaxLength - 1)));
+            Assert.False(ReturnPath.IsLocal("/" + new string('a', ReturnPath.MaxLength)));
         }
 
         // --- The locked inputs ---
