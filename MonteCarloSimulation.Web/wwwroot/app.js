@@ -3,9 +3,11 @@ const form = document.getElementById('run-form');
 const results = document.getElementById('results');
 
 // What the page shows, kept so switching language can redraw it without re-running: the results area
-// ({ kind: 'loading' | 'errors' | 'failed' | 'results', ... }) and the note about values loaded from the Optimal page.
+// ({ kind: 'loading' | 'errors' | 'failed' | 'results', ... }) and the note about values loaded from the Optimal page,
+// which lasts only until the visitor runs again themselves (handoffRunPending marks the hand-off's own run).
 let view = null;
 let handoff = null;
+let handoffRunPending = false;
 
 // The inputs tile's shared code (tabs, money fields, the Asset Classes table, balance totals) is in inputs.js
 const { parseNumber, formatWithCommas, formatAllocation, formatAsOf } = Inputs;
@@ -646,6 +648,32 @@ function renderView() {
             renderDetail(output, parameters.enableRothConversions, taxDetail);
         Paywall.decorate(results);
     }
+    renderRunStatus();
+}
+
+// Beside Run, which sits above the inputs while the results come below them: "Running simulation…" during a run, then a
+// link down to what it produced - the survival summary, or the errors when it didn't run
+function renderRunStatus() {
+    const status = document.getElementById('run-status');
+    if (view?.kind === 'loading') status.innerHTML = `<span class="loading">${t('runner.running')}</span>`;
+    else if (view?.kind === 'results') status.innerHTML = `<a href="#results" class="see-results">${t('runner.seeResults')}</a>`;
+    else if (view) status.innerHTML = `<a href="#results" class="see-results">${t('runner.seeProblem')}</a>`;
+    else status.innerHTML = '';
+}
+
+// Scrolls the survival summary (or the errors) to the middle of the window and moves focus to it, so a keyboard or
+// screen reader lands there too
+function initSeeResults() {
+    document.getElementById('run-status').addEventListener('click', (e) => {
+        if (!e.target.closest('.see-results')) return;
+        e.preventDefault();
+        const target = results.querySelector('.summary-box, .error-box') ?? results;
+        const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+        const focusable = target.querySelector('summary') ?? target;
+        if (focusable === target) target.tabIndex = -1;
+        focusable.focus({ preventScroll: true });
+    });
 }
 
 function initFootnotes() {
@@ -837,6 +865,8 @@ function initEditFlyout() {
 
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    // Only the hand-off's own run comes from the Optimal page; any later run is the visitor's, so its note goes
+    if (!handoffRunPending) clearHandoffNote();
     // A Free visitor's locked inputs hold their Free values once /api/me has answered (paywall.js)
     await Paywall.ready;
 
@@ -977,7 +1007,11 @@ function applySimulatorHandoff() {
 
     handoff = h;
     renderHandoffNote();
+    // The submit handler reads the flag before its first await, while requestSubmit is still dispatching; reset after,
+    // in case the form doesn't submit
+    handoffRunPending = true;
     form.requestSubmit();
+    handoffRunPending = false;
     document.getElementById('handoff-note').scrollIntoView({ block: 'start' });
 }
 
@@ -1011,6 +1045,11 @@ function renderHandoffNote() {
         </div>`);
 }
 
+function clearHandoffNote() {
+    handoff = null;
+    document.getElementById('handoff-note')?.remove();
+}
+
 // Access changed in another tab (paywall.js): the results' notes about the tax detail follow
 document.addEventListener('paywall:change', renderView);
 
@@ -1040,4 +1079,5 @@ initRunToggles();
 initFootnotes();
 Inputs.initFormFootnotes(form);
 initSummaryToggle();
+initSeeResults();
 initEditFlyout();

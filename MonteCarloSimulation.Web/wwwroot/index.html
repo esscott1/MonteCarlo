@@ -55,6 +55,18 @@
     </div>
 
     <form id="run-form">
+        <!-- The plan's spending, the question every run answers, and Run sit above the inputs: in view on every tab, and when they're folded -->
+        <div class="withdrawal-focus">
+            <label for="withdrawal-input" data-i18n="runner.monthlyWithdrawal">Monthly Withdrawal</label>
+            <span class="withdrawal-amount">
+                <span class="withdrawal-currency" aria-hidden="true">$</span>
+                <input type="text" id="withdrawal-input" inputmode="decimal" class="money-input" name="withdrawal" pattern="[0-9,]*\.?[0-9]*" value="8,000" aria-describedby="withdrawal-hint" required>
+            </span>
+            <button type="submit" data-i18n="runner.submit">Run</button>
+            <span id="run-status" class="run-status" aria-live="polite"></span>
+            <p id="withdrawal-hint" class="withdrawal-hint" data-i18n="runner.withdrawalTitle">Monthly spending in today's dollars.</p>
+        </div>
+
         <details id="inputs-section" class="inputs-section" open>
         <summary data-i18n="runner.yourInputs">Your inputs</summary>
         <div class="inputs-layout">
@@ -139,9 +151,6 @@
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-money" aria-labelledby="tab-money" hidden>
-                    <label><span data-i18n="runner.monthlyWithdrawal">Monthly Withdrawal</span>
-                        <input type="text" inputmode="decimal" class="money-input" name="withdrawal" pattern="[0-9,]*\.?[0-9]*" value="8,000" data-i18n-title="runner.withdrawalTitle" title="Monthly spending in today's dollars." required>
-                    </label>
                     <fieldset class="subgroup">
                         <legend data-i18n="form.taxDeferred">Tax Deferred Accts</legend>
                         <label><span data-i18n="form.balance">Balance</span>
@@ -153,7 +162,7 @@
                             <span class="paid-badge" data-feature="roth-conversions" hidden></span>
                         </label>
                     </fieldset>
-                    <fieldset class="subgroup">
+                    <fieldset class="subgroup span-two-rows">
                         <legend><span data-i18n="form.roth">Roth Accts</span> <span class="paid-badge" data-feature="account-basis-split" hidden></span></legend>
                         <label data-free-only="account-basis-split" hidden><span data-i18n="form.total">Total</span>
                             <input type="text" inputmode="decimal" class="money-input" name="rothTotal" pattern="[0-9,]*\.?[0-9]*" value="20,000" required>
@@ -185,16 +194,13 @@
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-income" aria-labelledby="tab-income" hidden>
-                    <fieldset class="subgroup">
+                    <fieldset class="subgroup span-two-rows">
                         <legend data-i18n="runner.socialSecurityLegend">Social Security</legend>
                         <label><span data-i18n="runner.initialSs">Initial SS (monthly)</span>
                             <input type="text" inputmode="decimal" class="money-input" name="socialSecurityMonthlyAmount" pattern="[0-9,]*\.?[0-9]*" value="2,750" data-i18n-title="runner.ssTitle" title="Monthly benefit in today's dollars (as on your SSA statement)." required>
                         </label>
                         <label><span data-i18n="runner.ssStart">Social Security Start</span>
                             <input type="date" name="socialSecurityStartDate" value="2031-07-07" data-i18n-title="runner.ssStartTitle" title="Date of your first payment; between ages 62 and 70. Defaults to your 62nd birthday." required>
-                        </label>
-                        <label><span class="label-row"><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span> <span class="paid-badge" data-feature="standard-deduction" hidden></span></span>
-                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" data-married-value="32,000" required data-requires="standard-deduction">
                         </label>
                     </fieldset>
                     <fieldset class="subgroup">
@@ -204,6 +210,12 @@
                         </label>
                         <label><span data-i18n="runner.whenYears">When (years from now)</span>
                             <input type="number" name="yearNewMoney" min="0" step="1" value="10" required data-requires="inheritance">
+                        </label>
+                    </fieldset>
+                    <fieldset class="subgroup">
+                        <legend data-i18n="form.taxesLegend">Taxes</legend>
+                        <label><span class="label-row"><span data-i18n="form.standardDeduction">Standard Ded. (Annual)</span> <span class="paid-badge" data-feature="standard-deduction" hidden></span></span>
+                            <input type="text" inputmode="decimal" class="money-input" name="annualStandardDeduction" pattern="[0-9,]*\.?[0-9]*" value="16,000" data-married-value="32,000" required data-requires="standard-deduction">
                         </label>
                     </fieldset>
                 </div>
@@ -234,7 +246,8 @@
                                 <input type="date" name="annuityStartDate" data-i18n-title="runner.annuity.startTitle" title="The date of the first payment: at least 2 years from today." required disabled data-requires="annuity">
                             </label>
                         </fieldset>
-                        <fieldset class="subgroup">
+                        <!-- Hidden to keep the tab short: the suggested SPIA rate uses a man's, like Plus. The Optimizer still asks. -->
+                        <fieldset class="subgroup" id="annuity-gender" hidden>
                             <legend><span data-i18n="runner.annuity.gender">Gender</span> <span class="paid-badge" data-feature="annuity-gender" hidden></span></legend>
                             <label class="checkbox-label"><input type="radio" name="annuitySex" value="male" checked data-requires="annuity-gender"> <span data-i18n="runner.annuity.male">Male</span></label>
                             <label class="checkbox-label"><input type="radio" name="annuitySex" value="female" data-requires="annuity-gender"> <span data-i18n="runner.annuity.female">Female</span></label>
@@ -275,8 +288,6 @@
             </section>
         </div>
         </details>
-
-        <button type="submit" data-i18n="runner.submit">Run</button>
     </form>
 
     <section id="results" aria-live="polite"></section>

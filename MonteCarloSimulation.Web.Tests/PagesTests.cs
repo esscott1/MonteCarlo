@@ -114,6 +114,8 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains(@"id=""optimal-submit""", submitRow);
             Assert.Contains(@"name=""paths""", submitRow);
             Assert.DoesNotContain(@"name=""paths""", Panel("panel-demographics") + Panel("panel-income"));
+            // ... above the foldable inputs, so it's in view on every tab and when they're folded
+            Assert.True(html.IndexOf(@"<div class=""submit-row"">", StringComparison.Ordinal) < html.IndexOf(@"<details id=""inputs-section""", StringComparison.Ordinal));
 
             // The shared inputs code loads before the page's own
             int inputsScript = html.IndexOf("<script src=\"inputs.js\"></script>");
@@ -154,10 +156,20 @@ namespace MonteCarloSimulation.Web.Tests
             foreach (Match tab in tabs)
                 Assert.True(HasId(html, tab.Groups[2].Value));
 
-            // Each input sits on its tab
+            // The Monthly Withdrawal and Run sit above the foldable inputs, on no tab, so they stay in view on every tab and
+            // when the inputs are folded
+            string aboveInputs = html[html.IndexOf(@"<form id=""run-form"">", StringComparison.Ordinal)..html.IndexOf(@"<details id=""inputs-section""", StringComparison.Ordinal)];
+            Assert.Contains(@"name=""withdrawal""", aboveInputs);
+            Assert.Single(Regex.Matches(html, @"name=""withdrawal"""));
+            Assert.Contains(@"<button type=""submit"" data-i18n=""runner.submit"">", aboveInputs);
+            // ... with the run's progress and then See results right of Run (app.js fills it)
+            Assert.Matches(@"runner.submit"">Run</button>\s*<span id=""run-status"" class=""run-status"" aria-live=""polite""></span>", aboveInputs);
+            Assert.Single(Regex.Matches(html, @"data-i18n=""runner.submit"""));
+
+            // Each other input sits on its tab
             string Panel(string id) => Regex.Match(html, $@"id=""{id}""(.*?)(?=<div class=""tab-panel|<section class=""graph-tile)", RegexOptions.Singleline).Groups[1].Value;
             Assert.All(new[] { "retirementDate", "birthdate", "years", "iterations" }, name => Assert.Contains($@"name=""{name}""", Panel("panel-demographics")));
-            Assert.All(new[] { "withdrawal", "initialTaxableBalance", "initialRothBasis", "initialRothUnrealizedGain", "initialBrokerageBasis", "initialBrokerageUnrealizedGain", "enableRothConversions" },
+            Assert.All(new[] { "initialTaxableBalance", "initialRothBasis", "initialRothUnrealizedGain", "initialBrokerageBasis", "initialBrokerageUnrealizedGain", "enableRothConversions" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-money")));
             Assert.All(new[] { "socialSecurityMonthlyAmount", "socialSecurityStartDate", "annualStandardDeduction", "newMoney", "yearNewMoney" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
@@ -406,6 +418,38 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.DoesNotContain("paid-badge", fieldset);
         }
 
+        // Your Money: Roth spans the second column's two rows, so Brokerage sits right under Tax Deferred in the first
+        [Theory]
+        [InlineData("/index.html")]
+        [InlineData("/optimal.html")]
+        public async Task YourMoney_StacksBrokerageUnderTaxDeferred(string path)
+        {
+            string html = await GetAsync(path);
+            string panel = Regex.Match(html, @"id=""panel-money""(.*?)(?=<div class=""tab-panel)", RegexOptions.Singleline).Groups[1].Value;
+            var boxes = Regex.Matches(panel, @"<fieldset class=""([^""]+)"">\s*<legend[^>]*>(?:<span data-i18n=""([\w.]+)"">)?", RegexOptions.Singleline);
+
+            Assert.Equal(new[] { "subgroup", "subgroup span-two-rows", "subgroup" }, boxes.Select(m => m.Groups[1].Value));
+            Assert.Equal(new[] { "", "form.roth", "form.brokerage" }, boxes.Select(m => m.Groups[2].Value));
+            Assert.Contains(@"data-i18n=""form.taxDeferred""", panel[..panel.IndexOf(@"data-i18n=""form.roth""", StringComparison.Ordinal)]);
+        }
+
+        // Other Income: Social Security spans the first column's two rows, so Inheritance and then the Taxes box, holding
+        // only the standard deduction, stack in the second
+        [Theory]
+        [InlineData("/index.html")]
+        [InlineData("/optimal.html")]
+        public async Task OtherIncome_PutsTheStandardDeductionInATaxesBoxUnderInheritance(string path)
+        {
+            string html = await GetAsync(path);
+            string panel = Regex.Match(html, @"id=""panel-income""(.*?)(?=<div class=""tab-panel)", RegexOptions.Singleline).Groups[1].Value;
+            var boxes = Regex.Matches(panel, @"<fieldset class=""([^""]+)"">(.*?)</fieldset>", RegexOptions.Singleline);
+
+            Assert.Equal(new[] { "subgroup span-two-rows", "subgroup", "subgroup" }, boxes.Select(m => m.Groups[1].Value));
+            Assert.Contains(@"name=""newMoney""", boxes[1].Groups[2].Value);
+            Assert.Contains(@"<legend data-i18n=""form.taxesLegend"">Taxes</legend>", boxes[2].Groups[2].Value);
+            Assert.Equal(new[] { "annualStandardDeduction" }, Regex.Matches(boxes[2].Groups[2].Value, @"name=""(\w+)""").Select(m => m.Groups[1].Value));
+        }
+
         // A Free visitor enters one total per account; it starts at the sum of the basis and gain fields' defaults
         [Theory]
         [InlineData("/index.html")]
@@ -475,7 +519,9 @@ namespace MonteCarloSimulation.Web.Tests
                 Assert.Matches($@"<sup class=""footnote""><a href=""#"" class=""footnote-ref"" aria-label=""[^""]+"" data-i18n-aria-label=""runner.annuity.note\w+Aria"">{Regex.Escape(marker)}</a><span class=""footnote-tip"" role=""tooltip"" data-i18n=""runner.annuity.note\w+"">", panel);
             Assert.DoesNotContain("form-notes", panel);
 
-            // The gender (Pro) only sets the suggested SPIA rate, whose block app.js fills: hidden until there is one
+            // The gender (Pro) only sets the suggested SPIA rate, whose block app.js fills: hidden until there is one. The
+            // Gender box itself is hidden to keep the tab short, so the rate is a man's
+            Assert.Contains(@"<fieldset class=""subgroup"" id=""annuity-gender"" hidden>", panel);
             Assert.Contains(@"name=""annuitySex"" value=""male"" checked", panel);
             Assert.Matches(@"name=""annuitySex"" value=""female""(?![^>]*checked)", panel);
             Assert.Contains(@"<div class=""annuity-rate span-all"" id=""annuity-rate"" aria-live=""polite"" hidden>", panel);
