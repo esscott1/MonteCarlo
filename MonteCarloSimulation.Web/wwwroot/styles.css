@@ -1984,6 +1984,26 @@ input[type="checkbox"].locked[data-locked-tier="pro"] {
     margin-top: 1rem;
 }
 
+/* The access page, reached from a shared Scenario runner link: why it's here, and the way on without a code */
+.access-shared {
+    margin: 0 0 1rem;
+}
+
+.access-shared p {
+    margin: 0.3rem 0;
+}
+
+/* Share scenario, in the results summary (its twin sits beside Run) */
+.summary-share {
+    margin: 0.6rem 0 0;
+}
+
+.summary-share .secondary-button,
+.withdrawal-focus .share-scenario {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+}
+
 /* Translations page (translations.html): English and Spanish side by side, the Spanish editable */
 body.translations-page {
     max-width: 1200px;

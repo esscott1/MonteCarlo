@@ -32,6 +32,13 @@ within about 3.5% of the site's published table at every age. Plus gets a man's 
 app fetches the index at most once a week, on the first rate request after Monday 6:00 AM Mountain time, and keeps the
 last figures if that fails ([SpiaPayoutIndex.cs](MonteCarloSimulation.Web/SpiaPayoutIndex.cs)).
 
+After a run, **Share scenario** (beside Run, and in the results summary) copies a link to the Scenario runner holding
+that run's inputs: only the numbers and dates, packed into the link itself, so nothing is stored and no names are
+involved ([scenario-link.js](MonteCarloSimulation.Web/wwwroot/scenario-link.js)). Opening the link fills the inputs and
+runs them. On every tier: when the scenario uses paid inputs the visitor's tier doesn't have, the link goes first to
+the access-code page, which comes back to the scenario once a code is entered, or offers to continue without one, with
+those inputs set back to their Free values.
+
 ## Secondary purpose: illustrating Claude AI and CI/CD concepts
 
 Beyond the retirement simulation itself, this repo doubles as a small, direct illustration of several Claude AI and CI/CD concepts, each implemented as simply as possible rather than abstracted into a reusable framework:

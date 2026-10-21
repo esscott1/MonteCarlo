@@ -180,6 +180,12 @@
   "runner.seeResults": "See results",
   "runner.seeProblem": "See what went wrong",
   "runner.handoff": "Loaded from the Optimal page, with the same asset mix: Social Security at {age}, <strong>{amount}/month</strong> &mdash; the spend that survived 82.5% of its simulated markets. This run uses {iterations} new random markets, so its survival rate will be close to, not exactly, 82.5%. It also re-picks the withdrawal order and conversion line for these inputs.",
+  "runner.share.button": "Share scenario",
+  "runner.share.copied": "Link copied",
+  "runner.share.copyManually": "Copy this link to share the scenario:",
+  "runner.shared": "Loaded from a shared link: these are the inputs of the run that was shared, run again on new random markets, so the results will be close to, not exactly, the same.",
+  "runner.shared.reset": "Some of its inputs need a paid tier, so they were set back to their Free values.",
+  "runner.shared.diaMoved": "The annuity's DIA start date had passed the earliest allowed (2 years from today), so it was moved to that date.",
 
   "flyout.asking": "Asking the agent to create the story&hellip;",
   "flyout.created": "Created {link} in Jira and sent it to the agent, which opens a pull request for review.",
