@@ -5,6 +5,8 @@
 // was (return=, from paywall.js), the page then says it's taking the visitor back and, 2.5 seconds later, closes this
 // tab so they land on that page; a browser that won't let it close the tab gets the page here instead. Opened directly
 // (no return=), it stays put. Text comes from i18n.js (t).
+// From a shared Scenario runner link (shared=1, sent by app.js in the same tab), it says why it's here and offers to
+// continue without a code, and going back takes this tab to the scenario rather than closing it: it's the only one.
 (function () {
     const RETURN_DELAY_MS = 2500;
     const form = document.getElementById('access-form');
@@ -26,6 +28,7 @@
 
     let requested = (new URLSearchParams(location.search).get('tier') || '').toLowerCase();
     const returnTo = returnPage(new URLSearchParams(location.search).get('return'));
+    const shared = returnTo !== null && new URLSearchParams(location.search).get('shared') === '1';
     let me = null;
     // The last message shown under the form, kept so switching language can re-word it: { key, values } or { errors }
     let message = null;
@@ -49,8 +52,13 @@
     }
 
     // Close this tab, which a link opened, so the visitor lands on the page they came from - it has already unlocked (or
-    // locked) itself from the broadcast. A browser that won't let a page close its tab gets the page here instead.
+    // locked) itself from the broadcast. A browser that won't let a page close its tab gets the page here instead, and so
+    // does a visitor from a shared link: this tab is the one with their scenario.
     function returnToPage() {
+        if (shared) {
+            location.replace(returnTo);
+            return;
+        }
         window.close();
         setTimeout(() => {
             if (!window.closed) location.replace(returnTo);
@@ -88,6 +96,7 @@
 
     function render() {
         renderMessage();
+        document.getElementById('access-shared').hidden = !shared;
         if (!me) {
             status.textContent = t('access.unavailable');
             form.hidden = true;
@@ -174,6 +183,8 @@
         render();
         quota.restore();
     });
+
+    if (shared) document.getElementById('access-shared-continue').href = returnTo;
 
     Promise.all([load(), I18n.ready]).then(() => {
         render();

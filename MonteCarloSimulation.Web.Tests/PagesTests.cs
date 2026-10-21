@@ -553,5 +553,37 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains("window.location.href = 'index.html';", script);
             Assert.DoesNotContain("Run in Simulator", script);
         }
+
+        [Fact]
+        public async Task ScenarioRunner_SharesAScenarioAsALink()
+        {
+            string html = await GetAsync("/index.html");
+            string script = await GetAsync("/app.js");
+
+            // Share scenario beside Run (hidden until there are results) and in the results summary, both copying the link
+            Assert.Matches(@"<span id=""run-status""[^>]*></span>\s*<button type=""button"" id=""share-scenario"" class=""secondary-button share-scenario""[^>]*hidden>", html);
+            Assert.Contains(@"<button type=""button"" class=""secondary-button share-scenario"">${t('runner.share.button')}</button>", script);
+            Assert.Contains("navigator.clipboard.writeText(url)", script);
+            // The link's format lives in scenario-link.js, loaded before the page script
+            int link = html.IndexOf(@"<script src=""scenario-link.js"">");
+            Assert.InRange(link, 1, html.IndexOf(@"<script src=""app.js"">"));
+            Assert.Contains("ScenarioLink.encode(view.request)", script);
+            // Opened once the locks are on, so a Free visitor's locked inputs keep their Free values
+            Assert.Contains("Paywall.ready.then(applySharedScenario);", script);
+            Assert.Contains("&shared=1&return=", script);
+        }
+
+        [Fact]
+        public async Task AccessPage_FromASharedLink_OffersToContinueWithoutACode_AndGoesBackInThisTab()
+        {
+            string html = await GetAsync("/access.html");
+            string script = await GetAsync("/access.js");
+
+            Assert.Contains(@"<div id=""access-shared"" class=""handoff-note access-shared"" hidden>", html);
+            Assert.True(HasId(html, "access-shared-continue"));
+            Assert.Contains("get('shared') === '1'", script);
+            // This tab holds the visitor's scenario, so going back navigates it rather than closing it
+            Assert.Matches(@"if \(shared\) \{\s*location\.replace\(returnTo\);\s*return;\s*\}\s*window\.close\(\);", script);
+        }
     }
 }

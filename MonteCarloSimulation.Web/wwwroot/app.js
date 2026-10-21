@@ -3,8 +3,9 @@ const form = document.getElementById('run-form');
 const results = document.getElementById('results');
 
 // What the page shows, kept so switching language can redraw it without re-running: the results area
-// ({ kind: 'loading' | 'errors' | 'failed' | 'results', ... }) and the note about values loaded from the Optimal page,
-// which lasts only until the visitor runs again themselves (handoffRunPending marks the hand-off's own run).
+// ({ kind: 'loading' | 'errors' | 'failed' | 'results', ... }; results keep the request they came from, for Share
+// scenario) and the note about values loaded from the Optimal page or a shared link, which lasts only until the visitor
+// runs again themselves (handoffRunPending marks the hand-off's own run).
 let view = null;
 let handoff = null;
 let handoffRunPending = false;
@@ -533,6 +534,7 @@ function summaryBox(kind, headline, details) {
                 <summary><span class="summary-caret" aria-hidden="true"></span>${headline}</summary>
                 ${details}
             </details>
+            <p class="summary-share"><button type="button" class="secondary-button share-scenario">${t('runner.share.button')}</button></p>
         </div>
     `;
 }
@@ -659,6 +661,26 @@ function renderRunStatus() {
     else if (view?.kind === 'results') status.innerHTML = `<a href="#results" class="see-results">${t('runner.seeResults')}</a>`;
     else if (view) status.innerHTML = `<a href="#results" class="see-results">${t('runner.seeProblem')}</a>`;
     else status.innerHTML = '';
+    document.getElementById('share-scenario').hidden = view?.kind !== 'results';
+}
+
+// Share scenario (beside Run, and in the results summary): a link to this page holding the inputs of the run on screen
+// (scenario-link.js), copied to the clipboard; where the clipboard can't be used, shown to copy by hand
+function initShareScenario() {
+    document.addEventListener('click', async (e) => {
+        const button = e.target.closest('.share-scenario');
+        if (!button || view?.kind !== 'results') return;
+        const url = `${location.origin}/index.html#${ScenarioLink.encode(view.request)}`;
+        try {
+            await navigator.clipboard.writeText(url);
+        } catch {
+            window.prompt(t('runner.share.copyManually'), url);
+            return;
+        }
+        const label = button.textContent;
+        button.textContent = t('runner.share.copied');
+        setTimeout(() => { button.textContent = label; }, 2000);
+    });
 }
 
 // Scrolls the survival summary (or the errors) to the middle of the window and moves focus to it, so a keyboard or
@@ -910,7 +932,7 @@ form.addEventListener('submit', async (e) => {
         } else {
             const data = await response.json();
             // taxDetail is false when the server left out the year-by-year tax detail (FreeRunView)
-            view = { kind: 'results', parameters: data.parameters, output: data.output, taxDetail: data.taxDetail !== false, taxDetailYears: data.taxDetailYears ?? 0 };
+            view = { kind: 'results', parameters: data.parameters, output: data.output, taxDetail: data.taxDetail !== false, taxDetailYears: data.taxDetailYears ?? 0, request: payload };
             chartData = { points: data.output.balanceBands, runs: data.output.result.runs.length };
         }
     } catch (err) {
@@ -1035,19 +1057,133 @@ function applyHandoffAnnuity(annuity) {
 function renderHandoffNote() {
     if (!handoff) return;
     document.getElementById('handoff-note')?.remove();
-    results.insertAdjacentHTML('beforebegin', `
-        <div id="handoff-note" class="handoff-note">
-            ${t('runner.handoff', {
-                age: handoff.recommendedAge,
-                amount: formatCurrency(handoff.withdrawalMonthly),
-                iterations: handoff.iterations,
-            })}
-        </div>`);
+    const text = handoff.kind === 'shared'
+        ? [t('runner.shared'), handoff.reset ? t('runner.shared.reset') : '', handoff.diaMoved ? t('runner.shared.diaMoved') : ''].filter(Boolean).join(' ')
+        : t('runner.handoff', {
+            age: handoff.recommendedAge,
+            amount: formatCurrency(handoff.withdrawalMonthly),
+            iterations: handoff.iterations,
+        });
+    results.insertAdjacentHTML('beforebegin', `<div id="handoff-note" class="handoff-note">${text}</div>`);
 }
 
 function clearHandoffNote() {
     handoff = null;
     document.getElementById('handoff-note')?.remove();
+}
+
+// A shared link (Share scenario): index.html#s=1.… holds a run's inputs (scenario-link.js). Opened by a visitor whose
+// tier lacks some of the paid features they use, it goes first to the access page (shared=1), which comes back here
+// with a code entered or without one; sessionStorage remembers the detour, so coming back never sends them round again.
+// Then it fills the form - except the inputs locked for this visitor, which keep their Free values (paywall.js) - takes
+// the link out of the address bar, explains where the values came from, and runs.
+const SHARED_DETOUR_KEY = 'sharedScenarioDetour';
+
+// The page's own defaults, which say whether a link's inputs need a paid feature (PagesTests keeps them the server's)
+function sharedLinkDefaults() {
+    const el = form.elements;
+    const deduction = el['annualStandardDeduction'];
+    const assetMix = { stockBondCorrelation: Number(el['stockBondCorrelation'].defaultValue) };
+    ['stockReturn', 'stockStdDev', 'bondReturn', 'bondStdDev', 'cashReturn', 'cashStdDev']
+        .forEach((name) => { assetMix[name] = Number(el[name].defaultValue) / 100; });
+    return {
+        standardDeduction: { single: parseNumber(deduction.defaultValue), married: parseNumber(deduction.dataset.marriedValue) },
+        assetMix,
+        shares: Paywall.me.freeDefaults ?? null,
+    };
+}
+
+// The access page to unlock a link's missing features first: the tier offering the most of them (offers come cheapest
+// first), or null to run it here as it is - nothing missing, nothing on offer, already been, or no sessionStorage to
+// remember the detour by
+function sharedDetour(hash, missing) {
+    try {
+        const been = sessionStorage.getItem(SHARED_DETOUR_KEY) === hash;
+        sessionStorage.removeItem(SHARED_DETOUR_KEY);
+        if (been || missing.length === 0) return null;
+        const covered = (offer) => missing.filter((feature) => offer.features.includes(feature)).length;
+        const offer = Paywall.me.offers.reduce((best, o) => (covered(o) > (best ? covered(best) : 0) ? o : best), null);
+        if (!offer) return null;
+        sessionStorage.setItem(SHARED_DETOUR_KEY, hash);
+        return `/access.html?tier=${encodeURIComponent(offer.tier.toLowerCase())}&shared=1&return=${encodeURIComponent(location.pathname + hash)}`;
+    } catch {
+        return null;
+    }
+}
+
+function applySharedScenario() {
+    const request = ScenarioLink.decode(location.hash);
+    if (!request) return;
+    const missing = ScenarioLink.featuresNeeded(request, sharedLinkDefaults()).filter((feature) => !Paywall.can(feature));
+    const detour = sharedDetour(location.hash, missing);
+    if (detour) {
+        // A new history entry, not a replacement: the access page then never takes the visitor's only page with it
+        location.href = detour;
+        return;
+    }
+
+    const diaMoved = applyScenarioRequest(request);
+    history.replaceState(null, '', location.pathname + location.search);
+    handoff = { kind: 'shared', reset: missing.length > 0, diaMoved };
+    renderHandoffNote();
+    handoffRunPending = true;
+    form.requestSubmit();
+    handoffRunPending = false;
+    document.getElementById('handoff-note').scrollIntoView({ block: 'start' });
+}
+
+// Fills the form from a request as /api/run takes it, leaving locked inputs alone. True when the link's DIA start date
+// had passed the earliest allowed (two years from today) and was moved to it.
+function applyScenarioRequest(r) {
+    const el = form.elements;
+    const open = (name) => !(el[name] instanceof RadioNodeList ? el[name][0] : el[name]).classList.contains('locked');
+    const set = (name, value) => { if (open(name)) el[name].value = value; };
+    const setMoney = (name, value) => set(name, formatWithCommas(String(value)));
+    const check = (name, value) => { if (open(name)) el[name].checked = value; };
+
+    set('years', r.years);
+    set('iterations', r.iterations);
+    setMoney('withdrawal', Math.round(r.withdrawal / 12 * 100) / 100);
+    set('retirementDate', r.retirementDate);
+    // As in the hand-off: the Social Security start date counts as the visitor's own, so it no longer follows the birthdate
+    set('birthdate', r.birthdate);
+    set('socialSecurityStartDate', r.socialSecurityStartDate);
+    el['socialSecurityStartDate'].dispatchEvent(new Event('input'));
+    setMoney('socialSecurityMonthlyAmount', r.socialSecurityMonthlyAmount);
+    // The status first: it moves the deduction to its default, which the link's own amount then replaces
+    Inputs.setFilingStatus(form, r.filingStatus);
+    setMoney('annualStandardDeduction', r.annualStandardDeduction);
+    ['initialTaxableBalance', 'initialRothBasis', 'initialRothUnrealizedGain', 'initialBrokerageBasis', 'initialBrokerageUnrealizedGain', 'newMoney']
+        .forEach((name) => setMoney(name, r[name]));
+    set('yearNewMoney', r.yearNewMoney);
+    check('enableRothConversions', r.enableRothConversions);
+
+    let diaMoved = false;
+    check('includeAnnuity', r.includeAnnuity);
+    if (r.includeAnnuity && open('includeAnnuity')) {
+        setMoney('annuityMonthlyAmount', r.annuityMonthlyAmount);
+        setMoney('annuityInvestment', r.annuityInvestment);
+        set('annuityType', r.annuityType);
+        if (r.annuityType === 'dia') {
+            const start = el['annuityStartDate'];
+            diaMoved = r.annuityStartDate < start.min;
+            set('annuityStartDate', diaMoved ? start.min : r.annuityStartDate);
+        }
+        check('annuityTaxDeferred', r.annuityTaxDeferred);
+        check('annuityCola', r.annuityCola);
+        if ([...el['annuityColaRate'].options].some((o) => o.value === String(r.annuityColaRate))) set('annuityColaRate', String(r.annuityColaRate));
+    }
+    // The tab redraws from all its fields (the DIA date, the COLA rate, the suggested rate) on this one change
+    el['includeAnnuity'].dispatchEvent(new Event('change'));
+
+    // Field by field rather than Inputs.setAssetMix, which would also fill a Free visitor's locked returns
+    ['stockAllocation', 'bondAllocation', 'cashAllocation', 'stockReturn', 'stockStdDev', 'bondReturn', 'bondStdDev', 'cashReturn', 'cashStdDev']
+        .forEach((name) => set(name, String(Number((r[name] * 100).toFixed(4)))));
+    set('stockBondCorrelation', String(r.stockBondCorrelation));
+    updateAllocation();
+    updateBalanceTotals();
+    Inputs.refreshAccountTotals(form);
+    return diaMoved;
 }
 
 // Access changed in another tab (paywall.js): the results' notes about the tax detail follow
@@ -1063,6 +1199,11 @@ document.addEventListener('i18n:change', () => {
 });
 
 I18n.ready.then(applySimulatorHandoff);
+// Once a Free visitor's locks are on (Paywall.ready follows I18n.ready). A link pasted into this tab arrives as a new
+// hash, and Back from the access page may restore this page as it was left, before the link was applied.
+Paywall.ready.then(applySharedScenario);
+window.addEventListener('hashchange', () => Paywall.ready.then(applySharedScenario));
+window.addEventListener('pageshow', (e) => { if (e.persisted) Paywall.ready.then(applySharedScenario); });
 Inputs.initTabs(form, 'runnerTab');
 Inputs.initAllocation(form);
 initChart();
@@ -1080,4 +1221,5 @@ initFootnotes();
 Inputs.initFormFootnotes(form);
 initSummaryToggle();
 initSeeResults();
+initShareScenario();
 initEditFlyout();

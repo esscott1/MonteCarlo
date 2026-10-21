@@ -28,6 +28,12 @@
 
     <p id="access-status" class="page-intro" aria-live="polite"></p>
 
+    <!-- Arriving from a shared Scenario runner link whose inputs use paid features (app.js sends shared=1) -->
+    <div id="access-shared" class="handoff-note access-shared" hidden>
+        <p data-i18n="access.shared.intro">This link opens a shared scenario that uses paid features. Enter your access code to see it as it was shared.</p>
+        <p><a id="access-shared-continue" href="/" data-i18n="access.shared.continue">Continue without a code</a> <span data-i18n="access.shared.continueHint">(the paid inputs go back to their Free values)</span></p>
+    </div>
+
     <form id="access-form" class="access-form" hidden>
         <fieldset class="access-tiers">
             <legend data-i18n="access.tierLegend">Tier</legend>
