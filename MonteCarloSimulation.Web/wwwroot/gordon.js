@@ -177,11 +177,12 @@ window.Gordon = (() => {
     panel.innerHTML = `
         <div class="gordon-header">
             <span class="gordon-avatar" aria-hidden="true">G</span>
-            <div class="gordon-heading">
+            <div class="gordon-heading" tabindex="0">
                 <h2 id="gordon-title">Gordon</h2>
                 <p class="gordon-subtitle"></p>
             </div>
             <button type="button" class="gordon-restart secondary-button"></button>
+            <button type="button" class="flyout-close gordon-minimize" aria-expanded="true">&minus;</button>
             <button type="button" class="flyout-close gordon-close">&times;</button>
         </div>
         <div class="gordon-log" role="log" aria-live="polite"></div>
@@ -195,6 +196,9 @@ window.Gordon = (() => {
     const choiceBox = panel.querySelector('.gordon-choices');
     const inputForm = panel.querySelector('.gordon-input');
     const textBox = inputForm.querySelector('input');
+    const header = panel.querySelector('.gordon-header');
+    const heading = panel.querySelector('.gordon-heading');
+    const minimizeButton = panel.querySelector('.gordon-minimize');
 
     let engine = null;
     let entries = [];          // what's been said: { who: 'gordon', message } or { who: 'visitor', text }
@@ -206,6 +210,7 @@ window.Gordon = (() => {
     let progress = null;       // Optimize's { completed, total } while it works, shown as a live message
     let session = 0;           // a restart or a close ends what was playing
     let playing = Promise.resolve();
+    let minimized = false;     // folded to its header bar, so the page shows; the conversation carries on
 
     // Turns play one after another: Optimize's answer and the run that follows it can arrive close together
     const enqueue = (next) => { playing = playing.then(() => play(next)); };
@@ -236,6 +241,10 @@ window.Gordon = (() => {
         entries.push(entry);
         log.insertAdjacentHTML('beforeend', entryHtml(entry));
         scrollLog();
+        if (minimized && entry.who === 'gordon') {
+            panel.classList.add('unread');
+            renderMinimizeLabel();
+        }
     }
 
     function renderChoices() {
@@ -256,6 +265,9 @@ window.Gordon = (() => {
         panel.querySelector('.gordon-subtitle').textContent = t('gordon.subtitle');
         panel.querySelector('.gordon-restart').textContent = t('gordon.restart');
         panel.querySelector('.gordon-close').setAttribute('aria-label', t('gordon.close'));
+        heading.title = t('gordon.moveHint');
+        heading.setAttribute('aria-label', `Gordon. ${t('gordon.moveHint')}`);
+        renderMinimizeLabel();
         textBox.placeholder = t('gordon.placeholder');
         textBox.setAttribute('aria-label', t('gordon.placeholder'));
         inputForm.querySelector('button').textContent = t('gordon.send');
@@ -327,6 +339,8 @@ window.Gordon = (() => {
             addEntry({ who: 'gordon', message });
         }
         if (lead >= next.say.length && !(await applyActions(next.actions, mine))) return;
+        // Show the full results: the page has scrolled to them, so fold out of their way
+        if (next.actions.some((a) => a.name === 'showResults')) setMinimized(true, { focus: false });
         if (next.run || next.optimize) {
             // A field the browser refuses stops the run before it's sent, so there'd be no result to wait for
             if (!form.checkValidity()) {
@@ -346,7 +360,7 @@ window.Gordon = (() => {
         choices = next.choices;
         setBusy(false);
         renderChoices();
-        if (!panel.hidden && matchMedia('(pointer: fine)').matches) textBox.focus({ preventScroll: true });
+        if (!panel.hidden && !minimized && matchMedia('(pointer: fine)').matches) textBox.focus({ preventScroll: true });
     }
 
     function send(input, label) {
@@ -372,17 +386,153 @@ window.Gordon = (() => {
         panel.hidden = false;
         launcher.setAttribute('aria-expanded', 'true');
         launcher.classList.add('open');
+        setMinimized(false, { focus: false });
+        place();
         if (entries.length === 0) begin();
         else if (!busy && matchMedia('(pointer: fine)').matches) textBox.focus({ preventScroll: true });
     }
 
     function close() {
+        clearTimeout(autoMinimize);
         panel.hidden = true;
         launcher.setAttribute('aria-expanded', 'false');
         launcher.classList.remove('open');
     }
 
+    // --- minimize: the panel folds to its header bar, which a new message marks with a dot ---
+
+    function renderMinimizeLabel() {
+        minimizeButton.textContent = minimized ? '+' : '−';
+        minimizeButton.setAttribute('aria-expanded', String(!minimized));
+        minimizeButton.setAttribute('aria-label', t(!minimized ? 'gordon.minimize'
+            : panel.classList.contains('unread') ? 'gordon.restoreUnread' : 'gordon.restore'));
+    }
+
+    function setMinimized(on, { focus = true } = {}) {
+        clearTimeout(autoMinimize);
+        minimized = on;
+        panel.classList.toggle('minimized', on);
+        if (!on) panel.classList.remove('unread');
+        renderMinimizeLabel();
+        place();
+        if (on) {
+            if (focus) minimizeButton.focus();
+        } else {
+            scrollLog();
+            if (focus && !busy && matchMedia('(pointer: fine)').matches) textBox.focus({ preventScroll: true });
+        }
+    }
+
+    // Once a run Gordon started is explained, a pause to read it, then the page scrolls to the results and Gordon folds
+    // out of their way - unless the visitor has touched the panel meanwhile
+    const READ_PAUSE_MS = 5000;
+    let autoMinimize = null;
+    function minimizeAfterReading(mine) {
+        clearTimeout(autoMinimize);
+        autoMinimize = setTimeout(() => {
+            if (mine !== session || panel.hidden || minimized) return;
+            page.apply({ name: 'showResults' });
+            setMinimized(true, { focus: false });
+        }, READ_PAUSE_MS);
+    }
+    ['pointerdown', 'keydown'].forEach((type) => panel.addEventListener(type, () => clearTimeout(autoMinimize)));
+
+    // --- moving: drag the header (or its heading with the arrow keys); a double-click or Home puts it back in the corner.
+    // Where it was put is kept for the tab's session; it's always shown inside the window. A phone keeps the sheet. ---
+
+    const POSITION_KEY = 'gordonPosition';
+    const sheet = matchMedia('(max-width: 600px)');
+    let position = null;       // { left, top } in pixels, chosen by the visitor; null = the bottom-right corner
+    try { position = JSON.parse(sessionStorage.getItem(POSITION_KEY)); } catch { /* none kept */ }
+
+    function savePosition() {
+        try {
+            if (position) sessionStorage.setItem(POSITION_KEY, JSON.stringify(position));
+            else sessionStorage.removeItem(POSITION_KEY);
+        } catch { /* not kept */ }
+    }
+
+    // The chosen spot, moved inside the window if the panel (or the window) no longer fits there
+    function place() {
+        if (!position || sheet.matches || panel.hidden) {
+            panel.style.left = panel.style.top = panel.style.right = panel.style.bottom = '';
+            return;
+        }
+        const { width, height } = panel.getBoundingClientRect();
+        const left = Math.max(0, Math.min(position.left, innerWidth - width));
+        const top = Math.max(0, Math.min(position.top, innerHeight - height));
+        Object.assign(panel.style, { left: `${left}px`, top: `${top}px`, right: 'auto', bottom: 'auto' });
+    }
+
+    function moveTo(left, top) {
+        position = { left: Math.round(left), top: Math.round(top) };
+        place();
+        // Kept as shown, so a later move starts from where it is on screen
+        const rect = panel.getBoundingClientRect();
+        position = { left: Math.round(rect.left), top: Math.round(rect.top) };
+        savePosition();
+    }
+
+    function resetPosition() {
+        position = null;
+        savePosition();
+        place();
+    }
+
+    let drag = null;           // { id, dx, dy, startX, startY, moved }
+    header.addEventListener('pointerdown', (e) => {
+        if (sheet.matches || e.button !== 0 || e.target.closest('button')) return;
+        const rect = panel.getBoundingClientRect();
+        drag = { id: e.pointerId, dx: e.clientX - rect.left, dy: e.clientY - rect.top, startX: e.clientX, startY: e.clientY, moved: false };
+        header.setPointerCapture(e.pointerId);
+    });
+    header.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 4) return;
+        drag.moved = true;
+        panel.classList.add('dragging');
+        moveTo(e.clientX - drag.dx, e.clientY - drag.dy);
+    });
+    let dragged = false;       // the click that ends a drag isn't a click on the bar
+    const endDrag = (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        dragged = drag.moved;
+        drag = null;
+        panel.classList.remove('dragging');
+    };
+    header.addEventListener('pointerup', endDrag);
+    header.addEventListener('pointercancel', endDrag);
+    // A click on the folded bar opens it again
+    header.addEventListener('click', (e) => {
+        if (dragged) {
+            dragged = false;
+            return;
+        }
+        if (minimized && !e.target.closest('button')) setMinimized(false);
+    });
+    header.addEventListener('dblclick', (e) => {
+        if (!e.target.closest('button')) resetPosition();
+    });
+    heading.addEventListener('keydown', (e) => {
+        const step = e.shiftKey ? 80 : 20;
+        const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+        if (e.key === 'Home') {
+            e.preventDefault();
+            resetPosition();
+        } else if ((e.key === 'Enter' || e.key === ' ') && minimized) {
+            e.preventDefault();
+            setMinimized(false);
+        } else if (moves[e.key] && !sheet.matches) {
+            e.preventDefault();
+            const rect = panel.getBoundingClientRect();
+            moveTo(rect.left + moves[e.key][0], rect.top + moves[e.key][1]);
+        }
+    });
+    addEventListener('resize', place);
+    sheet.addEventListener('change', place);
+
     launcher.addEventListener('click', () => (panel.hidden ? open() : close()));
+    minimizeButton.addEventListener('click', () => setMinimized(!minimized));
     panel.querySelector('.gordon-close').addEventListener('click', () => { close(); launcher.focus(); });
     panel.querySelector('.gordon-restart').addEventListener('click', begin);
     panel.addEventListener('keydown', (e) => {
@@ -409,10 +559,12 @@ window.Gordon = (() => {
         renderProgress();
     });
 
-    // Optimize has filled in its answer and is starting the run: say what it decided, showing the fields it changed
+    // Optimize has filled in its answer and is starting the run: show the fields it changed; what it decided is told with
+    // the run's result, so until then only "typing" dots
     document.addEventListener('runner:optimized', (e) => {
         if (!awaitingOptimize) return;
         awaitingOptimize = false;
+        quietRun = true;
         progress = null;
         renderProgress();
         // A Free visitor's teaser changes only the spend
@@ -428,7 +580,11 @@ window.Gordon = (() => {
         quietRun = false;
         progress = null;
         renderProgress();
-        enqueue(engine.result(digest(e.detail)));
+        const facts = digest(e.detail);
+        enqueue(engine.result(facts));
+        // The results are on the page: once they're explained, Gordon makes room for them
+        const mine = session;
+        if (facts.ok) playing = playing.then(() => minimizeAfterReading(mine));
     });
 
     // Shown while the Observe switch is on; it's read again when the tab regains focus (paywall.js)

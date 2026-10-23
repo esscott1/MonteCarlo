@@ -693,6 +693,10 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains("new CustomEvent('runner:optimized', { detail: { ...handoff } })", app);
             Assert.Equal(2, Regex.Matches(app, @"new CustomEvent\('runner:result', \{ detail: view \}\)").Count);
             Assert.Contains("'runner:optimized'", gordon);
+            // The panel can fold to its header bar and be dragged out of the way, and folds itself once results are in
+            Assert.Contains(@"class=""flyout-close gordon-minimize""", gordon);
+            Assert.Contains("header.setPointerCapture(e.pointerId)", gordon);
+            Assert.Contains("minimizeAfterReading(mine)", gordon);
             Assert.Contains(@"data-tier=""gordon""", observe);
             Assert.Contains("Enable Gordon", observe);
         }

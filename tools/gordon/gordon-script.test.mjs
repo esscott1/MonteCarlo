@@ -154,13 +154,27 @@ test('"Find the most I can safely spend" leaves the spend to Optimize, which run
     assert.equal(optimizing.run, false);
     assert.deepEqual(keys(optimizing), ['gordon.optimizing']);
 
+    // Nothing is said about Optimize's answer until the run it starts is done
     const found = plain(engine.optimized({ kind: 'optimized', withdrawalMonthly: 7400, recommendedAge: 68, annuity: { investment: 300000, monthlyPayment: 1900, taxDeferred: true } }));
-    assert.deepEqual(found.say.map((m) => m.key), ['gordon.optimized.found', 'gordon.optimized.annuity', 'gordon.running']);
-    assert.equal(found.say[0].values.amount, '$7,400');
+    assert.deepEqual(found.say, []);
 
-    // The run's survival lands near 82.5%, so the tip explains that rather than saying to spend less
-    const result = engine.result({ ok: true, total: 99, survived: 78, rate: 78 / 99, years: 30, median: 1e6, lower: 0, endYear: '2075', endAge: 95, lowerOutYear: '2068', lowerOutAge: 88, monthly: 7400 });
-    assert.equal(keys(result)[3], 'gordon.tip.optimized');
+    // Then one bulleted message: what Optimize decided and how the run went, with no run count and no tip
+    const result = plain(engine.result({ ok: true, total: 99, survived: 78, rate: 78 / 99, years: 30, median: 1e6, lower: 0, endYear: '2075', endAge: 95, lowerOutYear: '2068', lowerOutAge: 88, monthly: 7400 }));
+    assert.equal(result.say.length, 1);
+    const message = result.say[0];
+    assert.equal(message.kind, 'summary');
+    assert.deepEqual(message.lines.map((line) => line.key), ['gordon.optimized.found', 'gordon.optimized.annuity', 'gordon.result.survivedRate', 'gordon.result.median', 'gordon.result.lowerRunsOut']);
+    assert.equal(message.lines[0].values.amount, '$7,400');
+    assert.deepEqual(message.lines[2].values, { years: 30, rate: 79 });
+    assert.deepEqual(result.choices.map((c) => c.value), ['details', 'change', 'restart']);
+
+    // A later plain run is told in the usual sentences again
+    engine.reply({ choice: 'change' });
+    engine.reply({ choice: 'spending' });
+    engine.reply({ text: '7,000' });
+    engine.reply({ choice: 'run' });
+    const later = engine.result({ ok: true, total: 99, survived: 99, rate: 1, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerOutYear: null, lowerOutAge: null, monthly: 7000 });
+    assert.deepEqual(keys(later), ['gordon.result.allSurvived', 'gordon.result.median', 'gordon.result.lowerHolds', 'gordon.tip.more']);
 });
 
 test('a Free visitor\'s Optimize is the teaser range, and says Plus finds the exact spend', () => {
@@ -169,11 +183,12 @@ test('a Free visitor\'s Optimize is the teaser range, and says Plus finds the ex
     const { engine } = converse(fakePage({ plus: false }), [...answers, { text: 'find the most I can safely spend' }]);
     assert.equal(engine.step, 'confirm');
     engine.reply({ choice: 'run' });
-    const teaser = plain(engine.optimized({ kind: 'optimizedTeaser', low: 6500, high: 7000 }));
-    assert.deepEqual(teaser.say.map((m) => m.key), ['gordon.optimized.teaser']);
-    assert.equal(teaser.say[0].values.low, '$6,500');
-    const result = engine.result({ ok: true, total: 99, survived: 90, rate: 90 / 99, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerOutYear: null, lowerOutAge: null, monthly: 6500 });
-    assert.equal(keys(result)[3], 'gordon.tip.teaser');
+    assert.deepEqual(plain(engine.optimized({ kind: 'optimizedTeaser', low: 6500, high: 7000 })).say, []);
+    const result = plain(engine.result({ ok: true, total: 99, survived: 99, rate: 1, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerOutYear: null, lowerOutAge: null, monthly: 6500 }));
+    assert.equal(result.say.length, 1);
+    const lines = result.say[0].lines;
+    assert.deepEqual(lines.map((line) => line.key), ['gordon.optimized.teaser', 'gordon.result.allSurvivedRate', 'gordon.result.median', 'gordon.result.lowerHolds']);
+    assert.equal(lines[0].values.low, '$6,500');
 });
 
 test('a typed spend after choosing Optimize goes back to a plain run', () => {

@@ -2260,6 +2260,67 @@ body.translations-page {
     font-size: 0.8rem;
 }
 
+/* Moving: the header is the handle (gordon.js); a phone keeps the sheet, so it isn't one there */
+@media (min-width: 601px) {
+    .gordon-header {
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .gordon-header button {
+        cursor: pointer;
+    }
+}
+
+.gordon-panel.dragging,
+.gordon-panel.dragging .gordon-header {
+    cursor: grabbing;
+    user-select: none;
+}
+
+.gordon-heading:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Minimized: just the header bar, so the page shows; a dot on the avatar when Gordon has said something since */
+.gordon-panel.minimized {
+    width: min(280px, calc(100vw - 2.5rem));
+    height: auto;
+}
+
+.gordon-panel.minimized .gordon-header {
+    border-bottom: none;
+}
+
+.gordon-panel.minimized .gordon-log,
+.gordon-panel.minimized .gordon-choices,
+.gordon-panel.minimized .gordon-input,
+.gordon-panel.minimized .gordon-restart {
+    display: none;
+}
+
+.gordon-panel.minimized .gordon-heading {
+    cursor: pointer;
+}
+
+.gordon-header .gordon-avatar {
+    position: relative;
+}
+
+.gordon-panel.unread .gordon-header .gordon-avatar::after {
+    content: "";
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 0.6rem;
+    height: 0.6rem;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+    background: var(--danger);
+}
+
 .gordon-log {
     flex: 1;
     overflow-y: auto;
@@ -2424,5 +2485,10 @@ body.translations-page {
         width: auto;
         height: min(75vh, 600px);
         border-radius: 12px 12px 0 0;
+    }
+
+    .gordon-panel.minimized {
+        width: auto;
+        height: auto;
     }
 }

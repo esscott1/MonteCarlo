@@ -5,8 +5,9 @@
 //
 // An engine answers each turn with { say: [message], lead, actions: [{ name, value }], choices: [{ key, value }], run,
 // optimize }: the actions are taken after the first lead messages (the reply to the visitor's answer), before the rest;
-// run runs the plan, optimize runs the page's Optimize (which then runs it). engine.optimized(detail) explains what
-// Optimize decided, and engine.result(digest) the run that follows either.
+// run runs the plan, optimize runs the page's Optimize (which then runs it). engine.optimized(detail) takes what
+// Optimize decided, and engine.result(digest) explains the run that follows either: after Optimize, in one message with
+// Optimize's answer.
 // A message is { key, values } (text from t(), values already formatted and escaped) or a bulleted list,
 // { kind: 'summary', lines, lead, after } (lead and after: keys of a line before and after the bullets, both optional).
 // A turn with quiet: true says nothing more until its run's result, which comes as one message.
@@ -110,9 +111,8 @@ window.GordonScript = (() => {
         let step = 'intro';
         let backTo = null;       // a step changed from the summary goes back to it
         let history = [];
-        let lastRun = 'run';     // what the last run came from: 'run', 'optimize' or 'teaser' (a Free visitor's Optimize)
         let reporting = false;   // the example: quiet until its run is done, then one bulleted report
-        let optimum = null;      // what the example's Optimize decided, for that report
+        let optimum = null;      // what Optimize decided, told with the result of the run it starts
         const answers = {};
 
         const ORDER = ['birth', 'retire', 'filing', 'taxDeferred', 'roth', 'brokerage', 'inheritance', 'ssAmount', 'ssStart', 'mix', 'spending', 'confirm'];
@@ -322,7 +322,6 @@ window.GordonScript = (() => {
                     const text = input.text ?? '';
                     if (input.choice === 'change' || has(text, /change|edit|fix|cambi|correg/)) return { next: 'change' };
                     if (input.choice === 'run' || has(text, /\b(run|go|yes|yep|sure|ok|okay|optimi\w*|si|dale|adelante|corre|ejecut\w*)\b/)) {
-                        lastRun = optimizing() ? 'optimize' : 'run';
                         return optimizing()
                             ? { say: [say('gordon.optimizing')], optimize: true, next: 'running' }
                             : { say: [say('gordon.running', { runs: page.get().iterations })], run: true, next: 'running' };
@@ -446,35 +445,31 @@ window.GordonScript = (() => {
         }
 
         // What Optimize put into the form, before the run it starts (detail: app.js's note - kind 'optimized', with the
-        // spend, the Social Security age and any annuity bought, or 'optimizedTeaser', a Free visitor's range)
+        // spend, the Social Security age and any annuity bought, or 'optimizedTeaser', a Free visitor's range). Nothing is
+        // said yet: it's told with the run's result, in one message.
         function optimized(detail) {
-            // The example says nothing until its run is done, then reports Optimize's answer with it
-            if (reporting) {
-                optimum = detail;
-                if (detail.kind === 'optimizedTeaser') lastRun = 'teaser';
-                return { say: [], choices: [], actions: [] };
-            }
-            if (detail.kind === 'optimizedTeaser') {
-                lastRun = 'teaser';
-                return { say: [say('gordon.optimized.teaser', { low: money(detail.low), high: money(detail.high) })], choices: [], actions: [] };
-            }
-            const lines = [say('gordon.optimized.found', { amount: money(detail.withdrawalMonthly), age: detail.recommendedAge })];
-            const a = detail.annuity;
+            optimum = detail;
+            return { say: [], choices: [], actions: [] };
+        }
+
+        // Optimize's answer, as the first lines of that message
+        function optimumLines(o) {
+            if (o.kind === 'optimizedTeaser') return [say('gordon.optimized.teaser', { low: money(o.low), high: money(o.high) })];
+            const lines = [say('gordon.optimized.found', { amount: money(o.withdrawalMonthly), age: o.recommendedAge })];
+            const a = o.annuity;
             if (a) {
                 lines.push(say(a.taxDeferred ? 'gordon.optimized.annuity' : 'gordon.optimized.annuityAfterTax', {
                     amount: money(a.investment), payment: money(a.monthlyPayment), cola: a.cola ? t('gordon.optimized.cola') : '',
                 }));
             }
-            lines.push(say('gordon.running', { runs: page.get().iterations }));
-            return { say: lines, choices: [], actions: [] };
+            return lines;
         }
 
         // The example's one message, once its run is done (the page shows the rest): when they were born and retire, what
         // they can spend with about 80% confidence (Optimize's 82.5% spend, or the low end of a Free visitor's range), and
         // the money they have
-        function report() {
+        function report(o) {
             const now = page.get();
-            const o = optimum;
             const spend = o?.kind === 'optimizedTeaser'
                 ? say('gordon.example.spendTeaser', { amount: money(o.low) })
                 : say('gordon.example.spend', { amount: money(o?.kind === 'optimized' ? o.withdrawalMonthly : now.spending) });
@@ -491,39 +486,46 @@ window.GordonScript = (() => {
             };
         }
 
-        // What a finished run means, in a few sentences (digest: gordon.js's reading of the results)
+        // How the run went: its survival, then a typical and a weak market (digest: gordon.js's reading of the results);
+        // counts: whether the survival says how many markets were run
+        function runLines(digest, { counts }) {
+            const about = (value) => money(Math.round(value / 10000) * 10000);
+            const percent = Math.round(digest.rate * 100);
+            const all = digest.survived === digest.total;
+            const survival = counts
+                ? (all ? say('gordon.result.allSurvived', { total: digest.total, years: digest.years })
+                    : say('gordon.result.survived', { survived: digest.survived, total: digest.total, years: digest.years, rate: percent }))
+                : (all ? say('gordon.result.allSurvivedRate', { years: digest.years })
+                    : say('gordon.result.survivedRate', { years: digest.years, rate: percent }));
+            return [
+                survival,
+                digest.medianOutYear
+                    ? say('gordon.result.medianRunsOut', { year: digest.medianOutYear, age: digest.medianOutAge })
+                    : say('gordon.result.median', { amount: about(digest.median), year: digest.endYear, age: digest.endAge }),
+                digest.lowerOutYear
+                    ? say('gordon.result.lowerRunsOut', { year: digest.lowerOutYear, age: digest.lowerOutAge })
+                    : say('gordon.result.lowerHolds', { amount: about(digest.lower), year: digest.endYear }),
+            ];
+        }
+
+        // What a finished run means (digest: gordon.js's reading of the results)
         function result(digest) {
             step = 'results';
+            const o = optimum;
+            optimum = null;
+            const choices = STEPS.results.choices();
+            const problem = () => (digest.message ? say('gordon.result.problem', { message: digest.message }) : say('gordon.result.failed'));
             if (reporting) {
                 reporting = false;
-                const message = digest.ok ? report()
-                    : digest.message ? say('gordon.result.problem', { message: digest.message }) : say('gordon.result.failed');
-                optimum = null;
-                return { say: [message], choices: STEPS.results.choices(), actions: [] };
+                return { say: [digest.ok ? report(o) : problem()], choices, actions: [] };
             }
-            const lines = [];
-            if (!digest.ok) {
-                lines.push(digest.message ? say('gordon.result.problem', { message: digest.message }) : say('gordon.result.failed'));
-            } else {
-                // The tip follows the percent as shown, so 79.8% reads "80%" and counts as in the range
-                const percent = Math.round(digest.rate * 100);
-                const about = (value) => money(Math.round(value / 10000) * 10000);
-                lines.push(digest.survived === digest.total
-                    ? say('gordon.result.allSurvived', { total: digest.total, years: digest.years })
-                    : say('gordon.result.survived', { survived: digest.survived, total: digest.total, years: digest.years, rate: percent }));
-                lines.push(digest.medianOutYear
-                    ? say('gordon.result.medianRunsOut', { year: digest.medianOutYear, age: digest.medianOutAge })
-                    : say('gordon.result.median', { amount: about(digest.median), year: digest.endYear, age: digest.endAge }));
-                lines.push(digest.lowerOutYear
-                    ? say('gordon.result.lowerRunsOut', { year: digest.lowerOutYear, age: digest.lowerOutAge })
-                    : say('gordon.result.lowerHolds', { amount: about(digest.lower), year: digest.endYear }));
-                // After Optimize the spend is the Optimizer's own, so the tip says what it aimed for, not to change it
-                const tip = lastRun === 'optimize' ? 'gordon.tip.optimized'
-                    : lastRun === 'teaser' ? 'gordon.tip.teaser'
-                        : percent < 80 ? 'gordon.tip.lower' : percent < 90 ? 'gordon.tip.inRange' : 'gordon.tip.more';
-                lines.push(say(tip, { amount: money(digest.monthly) }));
-            }
-            return { say: lines, choices: STEPS.results.choices(), actions: [] };
+            if (!digest.ok) return { say: [problem()], choices, actions: [] };
+            // After Optimize: one bulleted message - what it decided, then how the run went, without the run count
+            if (o) return { say: [{ kind: 'summary', lines: [...optimumLines(o), ...runLines(digest, { counts: false })] }], choices, actions: [] };
+            // The tip follows the percent as shown, so 79.8% reads "80%" and counts as in the range
+            const percent = Math.round(digest.rate * 100);
+            const tip = percent < 80 ? 'gordon.tip.lower' : percent < 90 ? 'gordon.tip.inRange' : 'gordon.tip.more';
+            return { say: [...runLines(digest, { counts: true }), say(tip, { amount: money(digest.monthly) })], choices, actions: [] };
         }
 
         // "Show me an example", in one turn: each of the example household's answers read by its step as if typed (so the
@@ -537,7 +539,6 @@ window.GordonScript = (() => {
             }
             history = [];
             backTo = null;
-            lastRun = 'optimize';
             step = 'running';
             reporting = true;
             // Nothing said yet: the inputs fill, Optimize runs, and the one message comes with the result
