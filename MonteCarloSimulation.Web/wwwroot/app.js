@@ -1221,6 +1221,12 @@ function setOptimizing(state) {
     form.querySelector('button[type="submit"]').disabled = !!state;
     refreshOptimizeSocialSecurity();
     renderRunStatus();
+    notifyOptimizing();
+}
+
+// For Gordon (gordon.js), which shows Optimize's progress in its panel: { completed, total }, or null once it's done
+function notifyOptimizing() {
+    document.dispatchEvent(new CustomEvent('runner:optimizing', { detail: optimizing ? { ...optimizing } : null }));
 }
 
 function initOptimize() {
@@ -1250,6 +1256,7 @@ function initOptimize() {
                     else if (event.type === 'teaser') teaser = event;
                     else if (event.type === 'error') failure = event.message;
                     renderRunStatus();
+                    notifyOptimizing();
                 });
             }
         } catch (err) {
@@ -1261,11 +1268,15 @@ function initOptimize() {
         else if (!optimum && !teaser) view = { kind: 'failed', message: failure ?? t('runner.optimize.stopped') };
         if (errors || (!optimum && !teaser)) {
             renderView();
+            // No run follows, so Gordon hears it ended here
+            document.dispatchEvent(new CustomEvent('runner:result', { detail: view }));
             return;
         }
         if (optimum) applyOptimized(optimum, request);
         else applyOptimizedTeaser(teaser);
         renderHandoffNote();
+        // For Gordon: what Optimize put into the form (the note's handoff), before the run it starts
+        document.dispatchEvent(new CustomEvent('runner:optimized', { detail: { ...handoff } }));
         // As the hand-off: the submit handler reads the flag before its first await
         handoffRunPending = true;
         form.requestSubmit();

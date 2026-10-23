@@ -123,19 +123,65 @@ test('a whole conversation fills each input once, in order, then runs', () => {
     assert.deepEqual(keys(turn), ['gordon.ack.spending', 'gordon.confirm.lead', 'summary', 'gordon.confirm.ask']);
 });
 
-test('confirming runs the plan, and the result reads the run', () => {
+const UP_TO_SPENDING = [
+    { choice: 'start' }, { text: 'June 1980' }, { text: 'at 65' }, { text: 'single' }, { text: '1.2m' }, { text: 'none' },
+    { text: '300k' }, { choice: 'none' }, { choice: 'unknown' }, { choice: 'unknown' }, { text: 'growth' },
+];
+
+test('confirming a typed spend runs the plan, and the result reads the run', () => {
     const page = fakePage();
-    const { engine } = converse(page, [
-        { choice: 'start' }, { text: 'June 1980' }, { text: 'at 65' }, { text: 'single' }, { text: '1.2m' }, { text: 'none' },
-        { text: '300k' }, { choice: 'none' }, { choice: 'unknown' }, { choice: 'unknown' }, { text: 'growth' }, { choice: 'suggested' },
-    ]);
+    const { engine } = converse(page, [...UP_TO_SPENDING, { text: '9,000' }]);
     const running = engine.reply({ choice: 'run' });
     assert.equal(running.run, true);
+    assert.equal(running.optimize, false);
     assert.deepEqual(keys(running), ['gordon.running']);
 
     const result = engine.result({ ok: true, total: 99, survived: 83, rate: 83 / 99, years: 30, median: 2.1e6, lower: 0, endYear: '2075', endAge: 95, lowerOutYear: '2068', lowerOutAge: 88, monthly: 9000 });
     assert.deepEqual(keys(result), ['gordon.result.survived', 'gordon.result.median', 'gordon.result.lowerRunsOut', 'gordon.tip.inRange']);
     assert.deepEqual(plain(result.choices.map((c) => c.value)), ['details', 'change', 'restart']);
+});
+
+test('"Find the most I can safely spend" leaves the spend to Optimize, which runs instead of Run', () => {
+    const page = fakePage();
+    const { engine, turn } = converse(page, [...UP_TO_SPENDING, { choice: 'optimize' }]);
+    assert.ok(!page.actions.some((a) => a.name === 'setSpending'));
+    const summary = turn.say.find((m) => m.kind === 'summary');
+    assert.ok(plain(summary.lines()).some((line) => line.key === 'gordon.summary.optimize'));
+    assert.deepEqual(plain(turn.choices.map((c) => c.key)), ['gordon.choice.optimizeRun', 'gordon.choice.change']);
+
+    const optimizing = engine.reply({ choice: 'run' });
+    assert.equal(optimizing.optimize, true);
+    assert.equal(optimizing.run, false);
+    assert.deepEqual(keys(optimizing), ['gordon.optimizing']);
+
+    const found = plain(engine.optimized({ kind: 'optimized', withdrawalMonthly: 7400, recommendedAge: 68, annuity: { investment: 300000, monthlyPayment: 1900, taxDeferred: true } }));
+    assert.deepEqual(found.say.map((m) => m.key), ['gordon.optimized.found', 'gordon.optimized.annuity', 'gordon.running']);
+    assert.equal(found.say[0].values.amount, '$7,400');
+
+    // The run's survival lands near 82.5%, so the tip explains that rather than saying to spend less
+    const result = engine.result({ ok: true, total: 99, survived: 78, rate: 78 / 99, years: 30, median: 1e6, lower: 0, endYear: '2075', endAge: 95, lowerOutYear: '2068', lowerOutAge: 88, monthly: 7400 });
+    assert.equal(keys(result)[3], 'gordon.tip.optimized');
+});
+
+test('a Free visitor\'s Optimize is the teaser range, and says Plus finds the exact spend', () => {
+    // Free isn't asked about an inheritance, the eighth answer
+    const answers = UP_TO_SPENDING.filter((_, i) => i !== 7);
+    const { engine } = converse(fakePage({ plus: false }), [...answers, { text: 'find the most I can safely spend' }]);
+    assert.equal(engine.step, 'confirm');
+    engine.reply({ choice: 'run' });
+    const teaser = plain(engine.optimized({ kind: 'optimizedTeaser', low: 6500, high: 7000 }));
+    assert.deepEqual(teaser.say.map((m) => m.key), ['gordon.optimized.teaser']);
+    assert.equal(teaser.say[0].values.low, '$6,500');
+    const result = engine.result({ ok: true, total: 99, survived: 90, rate: 90 / 99, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerOutYear: null, lowerOutAge: null, monthly: 6500 });
+    assert.equal(keys(result)[3], 'gordon.tip.teaser');
+});
+
+test('a typed spend after choosing Optimize goes back to a plain run', () => {
+    const page = fakePage();
+    const { engine } = converse(page, [...UP_TO_SPENDING, { choice: 'optimize' }, { choice: 'change' }, { choice: 'spending' }, { text: '6,000' }]);
+    assert.equal(engine.step, 'confirm');
+    assert.equal(page.state.spending, 6000);
+    assert.equal(engine.reply({ choice: 'run' }).run, true);
 });
 
 test('an answer it doesn\'t understand is asked again, without changing anything', () => {
@@ -176,22 +222,22 @@ test('a Free visitor isn\'t asked about an inheritance', () => {
     assert.equal(engine.step, 'ssAmount');
 });
 
-test('"Show me an example" answers every question itself, through to the run', () => {
+test('"Show me an example" answers every question itself, through to Optimize', () => {
     const page = fakePage();
     const engine = create(page);
     let turn = page.play(engine.start());
     turn = page.play(engine.reply({ choice: 'example' }));
-    for (let guard = 0; guard < 20 && !turn.run; guard++) {
+    for (let guard = 0; guard < 20 && !turn.run && !turn.optimize; guard++) {
         const answer = engine.exampleAnswer();
         assert.ok(answer, `no example answer at ${engine.step}`);
         turn = page.play(engine.reply(plain(answer)));
         assert.ok(!keys(turn).some((key) => key.startsWith('gordon.retry')), `the example's answer at ${engine.step} wasn't understood`);
     }
-    assert.equal(turn.run, true);
+    // The demo shows Optimize finding the spend, so it lands near 82.5% by design
+    assert.equal(turn.optimize, true);
     assert.equal(engine.exampleAnswer(), null);
     assert.equal(page.state.filingStatus, 'married');
-    // The suggested spend: 85% of 4% of $1.3M a year plus $4,800 over the 34 years less the 6.4 before it starts
-    assert.equal(page.state.spending, 7000);
+    assert.ok(!page.actions.some((a) => a.name === 'setSpending'));
 });
 
 test('the summary reads the form when it\'s shown, so it includes the last answer', () => {

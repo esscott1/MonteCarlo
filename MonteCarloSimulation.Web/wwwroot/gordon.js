@@ -103,6 +103,10 @@ window.Gordon = (() => {
                 case 'run':
                     form.requestSubmit();
                     return null;
+                // The page's Optimize (app.js initOptimize): it fills in its answer, then runs
+                case 'optimize':
+                    document.getElementById('optimize-run').click();
+                    return null;
                 default: return null;
             }
         },
@@ -197,7 +201,13 @@ window.Gordon = (() => {
     let choices = [];
     let busy = false;
     let awaitingRun = false;
+    let awaitingOptimize = false;
+    let progress = null;       // Optimize's { completed, total } while it works, shown as a live message
     let session = 0;           // a restart or a close ends what was playing
+    let playing = Promise.resolve();
+
+    // Turns play one after another: Optimize's answer and the run that follows it can arrive close together
+    const enqueue = (next) => { playing = playing.then(() => play(next)); };
 
     function renderText(message) {
         const values = message.values ? Object.fromEntries(Object.entries(message.values).map(([k, v]) => [k, escapeHtml(v)])) : undefined;
@@ -243,7 +253,26 @@ window.Gordon = (() => {
         textBox.setAttribute('aria-label', t('gordon.placeholder'));
         inputForm.querySelector('button').textContent = t('gordon.send');
         log.innerHTML = entries.map(entryHtml).join('');
+        renderProgress();
         renderChoices();
+    }
+
+    // Optimize's progress, one live message at the end of the conversation while it works
+    function renderProgress() {
+        let line = log.querySelector('.gordon-progress');
+        if (!awaitingOptimize || !progress) {
+            line?.remove();
+            return;
+        }
+        if (!line) {
+            line = document.createElement('div');
+            line.className = 'gordon-message gordon-progress';
+            log.appendChild(line);
+        }
+        line.textContent = progress.total > 0
+            ? t('gordon.optimizing.progress', { completed: progress.completed, total: progress.total })
+            : t('gordon.optimizing.start');
+        scrollLog();
     }
 
     // Fills the turn's fields one by one, each shown as it's filled; false when a restart or close ended the turn
@@ -282,17 +311,20 @@ window.Gordon = (() => {
             addEntry({ who: 'gordon', message });
         }
         if (lead >= next.say.length && !(await applyActions(next.actions, mine))) return;
-        if (next.run) {
+        if (next.run || next.optimize) {
             // A field the browser refuses stops the run before it's sent, so there'd be no result to wait for
             if (!form.checkValidity()) {
                 form.reportValidity();
-                play(engine.result({ ok: false, message: t('gordon.result.invalid') }));
+                enqueue(engine.result({ ok: false, message: t('gordon.result.invalid') }));
                 return;
             }
             awaitingRun = true;
-            page.apply({ name: 'run' });
+            awaitingOptimize = !!next.optimize;
+            page.apply({ name: next.optimize ? 'optimize' : 'run' });
             return;
         }
+        // Optimize's answer: still busy, until the run it starts has been explained
+        if (next.hold) return;
         choices = next.choices;
         setBusy(false);
         renderChoices();
@@ -303,7 +335,7 @@ window.Gordon = (() => {
     function send(input, label) {
         if (busy || !engine) return;
         addEntry({ who: 'visitor', text: label });
-        play(engine.reply(input));
+        enqueue(engine.reply(input));
     }
 
     // "Show me an example": the example household's answer types itself in, or its button is pressed
@@ -335,11 +367,13 @@ window.Gordon = (() => {
     function begin() {
         session++;
         awaitingRun = false;
+        awaitingOptimize = false;
+        progress = null;
         entries = [];
         log.innerHTML = '';
         textBox.value = '';
         engine = engine ?? GordonScript.create(page);
-        play(engine.start());
+        enqueue(engine.start());
     }
 
     function open() {
@@ -376,11 +410,32 @@ window.Gordon = (() => {
         send({ text }, text);
     });
 
-    // The run Gordon started has finished (app.js): say what it means
+    // Optimize, started by Gordon, is working (app.js): its progress
+    document.addEventListener('runner:optimizing', (e) => {
+        if (!awaitingOptimize) return;
+        progress = e.detail;
+        renderProgress();
+    });
+
+    // Optimize has filled in its answer and is starting the run: say what it decided, showing the fields it changed
+    document.addEventListener('runner:optimized', (e) => {
+        if (!awaitingOptimize) return;
+        awaitingOptimize = false;
+        progress = null;
+        renderProgress();
+        // A Free visitor's teaser changes only the spend
+        (e.detail.kind === 'optimized' ? [el['withdrawal'], el['socialSecurityStartDate']] : [el['withdrawal']]).forEach(reveal);
+        enqueue({ ...engine.optimized(e.detail), hold: true });
+    });
+
+    // The run Gordon started has finished (app.js) - or Optimize stopped before one: say what it means
     document.addEventListener('runner:result', (e) => {
         if (!awaitingRun) return;
         awaitingRun = false;
-        play(engine.result(digest(e.detail)));
+        awaitingOptimize = false;
+        progress = null;
+        renderProgress();
+        enqueue(engine.result(digest(e.detail)));
     });
 
     // Shown while the Observe switch is on; it's read again when the tab regains focus (paywall.js)

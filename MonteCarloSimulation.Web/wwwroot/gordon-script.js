@@ -3,8 +3,10 @@
 // engine only decides what to say and which page actions to take ({ name, value }, gordon.js's page.apply), so a model
 // calling the same actions as tools can replace it behind the same panel.
 //
-// An engine answers each turn with { say: [message], lead, actions: [{ name, value }], choices: [{ key, value }], run }:
-// the actions are taken after the first lead messages (the reply to the visitor's answer), before the rest.
+// An engine answers each turn with { say: [message], lead, actions: [{ name, value }], choices: [{ key, value }], run,
+// optimize }: the actions are taken after the first lead messages (the reply to the visitor's answer), before the rest;
+// run runs the plan, optimize runs the page's Optimize (which then runs it). engine.optimized(detail) explains what
+// Optimize decided, and engine.result(digest) the run that follows either.
 // A message is { key, values } (text from t(), values already formatted and escaped) or { kind: 'summary', lines }.
 window.GordonScript = (() => {
     const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -98,7 +100,7 @@ window.GordonScript = (() => {
         ssAmount: { text: '$4,800' },
         ssStart: { choice: 67 },
         mix: { choice: 'balanced' },
-        spending: { choice: 'suggested' },
+        spending: { choice: 'optimize' },
         confirm: { choice: 'run' },
     };
 
@@ -107,6 +109,7 @@ window.GordonScript = (() => {
         let backTo = null;       // a step changed from the summary goes back to it
         let history = [];
         let example = false;
+        let lastRun = 'run';     // what the last run came from: 'run', 'optimize' or 'teaser' (a Free visitor's Optimize)
         const answers = {};
 
         const ORDER = ['birth', 'retire', 'filing', 'taxDeferred', 'roth', 'brokerage', 'inheritance', 'ssAmount', 'ssStart', 'mix', 'spending', 'confirm'];
@@ -287,11 +290,17 @@ window.GordonScript = (() => {
                     };
                 },
             },
+            // Optimize (the runner's button) can find the spend instead: the most that survives about 82.5% of markets,
+            // with the best Social Security age and any annuity worth buying. It's chosen here and done in place of Run.
             spending: {
-                ask: () => [say('gordon.ask.spending'), say('gordon.ask.spendingHint', { amount: money(suggestedSpending()) })],
-                choices: () => [{ key: 'gordon.choice.useSuggested', value: 'suggested', values: { amount: money(suggestedSpending()) } }],
+                ask: () => [say('gordon.ask.spending'), say('gordon.ask.spendingOptimize')],
+                choices: () => [choice('gordon.choice.optimize', 'optimize')],
                 answer(input) {
-                    let amount = input.choice === 'suggested' ? suggestedSpending() : parseMoney(input.text ?? '');
+                    if (input.choice === 'optimize' || has(input.text ?? '', /optimi|safely|most i can|find it|not sure|don'?t know|lo mas|no se|encuentr/)) {
+                        answers.spending = 'optimize';
+                        return { say: [say('gordon.ack.optimize')] };
+                    }
+                    let amount = parseMoney(input.text ?? '');
                     if (!amount) return { retry: 'gordon.retry.spending' };
                     const yearly = amount > 50000;
                     if (yearly) amount = Math.round(amount / 12);
@@ -305,12 +314,15 @@ window.GordonScript = (() => {
             confirm: {
                 // The summary's lines are read when it's shown, once the last answer is on the form
                 ask: () => [say('gordon.confirm.lead'), { kind: 'summary', lines: summaryLines }, say('gordon.confirm.ask')],
-                choices: () => [choice('gordon.choice.run', 'run'), choice('gordon.choice.change', 'change')],
+                choices: () => [choice(optimizing() ? 'gordon.choice.optimizeRun' : 'gordon.choice.run', 'run'), choice('gordon.choice.change', 'change')],
                 answer(input) {
                     const text = input.text ?? '';
                     if (input.choice === 'change' || has(text, /change|edit|fix|cambi|correg/)) return { next: 'change' };
-                    if (input.choice === 'run' || has(text, /\b(run|go|yes|yep|sure|ok|okay|si|dale|adelante|corre)\b/)) {
-                        return { say: [say('gordon.running', { runs: page.get().iterations })], run: true, next: 'running' };
+                    if (input.choice === 'run' || has(text, /\b(run|go|yes|yep|sure|ok|okay|optimi\w*|si|dale|adelante|corre|ejecut\w*)\b/)) {
+                        lastRun = optimizing() ? 'optimize' : 'run';
+                        return optimizing()
+                            ? { say: [say('gordon.optimizing')], optimize: true, next: 'running' }
+                            : { say: [say('gordon.running', { runs: page.get().iterations })], run: true, next: 'running' };
                     }
                     return { retry: 'gordon.retry.confirm' };
                 },
@@ -357,17 +369,8 @@ window.GordonScript = (() => {
             };
         }
 
-        // A starting point, not advice: 4% of savings a year plus Social Security averaged over the years it's paid, less
-        // about 15% for taxes, rounded to $100 a month. (A household of $1.3M, $4,800 from 67 and retiring at 60 gets
-        // about $7,000, which survived about 88% of markets in October 2026.)
-        function suggestedSpending() {
-            const now = page.get();
-            const savings = now.taxDeferred + now.roth + now.brokerage;
-            const beforeBenefit = Math.max(0, ageOn(now.birthdate, now.socialSecurityStart) - ageOn(now.birthdate, now.retirementDate));
-            const benefitShare = now.years > 0 ? Math.max(0, now.years - beforeBenefit) / now.years : 1;
-            const monthly = 0.85 * (savings * 0.04 / 12 + now.socialSecurityMonthly * benefitShare);
-            return Math.max(100, Math.round(monthly / 100) * 100);
-        }
+        // The spend is left to Optimize, until an amount is given
+        const optimizing = () => answers.spending === 'optimize';
 
         function summaryLines() {
             const now = page.get();
@@ -389,7 +392,7 @@ window.GordonScript = (() => {
                 ? say('gordon.summary.ss', { amount: money(now.socialSecurityMonthly), date: page.monthYear(now.socialSecurityStart), age: Math.floor(ageOn(now.birthdate, now.socialSecurityStart) + 0.01) })
                 : say('gordon.summary.noSs'));
             lines.push(say('gordon.summary.mix', { stocks: now.mix.stocks, bonds: now.mix.bonds, cash: now.mix.cash }));
-            lines.push(say('gordon.summary.spending', { amount: money(now.spending) }));
+            lines.push(optimizing() ? say('gordon.summary.optimize') : say('gordon.summary.spending', { amount: money(now.spending) }));
             return lines;
         }
 
@@ -434,7 +437,25 @@ window.GordonScript = (() => {
                 step = next;
                 return { say: [], actions: result.actions ?? [], choices: STEPS[next].choices ? STEPS[next].choices() : [] };
             }
-            return { ...turn(next, result.say ?? []), actions: result.actions ?? [], run: !!result.run };
+            return { ...turn(next, result.say ?? []), actions: result.actions ?? [], run: !!result.run, optimize: !!result.optimize };
+        }
+
+        // What Optimize put into the form, before the run it starts (detail: app.js's note - kind 'optimized', with the
+        // spend, the Social Security age and any annuity bought, or 'optimizedTeaser', a Free visitor's range)
+        function optimized(detail) {
+            if (detail.kind === 'optimizedTeaser') {
+                lastRun = 'teaser';
+                return { say: [say('gordon.optimized.teaser', { low: money(detail.low), high: money(detail.high) })], choices: [], actions: [] };
+            }
+            const lines = [say('gordon.optimized.found', { amount: money(detail.withdrawalMonthly), age: detail.recommendedAge })];
+            const a = detail.annuity;
+            if (a) {
+                lines.push(say(a.taxDeferred ? 'gordon.optimized.annuity' : 'gordon.optimized.annuityAfterTax', {
+                    amount: money(a.investment), payment: money(a.monthlyPayment), cola: a.cola ? t('gordon.optimized.cola') : '',
+                }));
+            }
+            lines.push(say('gordon.running', { runs: page.get().iterations }));
+            return { say: lines, choices: [], actions: [] };
         }
 
         // What a finished run means, in a few sentences (digest: gordon.js's reading of the results)
@@ -456,7 +477,11 @@ window.GordonScript = (() => {
                 lines.push(digest.lowerOutYear
                     ? say('gordon.result.lowerRunsOut', { year: digest.lowerOutYear, age: digest.lowerOutAge })
                     : say('gordon.result.lowerHolds', { amount: about(digest.lower), year: digest.endYear }));
-                lines.push(say(percent < 80 ? 'gordon.tip.lower' : percent < 90 ? 'gordon.tip.inRange' : 'gordon.tip.more', { amount: money(digest.monthly) }));
+                // After Optimize the spend is the Optimizer's own, so the tip says what it aimed for, not to change it
+                const tip = lastRun === 'optimize' ? 'gordon.tip.optimized'
+                    : lastRun === 'teaser' ? 'gordon.tip.teaser'
+                        : percent < 80 ? 'gordon.tip.lower' : percent < 90 ? 'gordon.tip.inRange' : 'gordon.tip.more';
+                lines.push(say(tip, { amount: money(digest.monthly) }));
             }
             return { say: lines, choices: STEPS.results.choices(), actions: [] };
         }
@@ -470,7 +495,7 @@ window.GordonScript = (() => {
             return answer;
         }
 
-        return { start, reply, result, exampleAnswer, get step() { return step; } };
+        return { start, reply, optimized, result, exampleAnswer, get step() { return step; } };
     }
 
     return { create, parseMoney, parseDate, parseAge };

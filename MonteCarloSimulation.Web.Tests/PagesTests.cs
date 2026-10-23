@@ -674,6 +674,13 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains("Paywall.me.gordon", gordon);
             Assert.Contains("new CustomEvent('runner:result', { detail: view })", app);
             Assert.Contains("'runner:result'", gordon);
+            // Gordon can press Optimize: app.js reports its progress and what it put into the form, and a stopped
+            // Optimize still sends runner:result, so Gordon never waits on a run that won't come
+            Assert.Contains("document.getElementById('optimize-run').click()", gordon);
+            Assert.Contains("new CustomEvent('runner:optimizing'", app);
+            Assert.Contains("new CustomEvent('runner:optimized', { detail: { ...handoff } })", app);
+            Assert.Equal(2, Regex.Matches(app, @"new CustomEvent\('runner:result', \{ detail: view \}\)").Count);
+            Assert.Contains("'runner:optimized'", gordon);
             Assert.Contains(@"data-tier=""gordon""", observe);
             Assert.Contains("Enable Gordon", observe);
         }
