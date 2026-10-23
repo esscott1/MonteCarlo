@@ -657,6 +657,18 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains("&shared=1&return=", script);
         }
 
+        // The survival headline's face: a frown below 60%, a straight face from 60% to under 75%, a smile from 75%, and
+        // a smile when every run survived
+        [Fact]
+        public async Task ScenarioRunner_Results_ShowAFaceForTheSurvivalRate()
+        {
+            string app = await GetAsync("/app.js");
+
+            Assert.Matches(@"function survivalFace\(survival\) \{\s*if \(survival < 0\.6\) return '🙁';\s*if \(survival < 0\.75\) return '😐';\s*return '🙂';", app);
+            Assert.Contains("${survivalFace(survival)} ${t('runner.failedCount'", app);
+            Assert.Contains("${survivalFace(1)} ${t('runner.allSurvived')}", app);
+        }
+
         // Gordon, the guided setup: its scripted conversation and then its panel load after the page script, it shows only
         // while /api/me says the Observe switch is on, and it hears about each finished run from app.js
         [Fact]

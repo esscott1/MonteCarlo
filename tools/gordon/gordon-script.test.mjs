@@ -222,16 +222,14 @@ test('a Free visitor isn\'t asked about an inheritance', () => {
     assert.equal(engine.step, 'ssAmount');
 });
 
-test('"Show me an example" lists the household as bullets, fills every input at once, then optimizes', () => {
+test('"Show me an example" fills every input at once and optimizes, saying nothing until the run is done', () => {
     const page = fakePage();
     const engine = create(page);
     page.play(engine.start());
     const turn = page.play(engine.reply({ choice: 'example' }));
 
-    // One message - its lead and the list, read after the inputs are filled - then Optimize, quietly: no questions
-    assert.deepEqual(keys(turn), ['summary']);
-    assert.equal(turn.say[0].lead, 'gordon.intro.example');
-    assert.equal(turn.lead, 0);
+    // No questions and no message yet: the inputs fill, then Optimize runs quietly
+    assert.deepEqual(keys(turn), []);
     assert.equal(turn.optimize, true);
     assert.equal(turn.quiet, true);
     assert.equal(engine.step, 'running');
@@ -243,24 +241,19 @@ test('"Show me an example" lists the household as bullets, fills every input at 
     assert.equal(page.state.taxDeferred, 900000);
     assert.equal(page.state.socialSecurityStart, '2034-06-01');
 
-    const lines = plain(turn.say[0].lines()).map((line) => line.key);
-    assert.ok(lines.includes('gordon.summary.married'));
-    assert.ok(lines.includes('gordon.summary.optimize'));
-
-    // Nothing is said about Optimize's answer until the run is done; then one bulleted report pointing to the page
+    // Nothing about Optimize's answer either; once the run is done, one message: born, retiring, the spend with about
+    // 80% confidence, and the money they have as entered (an annuity Optimize buys is paid from the balances)
     const quiet = plain(engine.optimized({ kind: 'optimized', withdrawalMonthly: 8997, recommendedAge: 67, annuity: { investment: 900000, monthlyPayment: 5229, taxDeferred: true, cola: true } }));
     assert.deepEqual(quiet.say, []);
+    page.state.taxDeferred = 0;
     const result = plain(engine.result({ ok: true, total: 99, survived: 82, rate: 82 / 99, years: 34, median: 440000, lower: 0, endYear: '2062', endAge: 94, lowerOutYear: '2045', lowerOutAge: 77, monthly: 8997 }));
     assert.equal(result.say.length, 1);
     const report = result.say[0];
     assert.equal(report.kind, 'summary');
-    assert.equal(report.lead, 'gordon.report.lead');
-    assert.equal(report.after, 'gordon.report.seePage');
-    assert.deepEqual(report.lines.map((line) => line.key), [
-        'gordon.report.spend', 'gordon.report.ss', 'gordon.report.annuity', 'gordon.report.survival', 'gordon.report.typical', 'gordon.report.weakestRunsOut',
-    ]);
-    assert.equal(report.lines[0].values.amount, '$8,997');
-    assert.equal(report.lines[2].values.cola, 'gordon.optimized.cola');
+    assert.equal(report.lead, 'gordon.example.lead');
+    assert.equal(report.after, undefined);
+    assert.deepEqual(report.lines.map((line) => line.key), ['gordon.summary.born', 'gordon.example.retire', 'gordon.example.spend', 'gordon.example.savings']);
+    assert.deepEqual(report.lines.map((line) => Object.values(line.values ?? {})[0]), ['1967-06', '2028-01', '$8,997', '$1,300,000']);
     assert.deepEqual(result.choices.map((c) => c.value), ['details', 'change', 'restart']);
 
     // Change something still works as after any conversation, and a later run reports in the usual sentences
@@ -273,7 +266,7 @@ test('"Show me an example" lists the household as bullets, fills every input at 
     assert.deepEqual(keys(later), ['gordon.result.survived', 'gordon.result.median', 'gordon.result.lowerHolds', 'gordon.tip.more']);
 });
 
-test('a Free visitor\'s example leaves out the inheritance, and reports the teaser range', () => {
+test('a Free visitor\'s example leaves out the inheritance, and its spend is the low end of the range', () => {
     const page = fakePage({ plus: false });
     const engine = create(page);
     page.play(engine.start());
@@ -282,8 +275,8 @@ test('a Free visitor\'s example leaves out the inheritance, and reports the teas
 
     assert.deepEqual(plain(engine.optimized({ kind: 'optimizedTeaser', low: 7000, high: 7500 })).say, []);
     const report = plain(engine.result({ ok: true, total: 99, survived: 81, rate: 81 / 99, years: 34, median: 2.06e6, lower: 0, endYear: '2062', endAge: 94, lowerOutYear: '2054', lowerOutAge: 86, monthly: 7000 })).say[0];
-    assert.deepEqual(report.lines.map((line) => line.key), ['gordon.report.teaser', 'gordon.report.survival', 'gordon.report.typical', 'gordon.report.weakestRunsOut']);
-    assert.equal(report.lines[0].values.low, '$7,000');
+    assert.deepEqual(report.lines.map((line) => line.key), ['gordon.summary.born', 'gordon.example.retire', 'gordon.example.spendTeaser', 'gordon.example.savings']);
+    assert.equal(report.lines[2].values.amount, '$7,000');
 });
 
 test('when the example\'s run can\'t start, the one message says why', () => {

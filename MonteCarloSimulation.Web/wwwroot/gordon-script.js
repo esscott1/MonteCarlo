@@ -124,7 +124,7 @@ window.GordonScript = (() => {
         // returns { say, actions, next } when it's understood (next defaults to the following step) or { retry } when not.
         const STEPS = {
             intro: {
-                ask: () => [say('gordon.intro.hello'), say('gordon.intro.how')],
+                ask: () => [say('gordon.intro.hello')],
                 choices: () => [choice('gordon.choice.start', 'start'), choice('gordon.choice.example', 'example')],
                 answer(input) {
                     if (input.choice === 'example' || has(input.text ?? '', /example|ejemplo|demo|show/)) return { example: true };
@@ -469,34 +469,26 @@ window.GordonScript = (() => {
             return { say: lines, choices: [], actions: [] };
         }
 
-        // The example's report, in one message: what Optimize decided and what the run shows, as bullets, then where to
-        // see the rest
-        function report(digest) {
-            const about = (value) => money(Math.round(value / 10000) * 10000);
+        // The example's one message, once its run is done (the page shows the rest): when they were born and retire, what
+        // they can spend with about 80% confidence (Optimize's 82.5% spend, or the low end of a Free visitor's range), and
+        // the money they have
+        function report() {
+            const now = page.get();
             const o = optimum;
-            const lines = [];
-            if (o?.kind === 'optimized') {
-                lines.push(say('gordon.report.spend', { amount: money(o.withdrawalMonthly) }));
-                lines.push(say('gordon.report.ss', { age: o.recommendedAge }));
-                const a = o.annuity;
-                if (a) {
-                    lines.push(say(a.taxDeferred ? 'gordon.report.annuity' : 'gordon.report.annuityAfterTax', {
-                        amount: money(a.investment), payment: money(a.monthlyPayment), cola: a.cola ? t('gordon.optimized.cola') : '',
-                    }));
-                }
-            } else if (o?.kind === 'optimizedTeaser') {
-                lines.push(say('gordon.report.teaser', { low: money(o.low), high: money(o.high) }));
-            }
-            lines.push(digest.survived === digest.total
-                ? say('gordon.report.allSurvived', { total: digest.total, years: digest.years })
-                : say('gordon.report.survival', { survived: digest.survived, total: digest.total, years: digest.years, rate: Math.round(digest.rate * 100) }));
-            lines.push(digest.medianOutYear
-                ? say('gordon.report.typicalRunsOut', { year: digest.medianOutYear, age: digest.medianOutAge })
-                : say('gordon.report.typical', { amount: about(digest.median), year: digest.endYear, age: digest.endAge }));
-            lines.push(digest.lowerOutYear
-                ? say('gordon.report.weakestRunsOut', { year: digest.lowerOutYear, age: digest.lowerOutAge })
-                : say('gordon.report.weakestHolds', { amount: about(digest.lower), year: digest.endYear }));
-            return { kind: 'summary', lead: 'gordon.report.lead', lines, after: 'gordon.report.seePage' };
+            const spend = o?.kind === 'optimizedTeaser'
+                ? say('gordon.example.spendTeaser', { amount: money(o.low) })
+                : say('gordon.example.spend', { amount: money(o?.kind === 'optimized' ? o.withdrawalMonthly : now.spending) });
+            return {
+                kind: 'summary',
+                lead: 'gordon.example.lead',
+                lines: [
+                    say('gordon.summary.born', { date: page.monthYear(now.birthdate) }),
+                    say('gordon.example.retire', { date: page.monthYear(now.retirementDate) }),
+                    spend,
+                    // As answered: an annuity Optimize buys is paid from the balances, so the form shows less by now
+                    say('gordon.example.savings', { amount: money(answers.taxDeferred + answers.roth + answers.brokerage) }),
+                ],
+            };
         }
 
         // What a finished run means, in a few sentences (digest: gordon.js's reading of the results)
@@ -504,7 +496,7 @@ window.GordonScript = (() => {
             step = 'results';
             if (reporting) {
                 reporting = false;
-                const message = digest.ok ? report(digest)
+                const message = digest.ok ? report()
                     : digest.message ? say('gordon.result.problem', { message: digest.message }) : say('gordon.result.failed');
                 optimum = null;
                 return { say: [message], choices: STEPS.results.choices(), actions: [] };
@@ -548,15 +540,8 @@ window.GordonScript = (() => {
             lastRun = 'optimize';
             step = 'running';
             reporting = true;
-            // One message, after the inputs are filled (lead 0: the actions come first), then quiet until the report
-            return {
-                say: [{ kind: 'summary', lead: 'gordon.intro.example', lines: summaryLines }],
-                lead: 0,
-                actions,
-                choices: [],
-                optimize: true,
-                quiet: true,
-            };
+            // Nothing said yet: the inputs fill, Optimize runs, and the one message comes with the result
+            return { say: [], lead: 0, actions, choices: [], optimize: true, quiet: true };
         }
 
         return { start, reply, optimized, result, get step() { return step; } };

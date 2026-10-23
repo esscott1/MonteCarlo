@@ -633,6 +633,14 @@ function outcomeLine(result, allRates) {
     });
 }
 
+// The face before the survival headline: a frown below 60% of runs surviving, a straight face from 60% to under 75%,
+// a smile at 75% and above
+function survivalFace(survival) {
+    if (survival < 0.6) return '🙁';
+    if (survival < 0.75) return '😐';
+    return '🙂';
+}
+
 function renderSummary(parameters, output) {
     const result = output.result;
     const outcome = outcomeLine(result, output.allRates);
@@ -659,7 +667,7 @@ function renderSummary(parameters, output) {
         const avgFailureReturn = result.failedScenarioAverages.reduce((a, b) => a + b, 0) / result.failedScenarioAverages.length;
         return summaryBox(
             survival > 0.8 ? 'ok' : 'warn',
-            `<strong>${survival > 0.8 ? '🙂' : '🙁'} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}`,
+            `<strong>${survivalFace(survival)} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}`,
             outcome,
             `${scenarioLine}
                 <p>${t('runner.inheritance', { amount: formatCurrency(parameters.newMoney), year: new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney })}</p>
@@ -670,7 +678,7 @@ function renderSummary(parameters, output) {
 
     return summaryBox(
         'ok',
-        `<strong>🙂 ${t('runner.allSurvived')}</strong>`,
+        `<strong>${survivalFace(1)} ${t('runner.allSurvived')}</strong>`,
         outcome,
         `${scenarioLine}
             ${lifetimeTaxLine}
