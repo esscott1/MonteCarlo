@@ -76,6 +76,27 @@ namespace MonteCarloSimulation.Optimizer.Tests
             Assert.Equal(3_900 * 0.8, curve.MonthlyBenefitAtAge(64), 9);
         }
 
+        [Theory]
+        [InlineData(62, 0)]
+        [InlineData(64, 3)]
+        [InlineData(67, 0)]
+        [InlineData(69, 6)]
+        [InlineData(70, 0)]
+        public void FromClaim_PaysTheClaimsOwnAmountAtItsOwnAge_AndFollowsSsaRulesElsewhere(int years, int months)
+        {
+            var birthdate = new DateOnly(1969, 7, 7);
+            var start = birthdate.AddYears(years).AddMonths(months);
+
+            var curve = SocialSecurityCurve.FromClaim(birthdate, start, 2_750);
+
+            Assert.Equal(2_750, curve.MonthlyBenefitAtMonths(years * 12 + months), 9);
+            Assert.Equal(curve.At67 * SocialSecurityCurve.SsaShareAt62, curve.At62, 9);
+            Assert.Equal(curve.At67 * SocialSecurityCurve.SsaShareAt70, curve.At70, 9);
+            // A day short of the month counts the month before (and never earlier than 62)
+            var dayShort = SocialSecurityCurve.FromClaim(birthdate, start.AddDays(-1), 2_750);
+            Assert.Equal(2_750, dayShort.MonthlyBenefitAtMonths(Math.Max(62 * 12, years * 12 + months - 1)), 9);
+        }
+
         // --- Reading survival levels off break-evens ---
 
         [Fact]
@@ -444,6 +465,125 @@ namespace MonteCarloSimulation.Optimizer.Tests
             var alone = SpendingOptimizer.Optimize(new OptimizationInputs { Template = bought, SocialSecurity = Defaults, Paths = 60 }).Optimum;
             Assert.Equal(alone.Recommended, optimum.Recommended);
             Assert.Equal(alone.VerifiedSurvivalRate, optimum.VerifiedSurvivalRate);
+        }
+
+        [Fact]
+        public void AnAfterTaxPurchase_SellsBrokerageFirst_AfterItsEstimatedTax_ThenRothBasis_ThenRothGains()
+        {
+            var options = new AnnuityPurchaseOptions(612, "2026-10-01", ConsiderAfterTax: true);
+            var template = Mixed(); // Brokerage $200,000 basis + $200,000 gain, Roth $50,000 + $50,000, 60 on the Retire On date
+
+            // $100,000 from Brokerage: half of the sale is gain, and $50,000 of gain stays inside the 0% band
+            var small = AnnuityPurchase.Source(template, 100_000, AnnuityFunding.AfterTax);
+            Assert.Equal(AnnuityFunding.AfterTax, small.Funding);
+            Assert.Equal(0, small.BrokerageSaleTax);
+            Assert.Equal(50_000, small.FromBrokerageBasis, 6);
+            Assert.Equal(50_000, small.FromBrokerageGain, 6);
+            Assert.Equal(0, small.FromTaxDeferred + small.FromRothBasis + small.FromRothGain);
+
+            var bought = AnnuityPurchase.Apply(template, options, 100_000, funding: AnnuityFunding.AfterTax);
+            Assert.Equal(900_000, bought.InitialTaxableBalance); // Tax Deferred untouched
+            Assert.Equal(150_000, bought.InitialBrokerageBasis, 6);
+            Assert.Equal(150_000, bought.InitialBrokerageUnrealizedGain, 6);
+            Assert.Equal(template.InitialRothBasis, bought.InitialRothBasis);
+            Assert.Equal(100_000, bought.Annuity!.Basis); // non-qualified: its price comes back tax-free
+            Assert.Equal(612, bought.Annuity.MonthlyPayment, 6);
+
+            // More than Brokerage can net: all of it is sold (its gains past the 0% band taxed at 15%), then Roth basis, then
+            // Roth gains
+            var large = AnnuityPurchase.Source(template, 450_000, AnnuityFunding.AfterTax);
+            Assert.Equal(400_000, large.FromBrokerageBasis + large.FromBrokerageGain, 6);
+            Assert.True(large.BrokerageSaleTax > 0);
+            Assert.Equal(50_000, large.FromRothBasis, 6);
+            Assert.Equal(450_000, large.FromBrokerageBasis + large.FromBrokerageGain - large.BrokerageSaleTax + large.FromRothBasis + large.FromRothGain, 6);
+            Assert.True(large.FromRothGain > 0 && large.FromRothGain < 50_000);
+            var drained = AnnuityPurchase.Apply(template, options, 450_000, funding: AnnuityFunding.AfterTax);
+            Assert.Equal(0, drained.InitialBrokerageBasis + drained.InitialBrokerageUnrealizedGain, 6);
+            Assert.Equal(0, drained.InitialRothBasis, 6);
+
+            // The sizes reach what Brokerage nets (about $380,000) plus all of Roth: $400,000 in $100,000 steps
+            Assert.Equal(new[] { 100_000.0, 200_000, 300_000, 400_000 }, AnnuityPurchase.AfterTaxAmounts(template, options));
+            // A Tax Deferred purchase is the one it always was
+            Assert.Equal(AnnuityPurchase.Apply(template, options with { ConsiderAfterTax = false }, 400_000).InitialTaxableBalance,
+                AnnuityPurchase.Apply(template, options, 400_000).InitialTaxableBalance);
+        }
+
+        [Fact]
+        public void BeforeFiftyNineAndAHalf_OnlyRothBasisPaysForAnAfterTaxPurchase()
+        {
+            var options = new AnnuityPurchaseOptions(612, "2026-10-01", ConsiderAfterTax: true);
+            var young = Mixed();
+            young.Birthdate = new DateOnly(1970, 1, 1); // 56 on the Retire On date
+
+            var source = AnnuityPurchase.Source(young, 450_000, AnnuityFunding.AfterTax);
+
+            Assert.Equal(50_000, source.FromRothBasis, 6);
+            Assert.Equal(0, source.FromRothGain);
+            // Brokerage nets about $380,000 and Roth adds only its $50,000 basis: four sizes, and $450,000 can't be paid for
+            Assert.Equal(4, AnnuityPurchase.AfterTaxAmounts(young, options).Count);
+            Assert.True(source.FromBrokerageBasis + source.FromBrokerageGain - source.BrokerageSaleTax + source.FromRothBasis < 450_000);
+        }
+
+        [Fact]
+        public void WithAfterTaxMoneyWeighed_EachKindIsAFinalist_AndThePlanIsThatPurchasesOwnSearch()
+        {
+            var level = WithPurchase(700);
+            var inputs = new OptimizationInputs
+            {
+                Template = level.Template, SocialSecurity = level.SocialSecurity, Paths = level.Paths,
+                Purchase = level.Purchase! with { ConsiderCola = true, ConsiderAfterTax = true }
+            };
+
+            var optimum = SpendingOptimizer.Optimize(inputs).Optimum;
+            var decision = optimum.Purchase!;
+
+            // The screen, then the best of each kind: level or COLA, Tax Deferred or after-tax money
+            Assert.Equal(9 + 1 + 4 * 9, SpendingOptimizer.TotalSteps(inputs));
+            Assert.Equal(9 + 1 + 2 * 9, SpendingOptimizer.TotalSteps(new OptimizationInputs
+            {
+                Template = level.Template, SocialSecurity = level.SocialSecurity, Paths = level.Paths,
+                Purchase = level.Purchase! with { ConsiderAfterTax = true }
+            }));
+            Assert.Equal(2 * (9 + 4), decision.AmountsConsidered);
+            Assert.True(decision.Amount > 0);
+            var source = decision.Source!;
+            Assert.Equal(AnnuityPurchase.Source(inputs.Template, decision.Amount, source.Funding), source);
+
+            var bought = AnnuityPurchase.Apply(inputs.Template, inputs.Purchase!, decision.Amount, decision.AnnualIncrease > 0, source.Funding);
+            var alone = SpendingOptimizer.Optimize(new OptimizationInputs { Template = bought, SocialSecurity = Defaults, Paths = 60 }).Optimum;
+            Assert.Equal(alone.Recommended, optimum.Recommended);
+            Assert.Equal(alone.VerifiedSurvivalRate, optimum.VerifiedSurvivalRate);
+        }
+
+        // --- Optimize Social Security: the best claiming age at a fixed spend ---
+
+        [Fact]
+        public void BestClaim_IsTheBirthdayWhereTheMostPathsSurvive_AndCountsTheCurrentClaimOnTheSamePaths()
+        {
+            var template = Mixed();
+            template.SocialSecurityStartDate = template.Birthdate.AddYears(62);
+            template.SocialSecurityMonthlyAmount = Defaults.MonthlyBenefitAtAge(62);
+            // A spend some markets survive and some don't, so the start date matters
+            double spend = SpendingOptimizer.Optimize(new OptimizationInputs { Template = Mixed(), SocialSecurity = Defaults, Paths = 60 }).Optimum.Recommended.SpendAtMidpoint;
+
+            var choice = SocialSecurityOptimizer.BestClaim(template, Defaults, spend, paths: 60);
+
+            Assert.Equal(60, choice.Paths);
+            Assert.Equal(SpendingOptimizer.ClaimingAges, choice.ByAge.Select(c => c.Age));
+            Assert.All(choice.ByAge, c => Assert.Equal(template.Birthdate.AddYears(c.Age), c.StartDate));
+            Assert.All(choice.ByAge, c => Assert.Equal(Defaults.MonthlyBenefitAtAge(c.Age), c.MonthlyBenefit));
+            // The best is the most survivors (ties: more money left, then earlier)
+            Assert.Equal(choice.ByAge.Max(c => c.Survivors), choice.Best.Survivors);
+            Assert.Contains(choice.Best, choice.ByAge);
+            // Each age's count is its own paths at that spend, with the order and conversion line it reports
+            var market = PathSimulator.SeededPaths(template, 60);
+            var simulator = new PathSimulator(template, choice.Best.StartDate, choice.Best.MonthlyBenefit,
+                choice.Best.WithdrawalStrategy, choice.Best.RothConversionTarget, market);
+            Assert.Equal(choice.Best.Survivors, Enumerable.Range(0, 60).Count(path => simulator.Survives(spend, path)));
+            Assert.Equal(choice.Best.Survivors / 60.0, choice.Best.SurvivalRate, 9);
+            // The current claim (at 62, the curve's 62 amount) on the same paths is the 62 row
+            Assert.Equal(choice.ByAge[0].Survivors, choice.Current.Survivors);
+            Assert.Equal(choice.Best.Survivors > choice.Current.Survivors, choice.Improves);
         }
 
         // --- Reporting progress and cancelling ---

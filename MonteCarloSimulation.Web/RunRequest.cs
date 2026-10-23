@@ -1,4 +1,5 @@
 using MonteCarloSimulation.Core;
+using MonteCarloSimulation.Optimizer;
 
 namespace MonteCarloSimulation.Web
 {
@@ -47,6 +48,52 @@ namespace MonteCarloSimulation.Web
             FirstPayment = IsDia ? AnnuityStartDate!.Value : RetirementDate,
             Basis = AnnuityTaxDeferred ? 0 : AnnuityInvestment,
             AnnualIncrease = AnnuityCola ? Annuity.ColaIncrease : 0
+        };
+
+        // The simulation /api/run runs: these inputs as the engine takes them (the app picks the order and conversion line)
+        public SimulationParameters ToParameters()
+        {
+            var assetMix = ToAssetMix();
+            return new SimulationParameters
+            {
+                Years = Years,
+                Iterations = Iterations,
+                Withdrawal = Withdrawal,
+                Birthdate = Birthdate,
+                RetirementDate = RetirementDate,
+                FilingStatus = FilingStatusInput.Of(this),
+                InitialTaxableBalance = InitialTaxableBalance,
+                InitialRothBasis = InitialRothBasis,
+                InitialRothUnrealizedGain = InitialRothUnrealizedGain,
+                InitialBrokerageBasis = InitialBrokerageBasis,
+                InitialBrokerageUnrealizedGain = InitialBrokerageUnrealizedGain,
+                Mean = assetMix.ExpectedReturn,
+                StdDev = assetMix.StdDev,
+                AssetMix = assetMix,
+                NewMoney = NewMoney,
+                YearNewMoney = YearNewMoney,
+                SocialSecurityStartDate = SocialSecurityStartDate,
+                SocialSecurityMonthlyAmount = SocialSecurityMonthlyAmount,
+                Annuity = ToAnnuity(),
+                AnnualStandardDeduction = AnnualStandardDeduction,
+                EnableRothConversions = EnableRothConversions,
+                ScenarioDescription = MixDescription()
+            };
+        }
+
+        // The age on the Retire On date, when a suggested annuity would be bought (as the SPIA rate takes it)
+        public double AgeAtRetirement => (RetirementDate.DayNumber - Birthdate.DayNumber) / 365.25;
+
+        // The Scenario runner's Optimize (/api/run/optimize): the Optimizer on these inputs, with the fewest simulated
+        // markets (SpendingOptimizer.PathChoices' last, 167). Its withdrawal and run count are solved for or unused, and
+        // the one Social Security claim becomes the curve through it (SocialSecurityCurve.FromClaim), so every claiming
+        // age 62-70 is tried. An owned annuity is simulated as income, and then none is bought (AnnuityPurchase).
+        public OptimizationInputs ToOptimizerInputs(AnnuityPurchaseOptions? purchase) => new()
+        {
+            Template = ToParameters(),
+            SocialSecurity = SocialSecurityCurve.FromClaim(Birthdate, SocialSecurityStartDate, SocialSecurityMonthlyAmount),
+            Paths = SpendingOptimizer.PathChoices[^1],
+            Purchase = IncludeAnnuity ? null : purchase
         };
 
         public Dictionary<string, string> Validate()

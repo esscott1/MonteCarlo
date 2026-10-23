@@ -18,18 +18,36 @@ namespace MonteCarloSimulation.Optimizer
     // A SPIA bought on the Retire On date with Tax Deferred money (a qualified annuity: no tax at purchase, every payment
     // ordinary income), in multiples of Step up to the whole Tax Deferred balance. MonthlyPer100k is the current best
     // payout per $100,000 for the household's age then, as of RateAsOf. ConsiderCola also weighs each size with the app's
-    // COLA (2% a year, starting 10% lower).
-    public sealed record AnnuityPurchaseOptions(double MonthlyPer100k, string RateAsOf, double Step = AnnuityPurchase.DefaultStep, bool ConsiderCola = false);
+    // COLA (2% a year, starting 10% lower); ConsiderAfterTax also weighs a non-qualified one bought with Brokerage and
+    // then Roth money (AnnuityPurchase).
+    public sealed record AnnuityPurchaseOptions(
+        double MonthlyPer100k, string RateAsOf, double Step = AnnuityPurchase.DefaultStep, bool ConsiderCola = false, bool ConsiderAfterTax = false);
 
-    // One purchase to weigh: a size, level or with the COLA
-    public sealed record AnnuityCandidate(double Amount, bool Cola);
+    // Where a purchase's money comes from: Tax Deferred (a qualified annuity) or after-tax money, Brokerage then Roth
+    // (a non-qualified one)
+    public enum AnnuityFunding { TaxDeferred, AfterTax }
+
+    // One purchase to weigh: a size, level or with the COLA, and how it's paid for
+    public sealed record AnnuityCandidate(double Amount, bool Cola, AnnuityFunding Funding = AnnuityFunding.TaxDeferred);
+
+    // What a purchase takes from each of the household's balances (as SimulationParameters holds them): BrokerageSaleTax
+    // is the estimated tax on the gains the Brokerage sale realizes, part of what it takes from Brokerage
+    public sealed record AnnuitySource(
+        AnnuityFunding Funding,
+        double FromTaxDeferred,
+        double FromBrokerageBasis,
+        double FromBrokerageGain,
+        double BrokerageSaleTax,
+        double FromRothBasis,
+        double FromRothGain);
 
     // What the search decided. Amount 0 means no purchase raised the spend (and MonthlyPayment is 0). SpendWithout and
     // SpendWith are the recommended midpoint (82.5%) annual spends without and with the purchase (equal with none);
     // MoneyLeftWithout and MoneyLeftWith the median after-tax money left at the end of the window, over every path,
     // each at its own recommended spend (a failed path counts as 0). AmountsConsidered is how many purchases were tried
-    // (each size once, or twice when COLAs were weighed too). MonthlyPayment is the first payment; AnnualIncrease the
-    // bought annuity's COLA (Annuity.ColaIncrease), 0 for a level one.
+    // (each size once, or twice when COLAs were weighed too, for each way of paying). MonthlyPayment is the first payment;
+    // AnnualIncrease the bought annuity's COLA (Annuity.ColaIncrease), 0 for a level one. Source says what the purchase
+    // took from each balance (null with none), so a page can show it and add it back.
     public sealed record AnnuityPurchaseDecision(
         double Amount,
         double MonthlyPayment,
@@ -40,7 +58,8 @@ namespace MonteCarloSimulation.Optimizer
         double MoneyLeftWithout,
         double MoneyLeftWith,
         int AmountsConsidered,
-        double AnnualIncrease = 0);
+        double AnnualIncrease = 0,
+        AnnuitySource? Source = null);
 
     // One Social Security claiming age: the most annual spending (today's dollars) that survives 85%, 82.5% and 80%
     // of the simulated market paths. TotalSocialSecurity is every benefit payment received from the start date to

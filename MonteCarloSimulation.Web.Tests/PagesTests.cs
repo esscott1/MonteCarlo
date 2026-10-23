@@ -52,6 +52,27 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(await GetAsync("/splash.html"), await GetAsync("/"));
         }
 
+        [Theory]
+        [InlineData("/")]
+        [InlineData("/index.html")]
+        [InlineData("/inputs.js")]
+        [InlineData("/app.js")]
+        [InlineData("/styles.css")]
+        [InlineData("/i18n/es.json")]
+        public async Task PageFiles_MustBeRevalidated_SoADeployNeverMixesOldAndNewScripts(string path)
+        {
+            var client = factory.CreateClient();
+            using var response = await client.GetAsync(path);
+
+            Assert.True(response.Headers.CacheControl?.NoCache, $"{path} has no Cache-Control: no-cache");
+
+            // Checking again costs a 304 when nothing changed
+            using var again = new HttpRequestMessage(HttpMethod.Get, path);
+            again.Headers.IfNoneMatch.Add(response.Headers.ETag!);
+            using var revalidated = await client.SendAsync(again);
+            Assert.Equal(System.Net.HttpStatusCode.NotModified, revalidated.StatusCode);
+        }
+
         [Fact]
         public async Task OptimalHtml_IsTheOptimizer_WithABackArrow_AndNoMenu()
         {
@@ -105,6 +126,9 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Matches(@"<input type=""checkbox"" name=""considerAnnuities"" checked data-requires=""annuity"" data-free-value=""true"">", annuity);
             Assert.Contains(@"<span class=""paid-badge"" data-feature=""annuity"" hidden></span>", annuity);
             Assert.Contains(@"id=""td-purchase-note"" hidden", Panel("panel-money"));
+            // An annuity bought with after-tax money comes out of Brokerage, then Roth: each says what it paid
+            Assert.Contains(@"id=""brokerage-purchase-note"" hidden", Panel("panel-money"));
+            Assert.Contains(@"id=""roth-purchase-note"" hidden", Panel("panel-money"));
 
             // The Optimizer finds the spend, so there's no withdrawal to enter; and there are no preset scenarios to pick
             Assert.DoesNotContain(@"name=""withdrawal""", html);
@@ -579,6 +603,39 @@ namespace MonteCarloSimulation.Web.Tests
 
             Assert.Contains($"const COLA_RATE = {MonteCarloSimulation.Core.Annuity.ColaIncrease.ToString(CultureInfo.InvariantCulture)};", script);
             Assert.Contains($"const COLA_FACTOR = {MonteCarloSimulation.Core.Annuity.ColaFirstYearFactor.ToString(CultureInfo.InvariantCulture)};", script);
+        }
+
+        // Optimize beside the Monthly Withdrawal, before Run: a plain button (not a submit) that streams the Optimizer's
+        // answer for these inputs from /api/run/optimize, read like the Optimal page's stream
+        [Fact]
+        public async Task ScenarioRunner_OffersOptimize_BesideTheWithdrawal()
+        {
+            string html = await GetAsync("/index.html");
+            string script = await GetAsync("/app.js");
+
+            Assert.Matches(@"</span>\s*<!--[^>]*-->\s*<button type=""button"" id=""optimize-run"" class=""secondary-button"" data-i18n=""runner.optimize""[^>]*>Optimize</button>\s*<button type=""submit"" data-i18n=""runner.submit"">Run</button>", html);
+            Assert.Contains("fetch('/api/run/optimize'", script);
+            Assert.Contains("await Inputs.readEvents(response", script);
+            Assert.Contains("await Inputs.readEvents(response", await GetAsync("/optimal.js"));
+            Assert.DoesNotContain("async function readEvents", await GetAsync("/optimal.js"));
+        }
+
+        // Optimize Social Security (Other Income, Plus): a button with the Plus badge under the Social Security fields,
+        // opening a flyout - its own form, outside the scenario's - with the Optimal page's 62/67/70 estimates
+        [Fact]
+        public async Task ScenarioRunner_OffersOptimizeSocialSecurity_InOtherIncome()
+        {
+            string html = await GetAsync("/index.html");
+            string script = await GetAsync("/app.js");
+            string income = Regex.Match(html, @"id=""panel-income""(.*?)(?=<div class=""tab-panel)", RegexOptions.Singleline).Groups[1].Value;
+
+            Assert.Matches(@"<button type=""button"" id=""optimize-ss""[^>]*data-i18n=""runner.optimizeSs"">Optimize Social Security</button>\s*<span class=""paid-badge"" data-feature=""optimizer-full"" hidden></span>", income);
+            string runForm = Regex.Match(html, @"<form id=""run-form"">(.*?)</form>", RegexOptions.Singleline).Groups[1].Value;
+            Assert.DoesNotContain("ss-flyout", runForm.Replace(@"aria-controls=""ss-flyout""", ""));
+            string flyout = Regex.Match(html, @"<form id=""ss-flyout""(.*?)</form>", RegexOptions.Singleline).Groups[1].Value;
+            Assert.All(new[] { "ssAt62", "ssAt67", "ssAt70" }, name => Assert.Contains($@"name=""{name}""", flyout));
+            Assert.Contains(@"data-i18n=""optimal.ssLegend""", flyout);
+            Assert.Contains("fetch('/api/run/optimize-social-security'", script);
         }
 
         [Fact]

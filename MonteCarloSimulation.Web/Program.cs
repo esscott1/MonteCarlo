@@ -86,7 +86,12 @@ var defaultFiles = new DefaultFilesOptions();
 defaultFiles.DefaultFileNames.Clear();
 defaultFiles.DefaultFileNames.Add("splash.html");
 app.UseDefaultFiles(defaultFiles);
-app.UseStaticFiles();
+// The pages' files aren't versioned, so a browser must check each one before reusing it (a 304 when unchanged): left to
+// guess, it can keep an old inputs.js beside a new app.js after a deploy, and the page breaks
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "no-cache"
+});
 app.UseRateLimiter();
 
 app.MapPost("/api/run", async (
@@ -106,33 +111,7 @@ app.MapPost("/api/run", async (
     if (locked.Count > 0) return FreeTier.Refused(locked);
     FreeTier.SplitAccounts(request, access, freeDefaults.CurrentValue);
 
-    var assetMix = request.ToAssetMix();
-    var parameters = new SimulationParameters
-    {
-        Years = request.Years,
-        Iterations = request.Iterations,
-        Withdrawal = request.Withdrawal,
-        Birthdate = request.Birthdate,
-        RetirementDate = request.RetirementDate,
-        FilingStatus = FilingStatusInput.Of(request),
-        InitialTaxableBalance = request.InitialTaxableBalance,
-        InitialRothBasis = request.InitialRothBasis,
-        InitialRothUnrealizedGain = request.InitialRothUnrealizedGain,
-        InitialBrokerageBasis = request.InitialBrokerageBasis,
-        InitialBrokerageUnrealizedGain = request.InitialBrokerageUnrealizedGain,
-        Mean = assetMix.ExpectedReturn,
-        StdDev = assetMix.StdDev,
-        AssetMix = assetMix,
-        NewMoney = request.NewMoney,
-        YearNewMoney = request.YearNewMoney,
-        SocialSecurityStartDate = request.SocialSecurityStartDate,
-        SocialSecurityMonthlyAmount = request.SocialSecurityMonthlyAmount,
-        Annuity = request.ToAnnuity(),
-        AnnualStandardDeduction = request.AnnualStandardDeduction,
-        EnableRothConversions = request.EnableRothConversions,
-        ScenarioDescription = request.MixDescription()
-    };
-
+    var parameters = request.ToParameters();
     var output = MonteCarloEngine.Run(parameters);
     return access.Can(Features.TaxDetail)
         ? Results.Ok(new RunResponse(parameters, output))
@@ -162,19 +141,63 @@ app.MapPost("/api/optimal", async (
     if (locked.Count > 0) return FreeTier.Refused(locked);
     FreeTier.SplitAccounts(request, access, freeDefaults.CurrentValue);
 
-    // The Optimizer also weighs buying a SPIA with Tax Deferred money, at today's rate: for a visitor with the annuity
-    // feature unless they untick "Consider buying an annuity", and for the Free teaser (a man's rate) while a paid tier
-    // offers annuities, so it can say how much one might add. Each size is weighed with the app's COLA too, the same
-    // way: with the annuity-cola feature, or for the teaser while a paid tier offers it.
-    bool teaser = !access.Can(Features.OptimizerFull);
-    bool Weighs(string feature) => access.Can(feature) || (teaser && access.Offers.Any(offer => offer.Features.Contains(feature)));
-    bool weighPurchase = access.Can(Features.Annuity) ? request.ConsiderAnnuities : Weighs(Features.Annuity);
-    var purchase = weighPurchase
-        ? request.PurchaseOptions(await spiaIndex.CurrentAsync(context.RequestAborted),
-            female: request.AnnuitantIsFemale && access.Can(Features.AnnuityGender),
-            cola: Weighs(Features.AnnuityCola))
-        : null;
-    return new OptimalStream(request.ToInputs(purchase), jsonOptions.Value.SerializerOptions, teaser);
+    // The Optimizer also weighs buying an annuity (OptimizerPurchases), unless the visitor unticked "Consider buying an annuity"
+    var purchase = await OptimizerPurchases.ForAsync(access, request.ConsiderAnnuities, request.AgeAtRetirement,
+        request.AnnuitantIsFemale, spiaIndex, context.RequestAborted);
+    return new OptimalStream(request.ToInputs(purchase), jsonOptions.Value.SerializerOptions, teaser: !access.Can(Features.OptimizerFull));
+});
+
+// The Scenario runner's Optimize: the Optimizer on the runner's own inputs (RunRequest.ToOptimizerInputs: 167 markets,
+// every claiming age through the runner's Social Security claim, no purchase when it already owns an annuity), streamed
+// like /api/optimal - the full result for optimizer-full, else the teaser. Checked like /api/run first.
+app.MapPost("/api/run/optimize", async (
+    RunRequest request,
+    HttpContext context,
+    FeatureAccess features,
+    SpiaPayoutIndex spiaIndex,
+    IOptionsMonitor<FreeDefaultsOptions> freeDefaults,
+    IOptions<JsonOptions> jsonOptions) =>
+{
+    var validationErrors = request.Validate();
+    if (validationErrors.Count > 0)
+        return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
+
+    var access = await features.ForAsync(context);
+    var locked = FreeTier.LockedInputs(request, access, freeDefaults.CurrentValue);
+    foreach (var (key, message) in FreeTier.LockedAnnuity(request, access)) locked[key] = message;
+    if (locked.Count > 0) return FreeTier.Refused(locked);
+    FreeTier.SplitAccounts(request, access, freeDefaults.CurrentValue);
+
+    // The runner asks for a man's rate (its gender choice is hidden), as its suggested SPIA rate does
+    var purchase = request.IncludeAnnuity
+        ? null
+        : await OptimizerPurchases.ForAsync(access, considerAnnuities: true, request.AgeAtRetirement, female: false, spiaIndex, context.RequestAborted);
+    return new OptimalStream(request.ToOptimizerInputs(purchase), jsonOptions.Value.SerializerOptions, teaser: !access.Can(Features.OptimizerFull));
+});
+
+// The Scenario runner's Optimize Social Security: with the runner's spend and every other input held, the claiming age
+// (each birthday 62-70, on the flyout's 62/67/70 estimates) that lets the most of 167 simulated markets survive, and how
+// the runner's own claim does on the same markets (SocialSecurityOptimizer). Plus (optimizer-full). Fast, so one answer.
+app.MapPost("/api/run/optimize-social-security", async (
+    SocialSecurityRequest request,
+    HttpContext context,
+    FeatureAccess features,
+    IOptionsMonitor<FreeDefaultsOptions> freeDefaults) =>
+{
+    var validationErrors = request.Validate();
+    foreach (var (key, message) in request.ValidateEstimates()) validationErrors[key] = message;
+    if (validationErrors.Count > 0)
+        return Results.ValidationProblem(validationErrors.ToDictionary(e => e.Key, e => new[] { e.Value }));
+
+    var access = await features.ForAsync(context);
+    var locked = FreeTier.LockedSocialSecurityOptimizer(access);
+    foreach (var (key, message) in FreeTier.LockedInputs(request, access, freeDefaults.CurrentValue)) locked[key] = message;
+    foreach (var (key, message) in FreeTier.LockedAnnuity(request, access)) locked[key] = message;
+    if (locked.Count > 0) return FreeTier.Refused(locked);
+    FreeTier.SplitAccounts(request, access, freeDefaults.CurrentValue);
+
+    var choice = await Task.Run(() => request.BestClaim(context.RequestAborted), context.RequestAborted);
+    return Results.Ok(choice);
 });
 
 // Checks run cheapest-first: shape, then passphrase, and only then the paid agent call.
