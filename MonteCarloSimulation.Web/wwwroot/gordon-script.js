@@ -7,7 +7,9 @@
 // optimize }: the actions are taken after the first lead messages (the reply to the visitor's answer), before the rest;
 // run runs the plan, optimize runs the page's Optimize (which then runs it). engine.optimized(detail) explains what
 // Optimize decided, and engine.result(digest) the run that follows either.
-// A message is { key, values } (text from t(), values already formatted and escaped) or { kind: 'summary', lines }.
+// A message is { key, values } (text from t(), values already formatted and escaped) or a bulleted list,
+// { kind: 'summary', lines, lead, after } (lead and after: keys of a line before and after the bullets, both optional).
+// A turn with quiet: true says nothing more until its run's result, which comes as one message.
 window.GordonScript = (() => {
     const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
     const money = (value) => usd.format(value);
@@ -109,6 +111,8 @@ window.GordonScript = (() => {
         let backTo = null;       // a step changed from the summary goes back to it
         let history = [];
         let lastRun = 'run';     // what the last run came from: 'run', 'optimize' or 'teaser' (a Free visitor's Optimize)
+        let reporting = false;   // the example: quiet until its run is done, then one bulleted report
+        let optimum = null;      // what the example's Optimize decided, for that report
         const answers = {};
 
         const ORDER = ['birth', 'retire', 'filing', 'taxDeferred', 'roth', 'brokerage', 'inheritance', 'ssAmount', 'ssStart', 'mix', 'spending', 'confirm'];
@@ -406,6 +410,8 @@ window.GordonScript = (() => {
             step = 'intro';
             backTo = null;
             history = [];
+            reporting = false;
+            optimum = null;
             Object.keys(answers).forEach((key) => delete answers[key]);
             return turn('intro');
         }
@@ -442,6 +448,12 @@ window.GordonScript = (() => {
         // What Optimize put into the form, before the run it starts (detail: app.js's note - kind 'optimized', with the
         // spend, the Social Security age and any annuity bought, or 'optimizedTeaser', a Free visitor's range)
         function optimized(detail) {
+            // The example says nothing until its run is done, then reports Optimize's answer with it
+            if (reporting) {
+                optimum = detail;
+                if (detail.kind === 'optimizedTeaser') lastRun = 'teaser';
+                return { say: [], choices: [], actions: [] };
+            }
             if (detail.kind === 'optimizedTeaser') {
                 lastRun = 'teaser';
                 return { say: [say('gordon.optimized.teaser', { low: money(detail.low), high: money(detail.high) })], choices: [], actions: [] };
@@ -457,9 +469,46 @@ window.GordonScript = (() => {
             return { say: lines, choices: [], actions: [] };
         }
 
+        // The example's report, in one message: what Optimize decided and what the run shows, as bullets, then where to
+        // see the rest
+        function report(digest) {
+            const about = (value) => money(Math.round(value / 10000) * 10000);
+            const o = optimum;
+            const lines = [];
+            if (o?.kind === 'optimized') {
+                lines.push(say('gordon.report.spend', { amount: money(o.withdrawalMonthly) }));
+                lines.push(say('gordon.report.ss', { age: o.recommendedAge }));
+                const a = o.annuity;
+                if (a) {
+                    lines.push(say(a.taxDeferred ? 'gordon.report.annuity' : 'gordon.report.annuityAfterTax', {
+                        amount: money(a.investment), payment: money(a.monthlyPayment), cola: a.cola ? t('gordon.optimized.cola') : '',
+                    }));
+                }
+            } else if (o?.kind === 'optimizedTeaser') {
+                lines.push(say('gordon.report.teaser', { low: money(o.low), high: money(o.high) }));
+            }
+            lines.push(digest.survived === digest.total
+                ? say('gordon.report.allSurvived', { total: digest.total, years: digest.years })
+                : say('gordon.report.survival', { survived: digest.survived, total: digest.total, years: digest.years, rate: Math.round(digest.rate * 100) }));
+            lines.push(digest.medianOutYear
+                ? say('gordon.report.typicalRunsOut', { year: digest.medianOutYear, age: digest.medianOutAge })
+                : say('gordon.report.typical', { amount: about(digest.median), year: digest.endYear, age: digest.endAge }));
+            lines.push(digest.lowerOutYear
+                ? say('gordon.report.weakestRunsOut', { year: digest.lowerOutYear, age: digest.lowerOutAge })
+                : say('gordon.report.weakestHolds', { amount: about(digest.lower), year: digest.endYear }));
+            return { kind: 'summary', lead: 'gordon.report.lead', lines, after: 'gordon.report.seePage' };
+        }
+
         // What a finished run means, in a few sentences (digest: gordon.js's reading of the results)
         function result(digest) {
             step = 'results';
+            if (reporting) {
+                reporting = false;
+                const message = digest.ok ? report(digest)
+                    : digest.message ? say('gordon.result.problem', { message: digest.message }) : say('gordon.result.failed');
+                optimum = null;
+                return { say: [message], choices: STEPS.results.choices(), actions: [] };
+            }
             const lines = [];
             if (!digest.ok) {
                 lines.push(digest.message ? say('gordon.result.problem', { message: digest.message }) : say('gordon.result.failed'));
@@ -498,12 +547,15 @@ window.GordonScript = (() => {
             backTo = null;
             lastRun = 'optimize';
             step = 'running';
+            reporting = true;
+            // One message, after the inputs are filled (lead 0: the actions come first), then quiet until the report
             return {
-                say: [say('gordon.intro.example'), { kind: 'summary', lines: summaryLines }, say('gordon.optimizing')],
-                lead: 1,
+                say: [{ kind: 'summary', lead: 'gordon.intro.example', lines: summaryLines }],
+                lead: 0,
                 actions,
                 choices: [],
                 optimize: true,
+                quiet: true,
             };
         }
 

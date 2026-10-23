@@ -2294,8 +2294,19 @@ body.translations-page {
     padding-left: 1.6rem;
 }
 
-.gordon-summary li + li {
+.gordon-summary li + li,
+.gordon-list li + li {
     margin-top: 0.2rem;
+}
+
+/* A message with a line before and after its bullets (the example's household and its report) */
+.gordon-message > p {
+    margin: 0;
+}
+
+.gordon-list {
+    margin: 0.35rem 0;
+    padding-left: 1.2rem;
 }
 
 .gordon-typing {

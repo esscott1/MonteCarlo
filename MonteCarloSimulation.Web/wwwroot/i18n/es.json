@@ -797,7 +797,7 @@
   "gordon.send": "Enviar",
   "gordon.intro.hello": "Hola, soy <strong>Gordon</strong>. Prepararé su plan de jubilación con unas pocas preguntas y llenaré los datos a medida que avancemos.",
   "gordon.intro.how": "Responda con sus propias palabras o toque un botón. Diga <em>atrás</em> para cambiar su última respuesta, o <em>saltar</em> para dejar lo que ya está en el formulario.",
-  "gordon.intro.example": "Este es el hogar de ejemplo que usaré; observe cómo se llena el formulario:",
+  "gordon.intro.example": "Este es el hogar de ejemplo que llené en el formulario:",
   "gordon.choice.start": "Empecemos",
   "gordon.choice.example": "Mostrarme un ejemplo",
   "gordon.ask.birth": "Primero, ¿cuándo nació? Basta con el mes y el año.",
@@ -919,5 +919,18 @@
   "gordon.optimized.cola": ", con un aumento del 2% cada enero",
   "gordon.optimized.teaser": "Alrededor de {low}–{high} al mes alcanza en el 82.5% de los mercados simulados, así que fijé su gasto en {low}. Plus encuentra el monto exacto y la mejor edad para el Seguro Social.",
   "gordon.tip.optimized": "Esos son los {amount} al mes del Optimizador, elegidos con 167 mercados. Esta prueba usó 99 nuevos, así que su porcentaje puede diferir del 82.5% en varios puntos hacia arriba o hacia abajo.",
-  "gordon.tip.teaser": "Ese era el extremo bajo del rango. Plus encuentra el gasto exacto y la mejor edad para el Seguro Social."
+  "gordon.tip.teaser": "Ese era el extremo bajo del rango. Plus encuentra el gasto exacto y la mejor edad para el Seguro Social.",
+  "gordon.report.lead": "Esto es lo que muestra el ejemplo:",
+  "gordon.report.spend": "Gasto: <strong>{amount} al mes</strong>, lo máximo que alcanza en alrededor del 82.5% de los mercados simulados",
+  "gordon.report.ss": "Seguro Social: empezar a los {age}",
+  "gordon.report.annuity": "Anualidad: una compra de {amount} con dinero con impuestos diferidos, que paga {payment} al mes{cola}",
+  "gordon.report.annuityAfterTax": "Anualidad: una compra de {amount} con dinero de corretaje y Roth, que paga {payment} al mes{cola}",
+  "gordon.report.teaser": "Gasto: <strong>{low} al mes</strong>, el extremo bajo del rango de {low}–{high} que alcanza en el 82.5% de los mercados (Plus encuentra el monto exacto y la mejor edad para el Seguro Social)",
+  "gordon.report.allSurvived": "Supervivencia: el dinero alcanzó los {years} años en los {total} mercados simulados",
+  "gordon.report.survival": "Supervivencia: el dinero alcanzó los {years} años en {survived} de {total} mercados simulados ({rate}%)",
+  "gordon.report.typical": "Mercado típico: quedan unos {amount} en {year}, a los {age} años (dólares futuros)",
+  "gordon.report.typicalRunsOut": "Mercado típico: el dinero se acaba hacia {year}, a los {age} años aproximadamente",
+  "gordon.report.weakestRunsOut": "10% de mercados más débiles: el dinero se acaba hacia {year}, a los {age} años aproximadamente",
+  "gordon.report.weakestHolds": "10% de mercados más débiles: todavía quedan unos {amount} en {year}",
+  "gordon.report.seePage": "Vea los resultados completos en la página, debajo de los datos."
 }

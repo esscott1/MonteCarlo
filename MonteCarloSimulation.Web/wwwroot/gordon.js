@@ -202,6 +202,7 @@ window.Gordon = (() => {
     let busy = false;
     let awaitingRun = false;
     let awaitingOptimize = false;
+    let quietRun = false;      // the example's run: only "typing" dots until its one report
     let progress = null;       // Optimize's { completed, total } while it works, shown as a live message
     let session = 0;           // a restart or a close ends what was playing
     let playing = Promise.resolve();
@@ -217,7 +218,13 @@ window.Gordon = (() => {
     function entryHtml(entry) {
         if (entry.who === 'visitor') return `<div class="gordon-message visitor">${escapeHtml(entry.text)}</div>`;
         const m = entry.message;
-        if (m.kind === 'summary') return `<ul class="gordon-message gordon-summary">${m.lines.map((line) => `<li>${renderText(line)}</li>`).join('')}</ul>`;
+        if (m.kind === 'summary') {
+            const bullets = m.lines.map((line) => `<li>${renderText(line)}</li>`).join('');
+            if (!m.lead && !m.after) return `<ul class="gordon-message gordon-summary">${bullets}</ul>`;
+            // One message: its lead line, the bullets, and a closing line
+            return `<div class="gordon-message">${m.lead ? `<p>${renderText({ key: m.lead })}</p>` : ''}`
+                + `<ul class="gordon-list">${bullets}</ul>${m.after ? `<p>${renderText({ key: m.after })}</p>` : ''}</div>`;
+        }
         return `<div class="gordon-message">${renderText(m)}</div>`;
     }
 
@@ -257,10 +264,11 @@ window.Gordon = (() => {
         renderChoices();
     }
 
-    // Optimize's progress, one live message at the end of the conversation while it works
+    // Optimize's progress, one live message at the end of the conversation while it works; for the example's quiet run,
+    // "typing" dots until the run is done
     function renderProgress() {
         let line = log.querySelector('.gordon-progress');
-        if (!awaitingOptimize || !progress) {
+        if (quietRun ? !awaitingRun : !awaitingOptimize || !progress) {
             line?.remove();
             return;
         }
@@ -269,9 +277,17 @@ window.Gordon = (() => {
             line.className = 'gordon-message gordon-progress';
             log.appendChild(line);
         }
-        line.textContent = progress.total > 0
-            ? t('gordon.optimizing.progress', { completed: progress.completed, total: progress.total })
-            : t('gordon.optimizing.start');
+        if (quietRun) {
+            if (!line.classList.contains('gordon-typing')) {
+                line.classList.add('gordon-typing');
+                line.setAttribute('aria-hidden', 'true');
+                line.innerHTML = '<span></span><span></span><span></span>';
+            }
+        } else {
+            line.textContent = progress.total > 0
+                ? t('gordon.optimizing.progress', { completed: progress.completed, total: progress.total })
+                : t('gordon.optimizing.start');
+        }
         scrollLog();
     }
 
@@ -320,6 +336,8 @@ window.Gordon = (() => {
             }
             awaitingRun = true;
             awaitingOptimize = !!next.optimize;
+            quietRun = !!next.quiet;
+            renderProgress();
             page.apply({ name: next.optimize ? 'optimize' : 'run' });
             return;
         }
@@ -341,6 +359,7 @@ window.Gordon = (() => {
         session++;
         awaitingRun = false;
         awaitingOptimize = false;
+        quietRun = false;
         progress = null;
         entries = [];
         log.innerHTML = '';
@@ -406,6 +425,7 @@ window.Gordon = (() => {
         if (!awaitingRun) return;
         awaitingRun = false;
         awaitingOptimize = false;
+        quietRun = false;
         progress = null;
         renderProgress();
         enqueue(engine.result(digest(e.detail)));

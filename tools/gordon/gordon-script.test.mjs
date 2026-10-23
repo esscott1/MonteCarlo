@@ -228,10 +228,12 @@ test('"Show me an example" lists the household as bullets, fills every input at 
     page.play(engine.start());
     const turn = page.play(engine.reply({ choice: 'example' }));
 
-    // One turn: the lead, the list (read after the inputs are filled), and Optimize - no questions
-    assert.deepEqual(keys(turn), ['gordon.intro.example', 'summary', 'gordon.optimizing']);
-    assert.equal(turn.lead, 1);
+    // One message - its lead and the list, read after the inputs are filled - then Optimize, quietly: no questions
+    assert.deepEqual(keys(turn), ['summary']);
+    assert.equal(turn.say[0].lead, 'gordon.intro.example');
+    assert.equal(turn.lead, 0);
     assert.equal(turn.optimize, true);
+    assert.equal(turn.quiet, true);
     assert.equal(engine.step, 'running');
     assert.deepEqual(page.actions.map((a) => a.name), [
         'setBirthdate', 'setRetirementDate', 'setHorizon', 'setRuns', 'setFilingStatus', 'setTaxDeferred', 'setRoth',
@@ -241,26 +243,55 @@ test('"Show me an example" lists the household as bullets, fills every input at 
     assert.equal(page.state.taxDeferred, 900000);
     assert.equal(page.state.socialSecurityStart, '2034-06-01');
 
-    const lines = plain(turn.say[1].lines()).map((line) => line.key);
+    const lines = plain(turn.say[0].lines()).map((line) => line.key);
     assert.ok(lines.includes('gordon.summary.married'));
     assert.ok(lines.includes('gordon.summary.optimize'));
 
-    // Then it explains Optimize's answer and the run like any conversation, and Change something still works
-    engine.optimized({ kind: 'optimized', withdrawalMonthly: 8997, recommendedAge: 67, annuity: null });
-    const result = engine.result({ ok: true, total: 99, survived: 80, rate: 80 / 99, years: 34, median: 1e6, lower: 0, endYear: '2062', endAge: 94, lowerOutYear: '2058', lowerOutAge: 90, monthly: 8997 });
-    assert.equal(keys(result)[3], 'gordon.tip.optimized');
+    // Nothing is said about Optimize's answer until the run is done; then one bulleted report pointing to the page
+    const quiet = plain(engine.optimized({ kind: 'optimized', withdrawalMonthly: 8997, recommendedAge: 67, annuity: { investment: 900000, monthlyPayment: 5229, taxDeferred: true, cola: true } }));
+    assert.deepEqual(quiet.say, []);
+    const result = plain(engine.result({ ok: true, total: 99, survived: 82, rate: 82 / 99, years: 34, median: 440000, lower: 0, endYear: '2062', endAge: 94, lowerOutYear: '2045', lowerOutAge: 77, monthly: 8997 }));
+    assert.equal(result.say.length, 1);
+    const report = result.say[0];
+    assert.equal(report.kind, 'summary');
+    assert.equal(report.lead, 'gordon.report.lead');
+    assert.equal(report.after, 'gordon.report.seePage');
+    assert.deepEqual(report.lines.map((line) => line.key), [
+        'gordon.report.spend', 'gordon.report.ss', 'gordon.report.annuity', 'gordon.report.survival', 'gordon.report.typical', 'gordon.report.weakestRunsOut',
+    ]);
+    assert.equal(report.lines[0].values.amount, '$8,997');
+    assert.equal(report.lines[2].values.cola, 'gordon.optimized.cola');
+    assert.deepEqual(result.choices.map((c) => c.value), ['details', 'change', 'restart']);
+
+    // Change something still works as after any conversation, and a later run reports in the usual sentences
     page.play(engine.reply({ choice: 'change' }));
     page.play(engine.reply({ choice: 'spending' }));
     page.play(engine.reply({ text: '8,000' }));
     assert.equal(engine.step, 'confirm');
+    engine.reply({ choice: 'run' });
+    const later = engine.result({ ok: true, total: 99, survived: 90, rate: 90 / 99, years: 34, median: 1e6, lower: 1e5, endYear: '2062', endAge: 94, lowerOutYear: null, lowerOutAge: null, monthly: 8000 });
+    assert.deepEqual(keys(later), ['gordon.result.survived', 'gordon.result.median', 'gordon.result.lowerHolds', 'gordon.tip.more']);
 });
 
-test('a Free visitor\'s example leaves out the inheritance', () => {
+test('a Free visitor\'s example leaves out the inheritance, and reports the teaser range', () => {
     const page = fakePage({ plus: false });
     const engine = create(page);
     page.play(engine.start());
     page.play(engine.reply({ text: 'show me an example' }));
     assert.ok(!page.actions.some((a) => a.name === 'setInheritance'));
+
+    assert.deepEqual(plain(engine.optimized({ kind: 'optimizedTeaser', low: 7000, high: 7500 })).say, []);
+    const report = plain(engine.result({ ok: true, total: 99, survived: 81, rate: 81 / 99, years: 34, median: 2.06e6, lower: 0, endYear: '2062', endAge: 94, lowerOutYear: '2054', lowerOutAge: 86, monthly: 7000 })).say[0];
+    assert.deepEqual(report.lines.map((line) => line.key), ['gordon.report.teaser', 'gordon.report.survival', 'gordon.report.typical', 'gordon.report.weakestRunsOut']);
+    assert.equal(report.lines[0].values.low, '$7,000');
+});
+
+test('when the example\'s run can\'t start, the one message says why', () => {
+    const engine = create(fakePage());
+    engine.start();
+    engine.reply({ choice: 'example' });
+    const failed = plain(engine.result({ ok: false, message: 'Allocations must total 100%.' }));
+    assert.deepEqual(failed.say.map((m) => m.key), ['gordon.result.problem']);
 });
 
 test('the summary reads the form when it\'s shown, so it includes the last answer', () => {
