@@ -733,7 +733,7 @@ namespace MonteCarloSimulation.Web.Tests
             // the Optimizer's own gain, rounded down to $100 - and nothing else about it
             var withPurchase = SpendingOptimizer.Optimize(expected.ToInputs(await TestSpiaRates.PurchaseFor(app, expected))).Optimum;
             var expectedTeaser = OptimalTeaserEvent.For(withPurchase);
-            Assert.Equal(SpendingOptimizer.ClaimingAges.Count * 3 + 1, events[0].GetProperty("totalSteps").GetInt32());
+            Assert.Equal(SpendingOptimizer.ClaimingAges.Count * 5 + 1, events[0].GetProperty("totalSteps").GetInt32());
             Assert.NotNull(expectedTeaser.AnnuityGainMonthly);
             Assert.Equal(expectedTeaser.AnnuityGainMonthly!.Value, events[^2].GetProperty("annuityGainMonthly").GetDouble());
             Assert.Equal(teaser.MonthlyLow, expectedTeaser.MonthlyLow);
@@ -757,6 +757,38 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(JsonSerializer.Serialize(SpendingOptimizer.Optimize(request.ToInputs(purchase)).Optimum,
                     app.Services.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions),
                 events[^2].GetProperty("optimum").GetRawText());
+        }
+
+        // The Scenario runner's Optimize: a Free visitor gets the teaser too (its range), and locked inputs are refused first
+        [Fact]
+        public async Task AFreeVisitorsRunnerOptimize_Streams_ATeaser_AndRefusesLockedInputs()
+        {
+            using var app = App();
+
+            var events = await EventsAsync(await PostAsync(app, "/api/run/optimize", FreeRunRequest()));
+
+            var types = events.Select(e => e.GetProperty("type").GetString()).ToList();
+            Assert.Equal(new[] { "teaser", "done" }, types.TakeLast(2));
+            Assert.DoesNotContain("result", types);
+            Assert.Equal(167, events[0].GetProperty("paths").GetInt32());
+            Assert.True(events[^2].GetProperty("monthlyLow").GetDouble() > 0);
+
+            var locked = FreeRunRequest();
+            locked.EnableRothConversions = true;
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/run/optimize", locked), HttpStatusCode.Forbidden);
+            Assert.Equal("Roth conversions are a Plus feature.", errors.GetProperty("enableRothConversions")[0].GetString());
+        }
+
+        // The runner's Optimize Social Security is the full Optimizer's choice of claiming age: Plus
+        [Fact]
+        public async Task OptimizeSocialSecurity_IsPlus()
+        {
+            using var app = App();
+
+            // The runner's own inputs, valid as they stand (the three estimates left at 0)
+            var errors = await ErrorsAsync(await PostAsync(app, "/api/run/optimize-social-security", FreeRunRequest()), HttpStatusCode.Forbidden);
+
+            Assert.Equal("Optimizing Social Security is a Plus feature.", errors.GetProperty("socialSecurity")[0].GetString());
         }
 
         // --- The Optimizer's suggested annuity: Plus; the annuitant's gender for its rate, Pro ---
@@ -803,11 +835,12 @@ namespace MonteCarloSimulation.Web.Tests
 
             var decision = events[^2].GetProperty("optimum").GetProperty("purchase");
             Assert.Equal(JsonValueKind.Object, decision.ValueKind);
-            // $100,000 steps of $1,000,000 Tax Deferred, each level and with the COLA
-            Assert.Equal(20, decision.GetProperty("amountsConsidered").GetInt32());
+            // $100,000 steps of $1,000,000 Tax Deferred and of what Brokerage nets plus Roth, each level and with the COLA
+            var options = await TestSpiaRates.PurchaseFor(app, request);
+            Assert.Equal(20 + 2 * AnnuityPurchase.AfterTaxAmounts(request.ToInputs().Template, options!).Count, decision.GetProperty("amountsConsidered").GetInt32());
+            Assert.True(decision.GetProperty("amountsConsidered").GetInt32() > 20);
             Assert.False(string.IsNullOrEmpty(decision.GetProperty("rateAsOf").GetString()));
-            var purchase = await TestSpiaRates.PurchaseFor(app, request);
-            Assert.Equal(purchase!.MonthlyPer100k, decision.GetProperty("monthlyPer100k").GetDouble());
+            Assert.Equal(options!.MonthlyPer100k, decision.GetProperty("monthlyPer100k").GetDouble());
         }
 
         [Fact]

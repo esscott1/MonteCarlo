@@ -62,6 +62,8 @@
                 <span class="withdrawal-currency" aria-hidden="true">$</span>
                 <input type="text" id="withdrawal-input" inputmode="decimal" class="money-input" name="withdrawal" pattern="[0-9,]*\.?[0-9]*" value="8,000" aria-describedby="withdrawal-hint" required>
             </span>
+            <!-- The Optimizer on these inputs: it fills in the spend that survives about 82.5% of 167 simulated markets, then runs (app.js initOptimize) -->
+            <button type="button" id="optimize-run" class="secondary-button" data-i18n="runner.optimize" data-i18n-title="runner.optimizeTitle" title="Find the monthly spend that survives about 82.5% of 167 simulated markets, with the best Social Security age (and an annuity purchase, unless you already have one), then run it.">Optimize</button>
             <button type="submit" data-i18n="runner.submit">Run</button>
             <span id="run-status" class="run-status" aria-live="polite"></span>
             <button type="button" id="share-scenario" class="secondary-button share-scenario" data-i18n="runner.share.top" hidden>Share scenario</button>
@@ -203,6 +205,10 @@
                         <label><span data-i18n="runner.ssStart">Social Security Start</span>
                             <input type="date" name="socialSecurityStartDate" value="2031-07-07" data-i18n-title="runner.ssStartTitle" title="Date of your first payment; between ages 62 and 70. Defaults to your 62nd birthday." required>
                         </label>
+                        <p class="ss-optimize">
+                            <button type="button" id="optimize-ss" class="secondary-button" aria-haspopup="dialog" aria-expanded="false" aria-controls="ss-flyout" data-i18n="runner.optimizeSs">Optimize Social Security</button>
+                            <span class="paid-badge" data-feature="optimizer-full" hidden></span>
+                        </p>
                     </fieldset>
                     <fieldset class="subgroup">
                         <legend><span data-i18n="form.inheritance">Inheritance</span> <span class="paid-badge" data-feature="inheritance" hidden></span></legend>
@@ -283,6 +289,33 @@
             </section>
         </div>
         </details>
+    </form>
+
+    <!-- Optimize Social Security (Other Income, Plus): the Optimal page's three estimates, prefilled from the claim above;
+         Run tries each birthday 62-70 at this spend (app.js initOptimizeSocialSecurity). Its own form, so its fields never
+         join the scenario's, and placed under its button when it opens. -->
+    <form id="ss-flyout" class="flyout ss-flyout" role="dialog" aria-labelledby="ss-flyout-title" hidden>
+        <div class="flyout-header">
+            <h2 id="ss-flyout-title" class="flyout-title" data-i18n="runner.optimizeSs.title">Optimize Social Security</h2>
+            <button type="button" id="ss-close" class="flyout-close" aria-label="Close" data-i18n-aria-label="common.close">&times;</button>
+        </div>
+        <p class="subgroup-hint" data-i18n="runner.optimizeSs.intro">Tries each birthday from 62 to 70 at your Monthly Withdrawal, with everything else the same, and starts Social Security at the one that survives the most of 167 simulated markets.</p>
+        <fieldset class="subgroup">
+            <legend data-i18n="optimal.ssLegend">Social Security (monthly, today's $)</legend>
+            <label><span data-i18n="optimal.atAge62">At age 62</span>
+                <input type="text" inputmode="decimal" class="money-input" name="ssAt62" pattern="[0-9,]*\.?[0-9]*" required>
+            </label>
+            <label><span data-i18n="optimal.atAge67">At age 67</span>
+                <input type="text" inputmode="decimal" class="money-input" name="ssAt67" pattern="[0-9,]*\.?[0-9]*" required>
+            </label>
+            <label><span data-i18n="optimal.atAge70">At age 70</span>
+                <input type="text" inputmode="decimal" class="money-input" name="ssAt70" pattern="[0-9,]*\.?[0-9]*" required>
+            </label>
+        </fieldset>
+        <div class="flyout-actions">
+            <button type="button" id="ss-cancel" data-i18n="common.cancel">Cancel</button>
+            <button type="submit" data-i18n="runner.optimizeSs.run">Run</button>
+        </div>
     </form>
 
     <section id="results" aria-live="polite"></section>
