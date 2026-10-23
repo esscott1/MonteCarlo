@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (gitignored) and fill in. Everything else has a default in variables.tf.
+
+subscription_id = "00000000-0000-0000-0000-000000000000"
+
+# Sent to Anthropic with the Marketplace subscription; applying accepts the offer terms.
+claude_organization_name = "Your organization"
+claude_country_code      = "US"
+claude_industry          = "technology"
+
+# Your own object id, for calling the model from a local run: az ad signed-in-user show --query id -o tsv
+operator_principal_id = ""
