@@ -146,42 +146,41 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Equal(SiteModes.PlusAvailable, await ModeAsync(client));
         }
 
-        // Gordon, the Scenario runner's guided setup: off until switched on, behind the same token, for every visitor
+        // Gordon, the Scenario runner's guided setup: on until switched off, behind the same token, for every visitor
         // whatever their tier, and not part of the site's mode
         [Fact]
-        public async Task Gordon_StartsOff_AndItsSwitchShowsItToEveryVisitor()
+        public async Task Gordon_StartsOn_AndItsSwitchHidesItFromEveryVisitor()
         {
             using var app = App(TempSiteFlags.NewPath());
             var client = Client(app);
 
             var view = await JsonAsync(await client.SendAsync(Request(HttpMethod.Get, "/api/features", Token())));
-            Assert.False(view.GetProperty("gordon").GetProperty("on").GetBoolean());
+            Assert.True(view.GetProperty("gordon").GetProperty("on").GetBoolean());
             Assert.Equal(JsonValueKind.Null, view.GetProperty("gordon").GetProperty("changedAt").ValueKind);
-            Assert.False((await JsonAsync(await client.GetAsync("/api/me"))).GetProperty("gordon").GetBoolean());
-
-            using var refused = await FlipAsync(client, "gordon", true, "not-a-token");
-            Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
-
-            var flipped = await JsonAsync(await FlipAsync(client, "gordon", true, Token()));
-            Assert.True(flipped.GetProperty("gordon").GetProperty("on").GetBoolean());
-            Assert.NotEqual(JsonValueKind.Null, flipped.GetProperty("gordon").GetProperty("changedAt").ValueKind);
-
             var me = await JsonAsync(await client.GetAsync("/api/me"));
             Assert.True(me.GetProperty("gordon").GetBoolean());
             Assert.Equal(SiteModes.PlusAvailable, me.GetProperty("mode").GetString());
             Assert.Equal("Free", me.GetProperty("tier").GetString());
+
+            using var refused = await FlipAsync(client, "gordon", false, "not-a-token");
+            Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+
+            var flipped = await JsonAsync(await FlipAsync(client, "gordon", false, Token()));
+            Assert.False(flipped.GetProperty("gordon").GetProperty("on").GetBoolean());
+            Assert.NotEqual(JsonValueKind.Null, flipped.GetProperty("gordon").GetProperty("changedAt").ValueKind);
+            Assert.False((await JsonAsync(await client.GetAsync("/api/me"))).GetProperty("gordon").GetBoolean());
         }
 
         [Fact]
-        public async Task Gordon_StaysOn_AcrossARestart()
+        public async Task Gordon_StaysOff_AcrossARestart()
         {
             string path = TempSiteFlags.NewPath();
             using (var first = App(path))
-                await JsonAsync(await FlipAsync(Client(first), "gordon", true, Token()));
+                await JsonAsync(await FlipAsync(Client(first), "gordon", false, Token()));
 
             using var restarted = App(path);
 
-            Assert.True((await JsonAsync(await Client(restarted).GetAsync("/api/me"))).GetProperty("gordon").GetBoolean());
+            Assert.False((await JsonAsync(await Client(restarted).GetAsync("/api/me"))).GetProperty("gordon").GetBoolean());
         }
 
         [Theory]

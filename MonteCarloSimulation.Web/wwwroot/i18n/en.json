@@ -636,7 +636,7 @@
   "gordon.send": "Send",
   "gordon.intro.hello": "Hi, I'm <strong>Gordon</strong>. I'll set up your retirement plan with a few quick questions and fill in the inputs as we go.",
   "gordon.intro.how": "Answer in your own words or tap a button. Say <em>back</em> to change your last answer, or <em>skip</em> to keep what's on the form.",
-  "gordon.intro.example": "Here's an example household: a married couple retiring in early 2028. Watch the inputs fill in.",
+  "gordon.intro.example": "Here's the example household I'll use, filled in on the form as you watch:",
   "gordon.choice.start": "Let's start",
   "gordon.choice.example": "Show me an example",
   "gordon.ask.birth": "First, when were you born? Month and year is enough.",

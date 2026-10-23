@@ -797,7 +797,7 @@
   "gordon.send": "Enviar",
   "gordon.intro.hello": "Hola, soy <strong>Gordon</strong>. Prepararé su plan de jubilación con unas pocas preguntas y llenaré los datos a medida que avancemos.",
   "gordon.intro.how": "Responda con sus propias palabras o toque un botón. Diga <em>atrás</em> para cambiar su última respuesta, o <em>saltar</em> para dejar lo que ya está en el formulario.",
-  "gordon.intro.example": "Este es un hogar de ejemplo: una pareja casada que se jubila a principios de 2028. Observe cómo se llenan los datos.",
+  "gordon.intro.example": "Este es el hogar de ejemplo que usaré; observe cómo se llena el formulario:",
   "gordon.choice.start": "Empecemos",
   "gordon.choice.example": "Mostrarme un ejemplo",
   "gordon.ask.birth": "Primero, ¿cuándo nació? Basta con el mes y el año.",

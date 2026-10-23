@@ -88,7 +88,8 @@ window.GordonScript = (() => {
     const MIX_NAMES = { conservative: 'gordon.mix.conservative', balanced: 'gordon.mix.balanced', growth: 'gordon.mix.growth' };
     const PLAN_TO_AGE = 95;
 
-    // "Show me an example": a household whose answers type themselves in, so a demo never depends on typing
+    // "Show me an example": a household's answers, read by the same steps as typed ones, filled in all at once and then
+    // optimized, so a demo never depends on typing
     const EXAMPLE = {
         birth: { text: 'June 1967' },
         retire: { text: 'January 2028' },
@@ -101,14 +102,12 @@ window.GordonScript = (() => {
         ssStart: { choice: 67 },
         mix: { choice: 'balanced' },
         spending: { choice: 'optimize' },
-        confirm: { choice: 'run' },
     };
 
     function create(page) {
         let step = 'intro';
         let backTo = null;       // a step changed from the summary goes back to it
         let history = [];
-        let example = false;
         let lastRun = 'run';     // what the last run came from: 'run', 'optimize' or 'teaser' (a Free visitor's Optimize)
         const answers = {};
 
@@ -124,8 +123,8 @@ window.GordonScript = (() => {
                 ask: () => [say('gordon.intro.hello'), say('gordon.intro.how')],
                 choices: () => [choice('gordon.choice.start', 'start'), choice('gordon.choice.example', 'example')],
                 answer(input) {
-                    if (input.choice === 'example' || has(input.text ?? '', /example|ejemplo|demo|show/)) example = true;
-                    return { say: example ? [say('gordon.intro.example')] : [], next: 'birth' };
+                    if (input.choice === 'example' || has(input.text ?? '', /example|ejemplo|demo|show/)) return { example: true };
+                    return { next: 'birth' };
                 },
             },
             birth: {
@@ -407,7 +406,6 @@ window.GordonScript = (() => {
             step = 'intro';
             backTo = null;
             history = [];
-            example = false;
             Object.keys(answers).forEach((key) => delete answers[key]);
             return turn('intro');
         }
@@ -426,6 +424,7 @@ window.GordonScript = (() => {
             }
 
             const result = STEPS[step].answer(input);
+            if (result.example) return exampleTurn();
             if (result.restart) return start();
             if (result.retry) return { say: [say(result.retry)], choices: STEPS[step].choices ? STEPS[step].choices() : [], actions: [] };
 
@@ -486,16 +485,29 @@ window.GordonScript = (() => {
             return { say: lines, choices: STEPS.results.choices(), actions: [] };
         }
 
-        // The example household's answer at this step, while "Show me an example" plays
-        function exampleAnswer() {
-            if (!example) return null;
-            const answer = EXAMPLE[step];
-            if (!answer) return null;
-            if (step === 'confirm') example = false;
-            return answer;
+        // "Show me an example", in one turn: each of the example household's answers read by its step as if typed (so the
+        // actions are exactly a conversation's), all filled in, listed as the summary's bullets, then Optimize. Afterwards
+        // the results' Change something works as after any conversation.
+        function exampleTurn() {
+            const actions = [];
+            for (const name of ORDER) {
+                if (name === 'confirm' || !asks(name)) continue;
+                actions.push(...(STEPS[name].answer(EXAMPLE[name]).actions ?? []));
+            }
+            history = [];
+            backTo = null;
+            lastRun = 'optimize';
+            step = 'running';
+            return {
+                say: [say('gordon.intro.example'), { kind: 'summary', lines: summaryLines }, say('gordon.optimizing')],
+                lead: 1,
+                actions,
+                choices: [],
+                optimize: true,
+            };
         }
 
-        return { start, reply, optimized, result, exampleAnswer, get step() { return step; } };
+        return { start, reply, optimized, result, get step() { return step; } };
     }
 
     return { create, parseMoney, parseDate, parseAge };

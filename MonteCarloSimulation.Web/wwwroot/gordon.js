@@ -329,39 +329,12 @@ window.Gordon = (() => {
         setBusy(false);
         renderChoices();
         if (!panel.hidden && matchMedia('(pointer: fine)').matches) textBox.focus({ preventScroll: true });
-        playExample(mine);
     }
 
     function send(input, label) {
         if (busy || !engine) return;
         addEntry({ who: 'visitor', text: label });
         enqueue(engine.reply(input));
-    }
-
-    // "Show me an example": the example household's answer types itself in, or its button is pressed
-    async function playExample(mine) {
-        const answer = engine.exampleAnswer();
-        if (!answer) return;
-        await wait(700);
-        if (mine !== session || busy) return;
-        if (answer.text) {
-            for (const ch of answer.text) {
-                textBox.value += ch;
-                await wait(45);
-                if (mine !== session) return;
-            }
-            await wait(250);
-            if (mine !== session) return;
-            inputForm.requestSubmit();
-        } else {
-            const i = choices.findIndex((c) => c.value === answer.choice);
-            const button = choiceBox.querySelector(`[data-i="${i}"]`);
-            if (!button) return;
-            button.classList.add('pressed');
-            await wait(350);
-            if (mine !== session) return;
-            button.click();
-        }
     }
 
     function begin() {

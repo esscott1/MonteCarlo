@@ -222,22 +222,45 @@ test('a Free visitor isn\'t asked about an inheritance', () => {
     assert.equal(engine.step, 'ssAmount');
 });
 
-test('"Show me an example" answers every question itself, through to Optimize', () => {
+test('"Show me an example" lists the household as bullets, fills every input at once, then optimizes', () => {
     const page = fakePage();
     const engine = create(page);
-    let turn = page.play(engine.start());
-    turn = page.play(engine.reply({ choice: 'example' }));
-    for (let guard = 0; guard < 20 && !turn.run && !turn.optimize; guard++) {
-        const answer = engine.exampleAnswer();
-        assert.ok(answer, `no example answer at ${engine.step}`);
-        turn = page.play(engine.reply(plain(answer)));
-        assert.ok(!keys(turn).some((key) => key.startsWith('gordon.retry')), `the example's answer at ${engine.step} wasn't understood`);
-    }
-    // The demo shows Optimize finding the spend, so it lands near 82.5% by design
+    page.play(engine.start());
+    const turn = page.play(engine.reply({ choice: 'example' }));
+
+    // One turn: the lead, the list (read after the inputs are filled), and Optimize - no questions
+    assert.deepEqual(keys(turn), ['gordon.intro.example', 'summary', 'gordon.optimizing']);
+    assert.equal(turn.lead, 1);
     assert.equal(turn.optimize, true);
-    assert.equal(engine.exampleAnswer(), null);
-    assert.equal(page.state.filingStatus, 'married');
-    assert.ok(!page.actions.some((a) => a.name === 'setSpending'));
+    assert.equal(engine.step, 'running');
+    assert.deepEqual(page.actions.map((a) => a.name), [
+        'setBirthdate', 'setRetirementDate', 'setHorizon', 'setRuns', 'setFilingStatus', 'setTaxDeferred', 'setRoth',
+        'setBrokerage', 'setInheritance', 'setSocialSecurityAmount', 'setSocialSecurityStart', 'setMix',
+    ]);
+    assert.equal(page.state.birthdate, '1967-06-01');
+    assert.equal(page.state.taxDeferred, 900000);
+    assert.equal(page.state.socialSecurityStart, '2034-06-01');
+
+    const lines = plain(turn.say[1].lines()).map((line) => line.key);
+    assert.ok(lines.includes('gordon.summary.married'));
+    assert.ok(lines.includes('gordon.summary.optimize'));
+
+    // Then it explains Optimize's answer and the run like any conversation, and Change something still works
+    engine.optimized({ kind: 'optimized', withdrawalMonthly: 8997, recommendedAge: 67, annuity: null });
+    const result = engine.result({ ok: true, total: 99, survived: 80, rate: 80 / 99, years: 34, median: 1e6, lower: 0, endYear: '2062', endAge: 94, lowerOutYear: '2058', lowerOutAge: 90, monthly: 8997 });
+    assert.equal(keys(result)[3], 'gordon.tip.optimized');
+    page.play(engine.reply({ choice: 'change' }));
+    page.play(engine.reply({ choice: 'spending' }));
+    page.play(engine.reply({ text: '8,000' }));
+    assert.equal(engine.step, 'confirm');
+});
+
+test('a Free visitor\'s example leaves out the inheritance', () => {
+    const page = fakePage({ plus: false });
+    const engine = create(page);
+    page.play(engine.start());
+    page.play(engine.reply({ text: 'show me an example' }));
+    assert.ok(!page.actions.some((a) => a.name === 'setInheritance'));
 });
 
 test('the summary reads the form when it\'s shown, so it includes the last answer', () => {
