@@ -17,12 +17,13 @@ year tables mark an RMD year's Tax Deferred withdrawal with an **RMD** footnote 
 
 The Scenario runner's **Annuity** tab (Plus) adds an income annuity the household **already owns**: its cost isn't taken
 from the balances. It pays a monthly amount (default $2,600) from the Retire On date (a **SPIA**) or from a date at least
-two years out (a **DIA**), for the rest of the horizon. The amount is fixed in dollars unless a **COLA** (Pro) raises it
-1%, 2% or 3% each January. Like Social Security, the payments are income that reduces what the portfolio must supply,
+two years out (a **DIA**), for the rest of the horizon. The amount is fixed in dollars unless a **COLA** (Plus) raises it
+2% each January; a COLA annuity's first year pays 10% less than a level one, so ticking COLA lowers the monthly amount
+by 10% (and unticking puts it back). Like Social Security, the payments are income that reduces what the portfolio must supply,
 and any excess is saved to Brokerage. For taxes, an annuity in a tax-deferred account is all ordinary income. Otherwise
 the exclusion ratio applies: the investment amount (default $400,000) comes back tax-free, 1/312 of it in each of the
 first 312 payments (26 years), and after that every payment is ordinary income ([Annuity.cs](MonteCarloSimulation.Core/Annuity.cs)).
-Free visitors' Optimizer results say "Consider buying an annuity", with about how much it could add a month when that's $100 or more. The Optimizer (Plus, unless "Consider buying an annuity" is unticked on its Annuity tab) weighs **buying** an annuity: a SPIA bought at retirement with Tax Deferred money, in $100,000 steps up to the whole balance, at today's rate (below). It recommends the purchase that raises the 82.5% spend most, if any, and shows the spend and the typical money left at the end with and without it; **Run in Scenario runner** carries the purchase across (Tax Deferred lowered, the annuity on the Annuity tab). The simulation assumes the household lives the whole horizon, so large purchases often win; the money-left figures show what they cost heirs.
+Free visitors' Optimizer results say "Consider buying an annuity", with about how much it could add a month when that's $100 or more. The Optimizer (Plus, unless "Consider buying an annuity" is unticked on its Annuity tab) weighs **buying** an annuity: a SPIA bought at retirement with Tax Deferred money, in $100,000 steps up to the whole balance, at today's rate (below), each size both level and with the 2% COLA (starting 10% lower). It recommends the purchase that raises the 82.5% spend most, if any, and shows the spend and the typical money left at the end with and without it; **Run in Scenario runner** carries the purchase across (Tax Deferred lowered, the annuity on the Annuity tab). The simulation assumes the household lives the whole horizon, so large purchases often win; the money-left figures show what they cost heirs.
 
 For a SPIA, the tab suggests a current payment (**Use this rate** fills it in): the best payout per $100,000 for the age
 at the Retire On date, with its as-of date, from the [LifeAnnuities.us SPIA Payout Index](https://lifeannuities.us/rates/spia-payout-index/)
@@ -136,8 +137,8 @@ and Translations pages and the passphrase box stay in English.
 
 ## Free, Plus and Pro
 
-The app has tiers: **Free**, **Plus** ($3.99 a month) and **Pro** ($100 a month: everything in Plus, plus an annuity's
-yearly increase (COLA) and features still to be built). Until sign-in and payments are added, each paid tier is unlocked with a secret **access code**
+The app has tiers: **Free**, **Plus** ($3.99 a month) and **Pro** ($100 a month: everything in Plus, plus choosing the
+annuitant's gender for annuity rates, and features still to be built). Until sign-in and payments are added, each paid tier is unlocked with a secret **access code**
 instead.
 
 - **The site's mode.** Two switches on the Observe page's **Features** section (behind the change-request passphrase)
@@ -163,8 +164,7 @@ instead.
   locked inputs stay at the pages' defaults: Roth conversions off, no inheritance, no annuity, the standard deduction at
   `FreeDefaults:StandardDeduction` (`FreeDefaults:StandardDeductionMarried` when married), and the default returns, std. devs and correlation. The pages lock them, and
   `/api/run` and `/api/optimal` refuse anything else with a 403 naming each field
-  ([FreeTier.cs](MonteCarloSimulation.Web/FreeTier.cs)). A Plus visitor's annuity COLA stays off the same way. While Pro
-  isn't offered, the COLA checkbox is greyed with no badge.
+  ([FreeTier.cs](MonteCarloSimulation.Web/FreeTier.cs)). The annuity's COLA is Plus too.
 - **The Free Scenario runner.** A Free visitor enters one **total** for Roth and one for Brokerage instead of basis and
   gains. Each total is split by the `FreeDefaults` shares (Brokerage 50% gains / 50% basis, Roth 100% basis), on the
   page and again on the server, whatever split the request carries. Unlocking Plus shows the basis and gain fields

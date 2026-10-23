@@ -50,14 +50,14 @@ namespace MonteCarloSimulation.Web
             return errors;
         }
 
-        // The Scenario runner's Annuity tab: the annuity is Plus, its COLA Pro
+        // The Scenario runner's Annuity tab: the annuity and its COLA are Plus
         public static Dictionary<string, string> LockedAnnuity(RunRequest request, Access access)
         {
             var errors = new Dictionary<string, string>();
             if (!access.Can(Features.Annuity) && request.IncludeAnnuity)
                 errors["includeAnnuity"] = "Annuities are a Plus feature.";
             if (!access.Can(Features.AnnuityCola) && request.AnnuityCola)
-                errors["annuityCola"] = "An annuity COLA is a Pro feature.";
+                errors["annuityCola"] = "An annuity COLA is a Plus feature.";
             return errors;
         }
 

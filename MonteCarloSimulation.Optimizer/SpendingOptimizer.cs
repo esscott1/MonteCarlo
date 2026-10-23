@@ -32,62 +32,64 @@ namespace MonteCarloSimulation.Optimizer
 
         public static OptimizationResult Optimize(OptimizationInputs inputs) => Optimize(inputs, null, CancellationToken.None);
 
-        // How many screened purchase sizes get a full search.
+        // How many screened purchases get a full search: the top two, or with COLAs weighed, the best level SPIA and the
+        // best COLA one, so each kind is searched in full.
         internal const int PurchaseFinalists = 2;
 
-        // How many steps Optimize reports: 9 claiming ages for the plan without a purchase, and with purchase sizes to
-        // try, one for screening them and 9 for each finalist.
+        // How many steps Optimize reports: 9 claiming ages for the plan without a purchase, and with purchases to try,
+        // one for screening them and 9 for each finalist.
         public static int TotalSteps(OptimizationInputs inputs)
         {
-            int sizes = inputs.Purchase is { } options ? AnnuityPurchase.Amounts(inputs.Template, options).Count : 0;
-            return ClaimingAges.Count * (1 + Math.Min(PurchaseFinalists, sizes)) + (sizes > 0 ? 1 : 0);
+            int candidates = inputs.Purchase is { } options ? AnnuityPurchase.Candidates(inputs.Template, options).Count : 0;
+            return ClaimingAges.Count * (1 + Math.Min(PurchaseFinalists, candidates)) + (candidates > 0 ? 1 : 0);
         }
 
         // The same result, reporting as it goes: `listener` hears each finished step (from worker threads), and
         // cancelling the token stops the work, throwing OperationCanceledException.
         //
         // With purchase options, the plan without a purchase is searched first (exactly as without options), then every
-        // purchase size is screened at that plan's recommended spend - at each claiming age, with that age's order and
-        // conversion target, the sizes that let the most paths survive (then the most after-tax money left) - and the top
-        // PurchaseFinalists sizes are searched in full. The plan with the highest midpoint spend wins; a purchase is
-        // recommended only if it beats the plan without one.
+        // purchase (each size, level and, when COLAs are weighed, with one) is screened at that plan's recommended spend -
+        // at each claiming age, with that age's order and conversion target, the purchases that let the most paths
+        // survive (then the most after-tax money left) - and the PurchaseFinalists are searched in full. The plan with
+        // the highest midpoint spend wins; a purchase is recommended only if it beats the plan without one.
         public static OptimizationResult Optimize(OptimizationInputs inputs, OptimizationListener? listener, CancellationToken cancellationToken)
         {
             var template = inputs.Template;
             // The market's paths, drawn once for every spend, claiming age, candidate and purchase
             var paths = PathSimulator.SeededPaths(template, inputs.Paths);
             var options = inputs.Purchase;
-            var amounts = options is null ? [] : AnnuityPurchase.Amounts(template, options);
+            var candidates = options is null ? [] : AnnuityPurchase.Candidates(template, options);
             var progress = new Progress(listener, TotalSteps(inputs));
 
             try
             {
                 var without = Plan(inputs, template, paths, progress, cancellationToken);
-                if (options is null || amounts.Count == 0)
+                if (options is null || candidates.Count == 0)
                     return new OptimizationResult(without.Optimum, BenefitByAge(inputs.SocialSecurity), inputs.Paths);
 
-                var finalists = ScreenPurchases(inputs, options, amounts, without, paths, cancellationToken);
+                var finalists = ScreenPurchases(inputs, options, candidates, without, paths, cancellationToken);
                 progress.Done();
 
                 var best = without;
-                double bought = 0;
-                foreach (double amount in finalists)
+                AnnuityCandidate? bought = null;
+                foreach (var candidate in finalists)
                 {
-                    var with = Plan(inputs, AnnuityPurchase.Apply(template, options, amount), paths, progress, cancellationToken);
+                    var with = Plan(inputs, AnnuityPurchase.Apply(template, options, candidate.Amount, candidate.Cola), paths, progress, cancellationToken);
                     if (with.Optimum.Recommended.SpendAtMidpoint > best.Optimum.Recommended.SpendAtMidpoint)
-                        (best, bought) = (with, amount);
+                        (best, bought) = (with, candidate);
                 }
 
                 var decision = new AnnuityPurchaseDecision(
-                    bought,
-                    bought > 0 ? AnnuityPurchase.MonthlyPayment(options, bought) : 0,
+                    bought?.Amount ?? 0,
+                    bought is null ? 0 : AnnuityPurchase.MonthlyPayment(options, bought.Amount, bought.Cola),
                     options.MonthlyPer100k,
                     options.RateAsOf,
                     without.Optimum.Recommended.SpendAtMidpoint,
                     best.Optimum.Recommended.SpendAtMidpoint,
                     without.MoneyLeft,
                     best.MoneyLeft,
-                    amounts.Count);
+                    candidates.Count,
+                    bought is { Cola: true } ? Annuity.ColaIncrease : 0);
                 return new OptimizationResult(best.Optimum with { Purchase = decision }, BenefitByAge(inputs.SocialSecurity), inputs.Paths);
             }
             catch (AggregateException e) when (cancellationToken.IsCancellationRequested
@@ -135,24 +137,25 @@ namespace MonteCarloSimulation.Optimizer
             return OptimumFor(inputs, template, byAge, paths);
         }
 
-        // The purchase sizes worth a full search: each size at each claiming age (that age's order and conversion target
-        // in the plan without a purchase), every path run at that plan's recommended spend. Ranked by the most paths
-        // surviving at any one age, then the after-tax money left there.
-        private static IReadOnlyList<double> ScreenPurchases(
-            OptimizationInputs inputs, AnnuityPurchaseOptions options, IReadOnlyList<double> amounts, PlanResult without,
+        // The purchases worth a full search: each one at each claiming age (that age's order and conversion target in the
+        // plan without a purchase), every path run at that plan's recommended spend. Ranked by the most paths surviving at
+        // any one age, then the after-tax money left there; the top PurchaseFinalists, or with COLAs weighed the best of
+        // each kind, in rank order.
+        private static IReadOnlyList<AnnuityCandidate> ScreenPurchases(
+            OptimizationInputs inputs, AnnuityPurchaseOptions options, IReadOnlyList<AnnuityCandidate> candidates, PlanResult without,
             double[][] paths, CancellationToken cancellationToken)
         {
             double probe = without.Optimum.Recommended.SpendAtMidpoint;
             var ages = without.Optimum.ClaimingAges;
-            var scores = new (int Survivors, double AfterTaxLeft)[amounts.Count, ages.Count];
+            var scores = new (int Survivors, double AfterTaxLeft)[candidates.Count, ages.Count];
 
-            Parallel.For(0, amounts.Count * ages.Count,
+            Parallel.For(0, candidates.Count * ages.Count,
                 new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount },
                 k =>
                 {
                     int a = k / ages.Count, i = k % ages.Count;
                     var age = ages[i];
-                    var simulator = new PathSimulator(AnnuityPurchase.Apply(inputs.Template, options, amounts[a]),
+                    var simulator = new PathSimulator(AnnuityPurchase.Apply(inputs.Template, options, candidates[a].Amount, candidates[a].Cola),
                         age.StartDate, age.MonthlyBenefit, age.WithdrawalStrategy, age.RothConversionTarget, paths);
                     int survivors = 0;
                     double left = 0;
@@ -167,13 +170,15 @@ namespace MonteCarloSimulation.Optimizer
                     scores[a, i] = (survivors, left);
                 });
 
-            return Enumerable.Range(0, amounts.Count)
-                .Select(a => (Amount: amounts[a], Best: Enumerable.Range(0, ages.Count).Select(i => scores[a, i])
+            var ranked = Enumerable.Range(0, candidates.Count)
+                .Select(a => (Candidate: candidates[a], Best: Enumerable.Range(0, ages.Count).Select(i => scores[a, i])
                     .OrderByDescending(s => s.Survivors).ThenByDescending(s => s.AfterTaxLeft).First()))
                 .OrderByDescending(x => x.Best.Survivors).ThenByDescending(x => x.Best.AfterTaxLeft)
-                .Take(PurchaseFinalists)
-                .Select(x => x.Amount)
+                .Select(x => x.Candidate)
                 .ToList();
+            return options.ConsiderCola
+                ? ranked.GroupBy(c => c.Cola).Select(kind => kind.First()).ToList()
+                : ranked.Take(PurchaseFinalists).ToList();
         }
 
         // The recommendation from the claiming ages: the highest midpoint spend (ties go to the earlier age),

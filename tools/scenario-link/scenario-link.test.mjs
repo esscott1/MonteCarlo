@@ -15,7 +15,7 @@ const { encode, decode, featuresNeeded } = context.window.ScenarioLink;
 // Objects made in the script's context have their own prototypes, so compare them as plain data
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-const NO_ANNUITY = { includeAnnuity: false, annuityMonthlyAmount: 0, annuityInvestment: 0, annuityType: 'spia', annuityStartDate: null, annuityTaxDeferred: false, annuityCola: false, annuityColaRate: 0 };
+const NO_ANNUITY = { includeAnnuity: false, annuityMonthlyAmount: 0, annuityInvestment: 0, annuityType: 'spia', annuityStartDate: null, annuityTaxDeferred: false, annuityCola: false };
 
 // The Scenario runner's defaults, as its submit handler sends them
 const pageDefaults = {
@@ -38,7 +38,7 @@ const defaults = {
 // What a Free visitor's page sends with its defaults: no conversions or inheritance, the totals split by the Free shares
 const freeRequest = { ...pageDefaults, enableRothConversions: false, newMoney: 0, initialRothBasis: 20000, initialRothUnrealizedGain: 0, initialBrokerageBasis: 200000, initialBrokerageUnrealizedGain: 200000 };
 
-const withAnnuity = (annuity) => ({ ...pageDefaults, includeAnnuity: true, annuityMonthlyAmount: 2600, annuityInvestment: 400000, annuityType: 'spia', annuityStartDate: null, annuityTaxDeferred: false, annuityCola: false, annuityColaRate: 0.02, ...annuity });
+const withAnnuity = (annuity) => ({ ...pageDefaults, includeAnnuity: true, annuityMonthlyAmount: 2600, annuityInvestment: 400000, annuityType: 'spia', annuityStartDate: null, annuityTaxDeferred: false, annuityCola: false, ...annuity });
 
 // Rebuilds a hash from version 1's values, so a test can damage one
 const hashOf = (values) => `s=1.${btoa(values.join('~')).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')}`;
@@ -51,11 +51,19 @@ test('a request survives the round trip, with and without an annuity', () => {
         { ...pageDefaults, filingStatus: 'married', annualStandardDeduction: 32000, withdrawal: 8000.5 * 12, stockReturn: 0.0725, stockBondCorrelation: -0.25 },
         withAnnuity({}),
         withAnnuity({ annuityType: 'dia', annuityStartDate: '2029-03-15', annuityTaxDeferred: true }),
-        withAnnuity({ annuityCola: true, annuityColaRate: 0.03 }),
+        withAnnuity({ annuityCola: true }),
     ]) {
         assert.deepEqual(plain(decode(encode(request))), request);
         assert.deepEqual(plain(decode(`#${encode(request)}`)), request);
     }
+});
+
+test('the COLA has one rate: a link writes 2%, and an older link with 1% or 3% still opens, at 2%', () => {
+    const values = valuesOf(encode(withAnnuity({ annuityCola: true })));
+    assert.equal(values[34], '2');
+    const older = hashOf(values.map((v, i) => (i === 34 ? '3' : v)));
+    assert.deepEqual(plain(decode(older)), withAnnuity({ annuityCola: true }));
+    assert.equal(decode(hashOf(values.map((v, i) => (i === 34 ? 'x' : v)))), null);
 });
 
 test('a SPIA leaves out the start date it does not use', () => {

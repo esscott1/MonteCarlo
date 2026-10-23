@@ -17,9 +17,8 @@ namespace MonteCarloSimulation.Web.Tests
     {
         private const string PlusCode = "plus-test-code";
         private const string ProCode = "pro-test-code";
-        // appsettings.json gives Plus every feature but the annuity's COLA and annuitant's sex, which are Pro's
-        private static readonly string[] PlusFeatures =
-            Features.All.Where(f => f != Features.AnnuityCola && f != Features.AnnuityGender).ToArray();
+        // appsettings.json gives Plus every feature but choosing the annuitant's sex, which is Pro's
+        private static readonly string[] PlusFeatures = Features.All.Where(f => f != Features.AnnuityGender).ToArray();
 
         private static WebApplicationFactory<Program> App(
             bool tierPlus = true, bool tierPro = true, string plusCode = PlusCode, int? teaserYears = null) =>
@@ -462,7 +461,6 @@ namespace MonteCarloSimulation.Web.Tests
             request.AnnuityType = "dia";
             request.AnnuityStartDate = DateOnly.FromDateTime(DateTime.Today).AddYears(2).AddMonths(1);
             request.AnnuityCola = cola;
-            request.AnnuityColaRate = 0.02;
             return request;
         }
 
@@ -474,11 +472,11 @@ namespace MonteCarloSimulation.Web.Tests
             var errors = await ErrorsAsync(await PostAsync(app, "/api/run", WithAnnuity(FreeRunRequest(), cola: true)), HttpStatusCode.Forbidden);
 
             Assert.Equal("Annuities are a Plus feature.", errors.GetProperty("includeAnnuity")[0].GetString());
-            Assert.Equal("An annuity COLA is a Pro feature.", errors.GetProperty("annuityCola")[0].GetString());
+            Assert.Equal("An annuity COLA is a Plus feature.", errors.GetProperty("annuityCola")[0].GetString());
         }
 
         [Fact]
-        public async Task APlusVisitor_RunsAnAnnuity_AsIncome_ButNotItsCola()
+        public async Task APlusVisitor_RunsAnAnnuity_AsIncome_AndItsCola_At2Percent()
         {
             using var app = App();
             string cookie = await UnlockAsync(Client(app), "plus", PlusCode);
@@ -494,9 +492,13 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains(years, y => y.GetProperty("annuityPayments").GetInt32() == 12
                 && Math.Abs(y.GetProperty("annuityIncome").GetDouble() - 31_200) < 1e-6);
 
-            var errors = await ErrorsAsync(await PostAsync(app, "/api/run", WithAnnuity(FreeRunRequest(), cola: true), cookie), HttpStatusCode.Forbidden);
-            Assert.Equal("An annuity COLA is a Pro feature.", errors.GetProperty("annuityCola")[0].GetString());
-            Assert.False(errors.TryGetProperty("includeAnnuity", out _));
+            // The COLA is Plus too, at the app's one rate; the payment sent is the first year's (the page took its 10% off)
+            using var withCola = await PostAsync(app, "/api/run", WithAnnuity(FreeRunRequest(), cola: true), cookie);
+            Assert.Equal(HttpStatusCode.OK, withCola.StatusCode);
+            using var colaBody = JsonDocument.Parse(await withCola.Content.ReadAsStringAsync());
+            var colaAnnuity = colaBody.RootElement.GetProperty("parameters").GetProperty("annuity");
+            Assert.Equal(MonteCarloSimulation.Core.Annuity.ColaIncrease, colaAnnuity.GetProperty("annualIncrease").GetDouble());
+            Assert.Equal(2_600, colaAnnuity.GetProperty("monthlyPayment").GetDouble());
         }
 
         [Fact]
@@ -539,7 +541,6 @@ namespace MonteCarloSimulation.Web.Tests
         [InlineData("annuityMonthlyAmount")]
         [InlineData("annuityInvestment")]
         [InlineData("annuityType")]
-        [InlineData("annuityColaRate")]
         public async Task AnAnnuitysInputs_AreValidated(string field)
         {
             using var app = App();
@@ -550,7 +551,6 @@ namespace MonteCarloSimulation.Web.Tests
                 case "annuityMonthlyAmount": request.AnnuityMonthlyAmount = 0; break;
                 case "annuityInvestment": request.AnnuityInvestment = -1; break;
                 case "annuityType": request.AnnuityType = "variable"; break;
-                case "annuityColaRate": request.AnnuityColaRate = 0.05; break;
             }
 
             var errors = await ErrorsAsync(await PostAsync(app, "/api/run", request, cookie), HttpStatusCode.BadRequest);
@@ -803,7 +803,8 @@ namespace MonteCarloSimulation.Web.Tests
 
             var decision = events[^2].GetProperty("optimum").GetProperty("purchase");
             Assert.Equal(JsonValueKind.Object, decision.ValueKind);
-            Assert.Equal(10, decision.GetProperty("amountsConsidered").GetInt32()); // $100,000 steps of $1,000,000 Tax Deferred
+            // $100,000 steps of $1,000,000 Tax Deferred, each level and with the COLA
+            Assert.Equal(20, decision.GetProperty("amountsConsidered").GetInt32());
             Assert.False(string.IsNullOrEmpty(decision.GetProperty("rateAsOf").GetString()));
             var purchase = await TestSpiaRates.PurchaseFor(app, request);
             Assert.Equal(purchase!.MonthlyPer100k, decision.GetProperty("monthlyPer100k").GetDouble());

@@ -397,7 +397,7 @@ body.wide {
 }
 
 /* The Annuity tab. Its fields join the panel's grid: the fieldset around them is only there to disable them all while
-   "Include an annuity" is off, greying their labels too. The DIA start date and the COLA rate show only when chosen. */
+   "Include an annuity" is off, greying their labels too. The DIA start date shows only when chosen. */
 .annuity-details {
     display: contents;
 }
@@ -909,6 +909,18 @@ button[type="submit"]:hover {
 
 .summary-details[open] > summary .summary-caret::before {
     transform: rotate(90deg);
+}
+
+/* The second line: the average ending balance and return, under the headline's text */
+.summary-outcome {
+    display: block;
+    padding-left: 1.45em;
+    margin-top: 0.2rem;
+}
+
+/* A failed run's year table ends with what its last year still paid */
+.run-income-row td {
+    background: var(--page);
 }
 
 /* The details line up under the headline's text, past the caret */
@@ -1994,6 +2006,12 @@ input[type="checkbox"].locked[data-locked-tier="pro"] {
 }
 
 /* Share scenario, in the results summary (its twin sits beside Run) */
+/* The COLA's one rate, in small print beside its checkbox */
+.cola-rate {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
 .summary-share {
     margin: 0.6rem 0 0;
 }

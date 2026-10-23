@@ -98,6 +98,8 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Matches(@"name=""annuityTaxDeferred"" checked disabled", annuity);
             Assert.DoesNotContain("includeAnnuity", annuity);
             Assert.DoesNotContain("annuityCola", annuity);
+            // Whether what it bought has the app's COLA (it weighs each size with and without one): shown, never entered
+            Assert.Matches(@"<input type=""checkbox"" name=""boughtCola"" disabled> <span data-i18n=""runner.annuity.cola"">[^<]*</span> <small class=""cola-rate"" data-i18n=""runner.annuity.colaRateNote"">2% a year</small> <span class=""paid-badge"" data-feature=""annuity-cola"" hidden></span>", annuity);
             Assert.Equal(new[] { "annuity", "annuity-gender", "annuity-gender" }, Regex.Matches(annuity, @"data-requires=""([\w-]+)""").Select(m => m.Groups[1].Value));
             // "Consider buying an annuity" (Plus): ticked, and held ticked for Free, whose teaser always weighs one
             Assert.Matches(@"<input type=""checkbox"" name=""considerAnnuities"" checked data-requires=""annuity"" data-free-value=""true"">", annuity);
@@ -173,7 +175,7 @@ namespace MonteCarloSimulation.Web.Tests
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-money")));
             Assert.All(new[] { "socialSecurityMonthlyAmount", "socialSecurityStartDate", "annualStandardDeduction", "newMoney", "yearNewMoney" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-income")));
-            Assert.All(new[] { "includeAnnuity", "annuityMonthlyAmount", "annuityInvestment", "annuityType", "annuityStartDate", "annuityTaxDeferred", "annuityCola", "annuityColaRate", "annuitySex" },
+            Assert.All(new[] { "includeAnnuity", "annuityMonthlyAmount", "annuityInvestment", "annuityType", "annuityStartDate", "annuityTaxDeferred", "annuityCola", "annuitySex" },
                 name => Assert.Contains($@"name=""{name}""", Panel("panel-annuity")));
 
             // Asset Classes: each class's allocation (60/30/10), return and std. dev. (8/19, 4.5/4, 3.5/1),
@@ -488,14 +490,14 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Matches(@"<h2 id=""recommendation-title""[^>]*>.*?<span class=""paid-badge"" data-feature=""optimizer-full"" hidden></span></h2>", optimal);
             Assert.Matches(@"<legend><span data-i18n=""optimal.markets"">[^<]*</span> <span class=""paid-badge"" data-feature=""optimizer-full"" hidden></span></legend>", optimal);
             Assert.Contains("data-feature=\"tax-detail\"", await GetAsync("/app.js"));
-            // The annuity's badge beside "Include an annuity", the COLA's beside its checkbox
+            // The annuity's badge beside "Include an annuity", the COLA's beside its checkbox and its one rate in small print
             Assert.Matches(@"name=""includeAnnuity""[^>]*>\s*<span data-i18n=""runner.annuity.include"">[^<]*</span><sup class=""footnote"">.*?</sup>\s*<span class=""paid-badge"" data-feature=""annuity"" hidden></span>", runner);
-            Assert.Matches(@"name=""annuityCola""[^>]*>\s*<span data-i18n=""runner.annuity.cola"">[^<]*</span>\s*<span class=""paid-badge"" data-feature=""annuity-cola"" hidden></span>", runner);
+            Assert.Matches(@"name=""annuityCola""[^>]*>\s*<span data-i18n=""runner.annuity.cola"">[^<]*</span>\s*<small class=""cola-rate"" data-i18n=""runner.annuity.colaRateNote"">2% a year</small>\s*<span class=""paid-badge"" data-feature=""annuity-cola"" hidden></span>", runner);
             Assert.Matches(@"<legend><span data-i18n=""runner.annuity.gender"">[^<]*</span> <span class=""paid-badge"" data-feature=""annuity-gender"" hidden></span></legend>", runner);
         }
 
         // The Annuity tab: Include (off), then the payment ($2,600) and investment ($400,000), SPIA or DIA (SPIA chosen;
-        // the DIA's date hidden until chosen, its minimum set by app.js), tax-deferred, and the COLA's 1/2/3% (2% chosen).
+        // the DIA's date hidden until chosen, its minimum set by app.js), tax-deferred, and the COLA (its one rate, 2%).
         // Its fields sit in a fieldset that stays disabled until Include is ticked; the * and 1-3 are footnotes like the year
         // tables': a superscript link whose tooltip holds the note.
         [Fact]
@@ -512,9 +514,9 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Matches(@"name=""annuityType"" value=""dia""(?![^>]*checked)", panel);
             Assert.Contains(@"<label id=""annuity-start"" hidden>", panel);
             Assert.Matches(@"<input type=""date"" name=""annuityStartDate""[^>]*disabled", panel);
-            Assert.Contains(@"<label id=""annuity-cola-rate"" hidden>", panel);
-            Assert.Equal(new[] { "0.01", "0.02", "0.03" }, Regex.Matches(panel, @"<option value=""([\d.]+)""").Select(m => m.Groups[1].Value));
-            Assert.Contains(@"<option value=""0.02"" selected>", panel);
+            // No rate to choose: the app has one COLA
+            Assert.DoesNotContain("annuityColaRate", panel);
+            Assert.DoesNotContain("<select", panel);
             foreach (var marker in new[] { "*", "1", "2", "3" })
                 Assert.Matches($@"<sup class=""footnote""><a href=""#"" class=""footnote-ref"" aria-label=""[^""]+"" data-i18n-aria-label=""runner.annuity.note\w+Aria"">{Regex.Escape(marker)}</a><span class=""footnote-tip"" role=""tooltip"" data-i18n=""runner.annuity.note\w+"">", panel);
             Assert.DoesNotContain("form-notes", panel);
@@ -552,6 +554,31 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains(@"""optimal.runInScenarioRunner"": ""Run in Scenario runner""", await GetAsync("/i18n/en.json"));
             Assert.Contains("window.location.href = 'index.html';", script);
             Assert.DoesNotContain("Run in Simulator", script);
+        }
+
+        // The results summary's second line (average ending balance and return, each with its std. dev.), shown folded or
+        // not, and a failed run's year table ending with what its last year still paid - or that the money is gone
+        [Fact]
+        public async Task ScenarioRunner_Results_SummarizeTheOutcome_AndSayWhatAFailedRunStillPays()
+        {
+            string script = await GetAsync("/app.js");
+            string en = await GetAsync("/i18n/en.json");
+
+            Assert.Contains(@"${headline}<span class=""summary-outcome"">${outcome}</span></summary>", script);
+            Assert.Contains("t('runner.outcome', {", script);
+            Assert.Contains("renderRunDetailTable(run.years, view.parameters.enableRothConversions, view.taxDetail, run.failed)", script);
+            Assert.Contains(@"""runner.stillReceive.none"": ""No more income or balances remain: completely out of money.""", en);
+            Assert.DoesNotContain("runner.realized", script);
+        }
+
+        // The app's one COLA: the page's numbers are Core's (2% each January, a first year 10% below a level payment)
+        [Fact]
+        public async Task ScenarioRunner_PricesTheCola_AsCoreDoes()
+        {
+            string script = await GetAsync("/app.js");
+
+            Assert.Contains($"const COLA_RATE = {MonteCarloSimulation.Core.Annuity.ColaIncrease.ToString(CultureInfo.InvariantCulture)};", script);
+            Assert.Contains($"const COLA_FACTOR = {MonteCarloSimulation.Core.Annuity.ColaFirstYearFactor.ToString(CultureInfo.InvariantCulture)};", script);
         }
 
         [Fact]

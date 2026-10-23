@@ -229,7 +229,7 @@
                     </label>
                     <fieldset class="annuity-details" id="annuity-details" disabled>
                         <label><span data-i18n="runner.annuity.monthly">Return (monthly $)</span>
-                            <input type="text" inputmode="decimal" class="money-input" name="annuityMonthlyAmount" pattern="[0-9,]*\.?[0-9]*" value="2,600" data-i18n-title="runner.annuity.monthlyTitle" title="The annuity's monthly payment. It stays the same every year unless a COLA raises it." required data-requires="annuity">
+                            <input type="text" inputmode="decimal" class="money-input" name="annuityMonthlyAmount" pattern="[0-9,]*\.?[0-9]*" value="2,600" data-i18n-title="runner.annuity.monthlyTitle" title="The annuity's monthly payment, the first year's with a COLA. It stays the same every year unless a COLA raises it 2% each January." required data-requires="annuity">
                         </label>
                         <label><span data-i18n="runner.annuity.investment">Investment Amount</span>
                             <input type="text" inputmode="decimal" class="money-input" name="annuityInvestment" pattern="[0-9,]*\.?[0-9]*" value="400,000" data-i18n-title="runner.annuity.investmentTitle" title="What you paid for the annuity: its tax basis, returned tax-free over its first 26 years of payments. Ignored when it's in a tax-deferred account." required data-requires="annuity">
@@ -263,14 +263,8 @@
                             <label class="checkbox-label">
                                 <input type="checkbox" name="annuityCola" data-requires="annuity-cola" data-free-value="false">
                                 <span data-i18n="runner.annuity.cola">Yearly increase (COLA)</span>
+                                <small class="cola-rate" data-i18n="runner.annuity.colaRateNote">2% a year</small>
                                 <span class="paid-badge" data-feature="annuity-cola" hidden></span>
-                            </label>
-                            <label id="annuity-cola-rate" hidden><span data-i18n="runner.annuity.colaRate">Increase each January</span>
-                                <select name="annuityColaRate" data-requires="annuity-cola">
-                                    <option value="0.01">1%</option>
-                                    <option value="0.02" selected>2%</option>
-                                    <option value="0.03">3%</option>
-                                </select>
                             </label>
                         </fieldset>
                     </fieldset>

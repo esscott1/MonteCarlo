@@ -164,14 +164,15 @@ app.MapPost("/api/optimal", async (
 
     // The Optimizer also weighs buying a SPIA with Tax Deferred money, at today's rate: for a visitor with the annuity
     // feature unless they untick "Consider buying an annuity", and for the Free teaser (a man's rate) while a paid tier
-    // offers annuities, so it can say how much one might add
+    // offers annuities, so it can say how much one might add. Each size is weighed with the app's COLA too, the same
+    // way: with the annuity-cola feature, or for the teaser while a paid tier offers it.
     bool teaser = !access.Can(Features.OptimizerFull);
-    bool weighPurchase = access.Can(Features.Annuity)
-        ? request.ConsiderAnnuities
-        : teaser && access.Offers.Any(offer => offer.Features.Contains(Features.Annuity));
+    bool Weighs(string feature) => access.Can(feature) || (teaser && access.Offers.Any(offer => offer.Features.Contains(feature)));
+    bool weighPurchase = access.Can(Features.Annuity) ? request.ConsiderAnnuities : Weighs(Features.Annuity);
     var purchase = weighPurchase
         ? request.PurchaseOptions(await spiaIndex.CurrentAsync(context.RequestAborted),
-            female: request.AnnuitantIsFemale && access.Can(Features.AnnuityGender))
+            female: request.AnnuitantIsFemale && access.Can(Features.AnnuityGender),
+            cola: Weighs(Features.AnnuityCola))
         : null;
     return new OptimalStream(request.ToInputs(purchase), jsonOptions.Value.SerializerOptions, teaser);
 });
