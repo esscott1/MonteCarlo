@@ -63,8 +63,9 @@ function initSections() {
     });
 }
 
-// The Features section: the Plus and Pro switches for the whole site (GET/PUT /api/features, with the same token). Each
-// flip saves at once; if saving fails the switch goes back.
+// The Features section: the Plus and Pro switches for the whole site, then Enable Gordon (the Scenario runner's chat
+// panel, for every tier) (GET/PUT /api/features, with the same token). Each flip saves at once; if saving fails the
+// switch goes back.
 function initFeatures(call) {
     const list = document.getElementById('features-list');
     const mode = document.getElementById('features-mode');
@@ -81,14 +82,20 @@ function initFeatures(call) {
         Pro: ['Offered: Pro badges where Pro is the cheapest tier on offer, and the Pro code works.', 'Not offered: no Pro badges, and the Pro code is refused.'],
     };
 
-    const when = (iso) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const GORDON = [
+        'On: the Scenario runner shows Gordon, the guided setup that asks a few questions and fills in the inputs.',
+        'Off: no Gordon on the Scenario runner.',
+    ];
 
+    const when = (iso) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const changedLine = (changedAt) => (changedAt ? `Last changed ${escapeHtml(when(changedAt))}` : 'Default (never switched here)');
+
+    // Each switch's data-tier is the last part of its PUT path: plus, pro or gordon
     function render(view) {
         const [name, description] = MODES[view.mode] ?? [view.mode, ''];
         mode.innerHTML = `Site mode: <strong>${escapeHtml(name)}</strong>. ${escapeHtml(description)}`;
         list.innerHTML = view.tiers.map((tier) => {
             const [on, off] = WHAT[tier.tier] ?? ['', ''];
-            const changed = tier.changedAt ? `Last changed ${escapeHtml(when(tier.changedAt))}` : 'Default (never switched here)';
             return `
                 <div class="feature-switch ${tier.tier.toLowerCase()}">
                     <label class="feature-switch-label">
@@ -98,9 +105,18 @@ function initFeatures(call) {
                     </label>
                     <p class="feature-meta">${escapeHtml(tier.on ? on : off)}</p>
                     <p class="feature-meta">Includes: ${tier.features.map(escapeHtml).join(', ')}</p>
-                    <p class="feature-meta">${changed}</p>
+                    <p class="feature-meta">${changedLine(tier.changedAt)}</p>
                 </div>`;
-        }).join('');
+        }).join('') + `
+                <div class="feature-switch gordon">
+                    <label class="feature-switch-label">
+                        <input type="checkbox" role="switch" data-tier="gordon"${view.gordon.on ? ' checked' : ''}>
+                        <span class="feature-switch-track" aria-hidden="true"></span>
+                        <span><strong>Enable Gordon</strong> &middot; every tier</span>
+                    </label>
+                    <p class="feature-meta">${escapeHtml(view.gordon.on ? GORDON[0] : GORDON[1])}</p>
+                    <p class="feature-meta">${changedLine(view.gordon.changedAt)}</p>
+                </div>`;
     }
 
     list.addEventListener('change', async (e) => {
@@ -112,7 +128,9 @@ function initFeatures(call) {
             const view = await call('PUT', `/api/features/${input.dataset.tier}`, { on: input.checked });
             if (!view) return;
             render(view);
-            status.textContent = `Saved: the site is now ${MODES[view.mode]?.[0] ?? view.mode}.`;
+            status.textContent = input.dataset.tier === 'gordon'
+                ? `Saved: Gordon is now ${view.gordon.on ? 'on' : 'off'}.`
+                : `Saved: the site is now ${MODES[view.mode]?.[0] ?? view.mode}.`;
         } catch (err) {
             input.checked = !input.checked;
             input.disabled = false;

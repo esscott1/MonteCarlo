@@ -600,6 +600,27 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains("&shared=1&return=", script);
         }
 
+        // Gordon, the guided setup: its scripted conversation and then its panel load after the page script, it shows only
+        // while /api/me says the Observe switch is on, and it hears about each finished run from app.js
+        [Fact]
+        public async Task ScenarioRunner_LoadsGordon_AfterThePageScript_BehindItsSwitch()
+        {
+            string html = await GetAsync("/index.html");
+            string app = await GetAsync("/app.js");
+            string gordon = await GetAsync("/gordon.js");
+            string observe = await GetAsync("/observe.js");
+
+            int page = html.IndexOf(@"<script src=""app.js""></script>");
+            int conversation = html.IndexOf(@"<script src=""gordon-script.js""></script>");
+            int panel = html.IndexOf(@"<script src=""gordon.js""></script>");
+            Assert.True(page > 0 && conversation > page && panel > conversation);
+            Assert.Contains("Paywall.me.gordon", gordon);
+            Assert.Contains("new CustomEvent('runner:result', { detail: view })", app);
+            Assert.Contains("'runner:result'", gordon);
+            Assert.Contains(@"data-tier=""gordon""", observe);
+            Assert.Contains("Enable Gordon", observe);
+        }
+
         [Fact]
         public async Task AccessPage_FromASharedLink_OffersToContinueWithoutACode_AndGoesBackInThisTab()
         {

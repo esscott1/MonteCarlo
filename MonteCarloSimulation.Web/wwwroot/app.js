@@ -1030,6 +1030,8 @@ form.addEventListener('submit', async (e) => {
     }
     renderView();
     renderChart();
+    // For Gordon (gordon.js), which explains a run it started
+    document.dispatchEvent(new CustomEvent('runner:result', { detail: view }));
 });
 
 // The chart beside the inputs: the latest run's balances (90th percentile, median, 10th percentile), or until the
