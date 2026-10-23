@@ -23,7 +23,7 @@ by 10% (and unticking puts it back). Like Social Security, the payments are inco
 and any excess is saved to Brokerage. For taxes, an annuity in a tax-deferred account is all ordinary income. Otherwise
 the exclusion ratio applies: the investment amount (default $400,000) comes back tax-free, 1/312 of it in each of the
 first 312 payments (26 years), and after that every payment is ordinary income ([Annuity.cs](MonteCarloSimulation.Core/Annuity.cs)).
-Free visitors' Optimizer results say "Consider buying an annuity", with about how much it could add a month when that's $100 or more. The Optimizer (Plus, unless "Consider buying an annuity" is unticked on its Annuity tab) weighs **buying** an annuity: a SPIA bought at retirement with Tax Deferred money, in $100,000 steps up to the whole balance, at today's rate (below), each size both level and with the 2% COLA (starting 10% lower). It recommends the purchase that raises the 82.5% spend most, if any, and shows the spend and the typical money left at the end with and without it; **Run in Scenario runner** carries the purchase across (Tax Deferred lowered, the annuity on the Annuity tab). The simulation assumes the household lives the whole horizon, so large purchases often win; the money-left figures show what they cost heirs.
+Free visitors' Optimizer results say "Consider buying an annuity", with about how much it could add a month when that's $100 or more. The Optimizer (Plus, unless "Consider buying an annuity" is unticked on its Annuity tab) weighs **buying** an annuity: a SPIA bought at retirement with Tax Deferred money, in $100,000 steps up to the whole balance, at today's rate (below), each size both level and with the 2% COLA (starting 10% lower), and paid for either with Tax Deferred money (a qualified annuity: every payment is ordinary income) or with after-tax money, Brokerage first and then Roth (a non-qualified annuity: its price comes back tax-free over 26 years). Selling Brokerage to buy it realizes gains, so the Optimizer sells extra to cover an estimate of that tax. It recommends the purchase that raises the 82.5% spend most, if any, and shows the spend and the typical money left at the end with and without it; **Run in Scenario runner** carries the purchase across (Tax Deferred lowered, the annuity on the Annuity tab). The simulation assumes the household lives the whole horizon, so large purchases often win; the money-left figures show what they cost heirs.
 
 For a SPIA, the tab suggests a current payment (**Use this rate** fills it in): the best payout per $100,000 for the age
 at the Retire On date, with its as-of date, from the [LifeAnnuities.us SPIA Payout Index](https://lifeannuities.us/rates/spia-payout-index/)
@@ -32,6 +32,13 @@ a standard annuity-pricing formula fitted to them ([SpiaPayoutModel.cs](MonteCar
 within about 3.5% of the site's published table at every age. Plus gets a man's rate; choosing the gender is Pro. The
 app fetches the index at most once a week, on the first rate request after Monday 6:00 AM Mountain time, and keeps the
 last figures if that fails ([SpiaPayoutIndex.cs](MonteCarloSimulation.Web/SpiaPayoutIndex.cs)).
+
+**Optimize**, beside Run, runs the Optimizer on the Scenario runner's own inputs with 167 simulated markets: it fills in
+the monthly spend that survives about 82.5% of them, the best Social Security start age and amount, and any annuity it
+decides to buy (none when the scenario already has one), then runs it. Free visitors get the Optimizer's $500 range and
+the low end of it. **Optimize Social Security** (Plus), on the Other Income tab, keeps the spend and everything else and
+looks only for the Social Security start (each birthday from 62 to 70, from the 62/67/70 estimates in its flyout) that
+lets the most of 167 simulated markets survive, then puts it in and runs.
 
 After a run, **Share scenario** (beside Run, and in the results summary) copies a link to the Scenario runner holding
 that run's inputs: only the numbers and dates, packed into the link itself, so nothing is stored and no names are

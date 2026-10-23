@@ -2006,6 +2006,19 @@ input[type="checkbox"].locked[data-locked-tier="pro"] {
 }
 
 /* Share scenario, in the results summary (its twin sits beside Run) */
+/* Optimize Social Security: its button under the Social Security fields, and its flyout, placed under the button */
+.ss-optimize {
+    margin: 0.4rem 0 0;
+}
+
+.ss-flyout {
+    max-width: min(360px, calc(100vw - 32px));
+}
+
+.ss-flyout .subgroup {
+    margin: 0;
+}
+
 /* The COLA's one rate, in small print beside its checkbox */
 .cola-rate {
     color: var(--muted);

@@ -9,6 +9,8 @@ const results = document.getElementById('results');
 let view = null;
 let handoff = null;
 let handoffRunPending = false;
+// While Optimize works: { completed, total } of its checks (initOptimize), else null
+let optimizing = null;
 
 // The inputs tile's shared code (tabs, money fields, the Asset Classes table, balance totals) is in inputs.js
 const { parseNumber, formatWithCommas, formatAllocation, formatAsOf } = Inputs;
@@ -747,6 +749,16 @@ function renderView() {
 // link down to what it produced - the survival summary, or the errors when it didn't run
 function renderRunStatus() {
     const status = document.getElementById('run-status');
+    if (optimizing?.socialSecurity) {
+        status.innerHTML = `<span class="loading">${t('runner.optimizingSs')}</span>`;
+        return;
+    }
+    if (optimizing) {
+        status.innerHTML = `<span class="loading">${optimizing.total > 0
+            ? t('runner.optimizing', { completed: optimizing.completed, total: optimizing.total })
+            : t('runner.optimizing.start')}</span>`;
+        return;
+    }
     if (view?.kind === 'loading') status.innerHTML = `<span class="loading">${t('runner.running')}</span>`;
     else if (view?.kind === 'results') status.innerHTML = `<a href="#results" class="see-results">${t('runner.seeResults')}</a>`;
     else if (view) status.innerHTML = `<a href="#results" class="see-results">${t('runner.seeProblem')}</a>`;
@@ -975,15 +987,10 @@ function initEditFlyout() {
     });
 }
 
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    // Only the hand-off's own run comes from the Optimal page; any later run is the visitor's, so its note goes
-    if (!handoffRunPending) clearHandoffNote();
-    // A Free visitor's locked inputs hold their Free values once /api/me has answered (paywall.js)
-    await Paywall.ready;
-
+// The form as /api/run (and /api/run/optimize) takes it
+function runRequest() {
     const formData = new FormData(form);
-    const payload = {
+    return {
         years: Number(formData.get('years')),
         iterations: Number(formData.get('iterations')),
         // Entered per month; the model and API work in annual amounts.
@@ -1005,7 +1012,17 @@ form.addEventListener('submit', async (e) => {
         ...annuityRequest(),
         ...Inputs.readAssetMix(form)
     };
+}
 
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    // Only the hand-off's own run (from the Optimal page, a shared link or Optimize) explains its values; any later run
+    // is the visitor's, so its note goes
+    if (!handoffRunPending) clearHandoffNote();
+    // A Free visitor's locked inputs hold their Free values once /api/me has answered (paywall.js)
+    await Paywall.ready;
+
+    const payload = runRequest();
     view = { kind: 'loading' };
     renderView();
 
@@ -1140,7 +1157,8 @@ function applyHandoffAnnuity(annuity) {
         el['annuityMonthlyAmount'].value = formatWithCommas(String(annuity.monthlyPayment));
         el['annuityInvestment'].value = formatWithCommas(String(annuity.investment));
         el['annuityType'].value = 'spia';
-        el['annuityTaxDeferred'].checked = true;
+        // Bought with Tax Deferred money unless the hand-off says after-tax (Brokerage, Roth): then its price is its basis
+        el['annuityTaxDeferred'].checked = annuity.taxDeferred !== false;
         el['annuityCola'].checked = !!annuity.cola;
     }
     setColaPriced(el['annuityCola'].checked);
@@ -1148,17 +1166,277 @@ function applyHandoffAnnuity(annuity) {
     el['includeAnnuity'].dispatchEvent(new Event('change'));
 }
 
+function handoffText() {
+    const saleTax = (annuity) => (annuity?.saleTax > 0.5 ? ` ${t('runner.handoff.saleTax', { tax: formatCurrency(annuity.saleTax) })}` : '');
+    if (handoff.kind === 'shared')
+        return [t('runner.shared'), handoff.reset ? t('runner.shared.reset') : '', handoff.diaMoved ? t('runner.shared.diaMoved') : ''].filter(Boolean).join(' ');
+    if (handoff.kind === 'socialSecurity') {
+        const { best, current, paths } = handoff.choice;
+        const values = { paths, spend: formatCurrency(handoff.spendMonthly), rate: percent1(best.survivalRate) };
+        return handoff.choice.improves
+            ? t('runner.ssOptimized', {
+                ...values,
+                age: best.age,
+                amount: formatCurrency(best.monthlyBenefit),
+                currentAge: current.age,
+                currentRate: percent1(current.survivalRate),
+            })
+            : t('runner.ssOptimized.already', { ...values, age: current.age, rate: percent1(current.survivalRate) });
+    }
+    if (handoff.kind === 'optimizedTeaser')
+        return `${t('runner.optimized.teaser', { low: formatCurrency(handoff.low), high: formatCurrency(handoff.high) })} <span class="paid-badge" data-feature="optimizer-full" hidden></span>`;
+    if (handoff.kind === 'optimized') {
+        const a = handoff.annuity;
+        return t('runner.optimized', { amount: formatCurrency(handoff.withdrawalMonthly), age: handoff.recommendedAge })
+            + (a ? ` ${t(a.taxDeferred ? 'runner.optimized.annuity' : 'runner.optimized.annuityAfterTax', {
+                amount: formatCurrency(a.investment),
+                payment: formatCurrency(a.monthlyPayment),
+                cola: a.cola ? t('runner.optimized.cola') : '',
+            })}` : '')
+            + saleTax(a);
+    }
+    return t('runner.handoff', {
+        age: handoff.recommendedAge,
+        amount: formatCurrency(handoff.withdrawalMonthly),
+        iterations: handoff.iterations,
+    }) + saleTax(handoff.annuity);
+}
+
 function renderHandoffNote() {
     if (!handoff) return;
     document.getElementById('handoff-note')?.remove();
-    const text = handoff.kind === 'shared'
-        ? [t('runner.shared'), handoff.reset ? t('runner.shared.reset') : '', handoff.diaMoved ? t('runner.shared.diaMoved') : ''].filter(Boolean).join(' ')
-        : t('runner.handoff', {
-            age: handoff.recommendedAge,
-            amount: formatCurrency(handoff.withdrawalMonthly),
-            iterations: handoff.iterations,
+    results.insertAdjacentHTML('beforebegin', `<div id="handoff-note" class="handoff-note">${handoffText()}</div>`);
+    Paywall.decorate(document.getElementById('handoff-note'));
+}
+
+// Optimize (beside the Monthly Withdrawal): the Optimizer on these inputs (POST /api/run/optimize: 167 simulated markets,
+// every claiming age through the entered Social Security claim, and an annuity purchase unless one is owned). Its answer
+// goes into the form - the 82.5% spend, the best Social Security start and its amount, and any annuity bought, with the
+// balances it was paid from lowered - and then runs, with a note. Free gets the teaser: the low end of its $500 range,
+// and a note that the rest is Plus. Run and Optimize wait while it works; its progress shows beside Run (`optimizing`).
+
+function setOptimizing(state) {
+    optimizing = state;
+    document.getElementById('optimize-run').disabled = !!state;
+    form.querySelector('button[type="submit"]').disabled = !!state;
+    refreshOptimizeSocialSecurity();
+    renderRunStatus();
+}
+
+function initOptimize() {
+    document.getElementById('optimize-run').addEventListener('click', async () => {
+        if (optimizing || !form.reportValidity()) return;
+        await Paywall.ready;
+        clearHandoffNote();
+        const request = runRequest();
+        setOptimizing({ completed: 0, total: 0 });
+        let optimum = null;
+        let teaser = null;
+        let errors = null;
+        let failure = null;
+        try {
+            const response = await fetch('/api/run/optimize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(request),
+            });
+            if (!response.ok) {
+                errors = (await response.json().catch(() => ({}))).errors ?? {};
+            } else {
+                await Inputs.readEvents(response, (event) => {
+                    if (event.type === 'start') optimizing.total = event.totalSteps;
+                    else if (event.type === 'progress') Object.assign(optimizing, { completed: event.completed, total: event.total });
+                    else if (event.type === 'result') optimum = event.optimum;
+                    else if (event.type === 'teaser') teaser = event;
+                    else if (event.type === 'error') failure = event.message;
+                    renderRunStatus();
+                });
+            }
+        } catch (err) {
+            failure = err.message;
+        }
+        setOptimizing(null);
+
+        if (errors) view = { kind: 'errors', errors };
+        else if (!optimum && !teaser) view = { kind: 'failed', message: failure ?? t('runner.optimize.stopped') };
+        if (errors || (!optimum && !teaser)) {
+            renderView();
+            return;
+        }
+        if (optimum) applyOptimized(optimum, request);
+        else applyOptimizedTeaser(teaser);
+        renderHandoffNote();
+        // As the hand-off: the submit handler reads the flag before its first await
+        handoffRunPending = true;
+        form.requestSubmit();
+        handoffRunPending = false;
+        document.getElementById('handoff-note').scrollIntoView({ block: 'start' });
+    });
+}
+
+// A full result into the form. `request`: what it was optimized from, the balances before any purchase.
+function applyOptimized(optimum, request) {
+    const el = form.elements;
+    const r = optimum.recommended;
+    const monthly = Math.round(r.spendAtMidpoint / 12);
+    el['withdrawal'].value = formatWithCommas(String(monthly));
+    // The start date counts as the visitor's own, so it no longer follows the birthdate
+    el['socialSecurityStartDate'].value = r.startDate;
+    el['socialSecurityStartDate'].dispatchEvent(new Event('input'));
+    el['socialSecurityMonthlyAmount'].value = formatWithCommas(String(Math.round(r.monthlyBenefit)));
+
+    const purchase = optimum.purchase?.amount > 0 ? optimum.purchase : null;
+    let annuity = null;
+    if (purchase) {
+        Object.keys(Inputs.PURCHASE_FIELDS).forEach((field) => {
+            const left = Math.round((request[field] - Inputs.purchaseTaken(purchase, field)) * 100) / 100;
+            el[field].value = formatWithCommas(String(Math.max(0, left)));
+            el[field].dispatchEvent(new Event('input', { bubbles: true }));
         });
-    results.insertAdjacentHTML('beforebegin', `<div id="handoff-note" class="handoff-note">${text}</div>`);
+        annuity = {
+            investment: purchase.amount,
+            monthlyPayment: purchase.monthlyPayment,
+            cola: purchase.annualIncrease > 0,
+            taxDeferred: purchase.source?.funding !== 'AfterTax',
+            saleTax: purchase.source?.brokerageSaleTax ?? 0,
+        };
+        applyHandoffAnnuity(annuity);
+        updateBalanceTotals();
+        Inputs.refreshAccountTotals(form);
+    }
+    handoff = { kind: 'optimized', withdrawalMonthly: monthly, recommendedAge: r.age, annuity };
+}
+
+// Optimize Social Security (Other Income, Plus: the full Optimizer's choice of claiming age). Its flyout holds the
+// Optimal page's three estimates, prefilled from the claim entered (by SSA's rules, as SocialSecurityCurve.FromClaim
+// does), for the visitor to adjust. Run sends them with the scenario (POST /api/run/optimize-social-security): with the
+// spend and everything else held, each birthday 62-70 is tried on 167 simulated markets, and the start that survives the
+// most replaces the entered one (unless the entered one already does best), then the scenario runs with a note.
+
+// The share of the benefit at full retirement age (67) a claim at this age in months gets: 5/9% less a month for the
+// first 36 months early, 5/12% after (30% less at 62), and 2/3% more a month to 70 (24% more) - SocialSecurityCurve's
+function ssShareAtMonths(months) {
+    const early = Math.min(Math.max(67 * 12 - months, 0), 60);
+    if (early > 0) return 1 - (5 / 9 * Math.min(early, 36) + 5 / 12 * Math.max(0, early - 36)) / 100;
+    return 1 + 0.24 * Math.min(Math.max(months - 67 * 12, 0), 36) / 36;
+}
+
+// The 62/67/70 estimates through the entered claim
+function ssEstimatesFromClaim() {
+    const el = form.elements;
+    const birth = el['birthdate'].value;
+    const start = el['socialSecurityStartDate'].value;
+    const amount = parseNumber(el['socialSecurityMonthlyAmount'].value) || 0;
+    if (!birth || !start) return null;
+    const [by, bm, bd] = birth.split('-').map(Number);
+    const [sy, sm, sd] = start.split('-').map(Number);
+    const months = Math.min(Math.max((sy - by) * 12 + sm - bm - (sd < bd ? 1 : 0), 62 * 12), 70 * 12);
+    const at67 = amount / ssShareAtMonths(months);
+    return { at62: at67 * 0.7, at67, at70: at67 * 1.24 };
+}
+
+function refreshOptimizeSocialSecurity() {
+    document.getElementById('optimize-ss').disabled = !!optimizing || !Paywall.can('optimizer-full');
+}
+
+function initOptimizeSocialSecurity() {
+    const button = document.getElementById('optimize-ss');
+    const flyout = document.getElementById('ss-flyout');
+    const fields = flyout.elements;
+
+    function open() {
+        const estimates = ssEstimatesFromClaim();
+        if (estimates) {
+            fields['ssAt62'].value = formatWithCommas(String(Math.round(estimates.at62)));
+            fields['ssAt67'].value = formatWithCommas(String(Math.round(estimates.at67)));
+            fields['ssAt70'].value = formatWithCommas(String(Math.round(estimates.at70)));
+        }
+        flyout.hidden = false;
+        button.setAttribute('aria-expanded', 'true');
+        // Under its button, kept inside the window
+        const r = button.getBoundingClientRect();
+        const left = Math.min(r.left, document.documentElement.clientWidth - flyout.offsetWidth - 16);
+        flyout.style.top = `${r.bottom + window.scrollY + 4}px`;
+        flyout.style.left = `${Math.max(16, left) + window.scrollX}px`;
+        fields['ssAt67'].focus();
+    }
+
+    function close() {
+        flyout.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+    }
+
+    button.addEventListener('click', () => (flyout.hidden ? open() : close()));
+    document.getElementById('ss-close').addEventListener('click', close);
+    document.getElementById('ss-cancel').addEventListener('click', close);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !flyout.hidden) close();
+    });
+    document.addEventListener('click', (e) => {
+        if (!flyout.hidden && !flyout.contains(e.target) && !button.contains(e.target)) close();
+    });
+    flyout.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!flyout.reportValidity() || !form.reportValidity()) return;
+        const estimates = {
+            socialSecurityAt62: parseNumber(fields['ssAt62'].value),
+            socialSecurityAt67: parseNumber(fields['ssAt67'].value),
+            socialSecurityAt70: parseNumber(fields['ssAt70'].value),
+        };
+        close();
+        optimizeSocialSecurity(estimates);
+    });
+    Paywall.ready.then(refreshOptimizeSocialSecurity);
+    document.addEventListener('paywall:change', refreshOptimizeSocialSecurity);
+}
+
+async function optimizeSocialSecurity(estimates) {
+    if (optimizing) return;
+    await Paywall.ready;
+    clearHandoffNote();
+    const request = { ...runRequest(), ...estimates };
+    setOptimizing({ socialSecurity: true });
+    let choice = null;
+    let errors = null;
+    let failure = null;
+    try {
+        const response = await fetch('/api/run/optimize-social-security', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (response.ok) choice = body;
+        else errors = body.errors ?? {};
+    } catch (err) {
+        failure = err.message;
+    }
+    setOptimizing(null);
+
+    if (!choice) {
+        view = errors ? { kind: 'errors', errors } : { kind: 'failed', message: failure ?? t('runner.optimize.stopped') };
+        renderView();
+        return;
+    }
+    if (choice.improves) {
+        const el = form.elements;
+        el['socialSecurityStartDate'].value = choice.best.startDate;
+        // The start date counts as the visitor's own, so it no longer follows the birthdate
+        el['socialSecurityStartDate'].dispatchEvent(new Event('input'));
+        el['socialSecurityMonthlyAmount'].value = formatWithCommas(String(Math.round(choice.best.monthlyBenefit)));
+    }
+    handoff = { kind: 'socialSecurity', choice, spendMonthly: request.withdrawal / 12 };
+    renderHandoffNote();
+    handoffRunPending = true;
+    form.requestSubmit();
+    handoffRunPending = false;
+    document.getElementById('handoff-note').scrollIntoView({ block: 'start' });
+}
+
+// The teaser into the form: the low end of its range (the exact amount, the best age and any purchase are Plus)
+function applyOptimizedTeaser(teaser) {
+    form.elements['withdrawal'].value = formatWithCommas(String(teaser.monthlyLow));
+    handoff = { kind: 'optimizedTeaser', low: teaser.monthlyLow, high: teaser.monthlyHigh };
 }
 
 function clearHandoffNote() {
@@ -1318,4 +1596,6 @@ Inputs.initFormFootnotes(form);
 initSummaryToggle();
 initSeeResults();
 initShareScenario();
+initOptimize();
+initOptimizeSocialSecurity();
 initEditFlyout();

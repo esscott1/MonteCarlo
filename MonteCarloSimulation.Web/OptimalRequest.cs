@@ -67,13 +67,18 @@ namespace MonteCarloSimulation.Web
         // The age on the Retire On date, when a suggested annuity would be bought (as the SPIA rate takes it)
         public double AgeAtRetirement => (RetirementDate.DayNumber - Birthdate.DayNumber) / 365.25;
 
-        // The annuity purchases to consider, at a woman's rate or a man's, level only or with the app's COLA too: none
-        // without figures, or when the index has no rate for that age
-        public AnnuityPurchaseOptions? PurchaseOptions(SpiaFigures? figures, bool female, bool cola = false)
+        // The annuity purchases to consider, at a woman's rate or a man's, level only or with the app's COLA too, and with
+        // Tax Deferred money only or with after-tax money (Brokerage, then Roth) too: none without figures, or when the
+        // index has no rate for that age
+        public AnnuityPurchaseOptions? PurchaseOptions(SpiaFigures? figures, bool female, bool cola = false, bool afterTax = false) =>
+            PurchaseOptionsAt(figures, AgeAtRetirement, female, cola, afterTax);
+
+        // The same for any household, by its age on the Retire On date
+        public static AnnuityPurchaseOptions? PurchaseOptionsAt(SpiaFigures? figures, double ageAtRetirement, bool female, bool cola, bool afterTax)
         {
-            if (figures?.Model.MonthlyPer100k(AgeAtRetirement, female ? AnnuitantSex.Female : AnnuitantSex.Male) is not { } rate)
+            if (figures?.Model.MonthlyPer100k(ageAtRetirement, female ? AnnuitantSex.Female : AnnuitantSex.Male) is not { } rate)
                 return null;
-            return new AnnuityPurchaseOptions(rate.Monthly, figures.AsOf, ConsiderCola: cola);
+            return new AnnuityPurchaseOptions(rate.Monthly, figures.AsOf, ConsiderCola: cola, ConsiderAfterTax: afterTax);
         }
 
         public OptimizationInputs ToInputs(AnnuityPurchaseOptions? purchase = null)

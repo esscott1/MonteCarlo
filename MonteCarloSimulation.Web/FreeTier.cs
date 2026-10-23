@@ -72,6 +72,15 @@ namespace MonteCarloSimulation.Web
             return errors;
         }
 
+        // The Scenario runner's Optimize Social Security is the full Optimizer's choice of claiming age: Plus
+        public static Dictionary<string, string> LockedSocialSecurityOptimizer(Access access)
+        {
+            var errors = new Dictionary<string, string>();
+            if (!access.Can(Features.OptimizerFull))
+                errors["socialSecurity"] = "Optimizing Social Security is a Plus feature.";
+            return errors;
+        }
+
         // The Optimizer's suggested annuity: the rate for a woman needs annuity-gender (Pro). Only asked of a visitor
         // with the annuity feature: without it there's no purchase search, so the choice doesn't matter.
         public static Dictionary<string, string> LockedOptimizerAnnuity(OptimalRequest request, Access access)

@@ -32,23 +32,31 @@ namespace MonteCarloSimulation.Optimizer
 
         public static OptimizationResult Optimize(OptimizationInputs inputs) => Optimize(inputs, null, CancellationToken.None);
 
-        // How many screened purchases get a full search: the top two, or with COLAs weighed, the best level SPIA and the
-        // best COLA one, so each kind is searched in full.
+        // How many screened purchases get a full search when only level Tax Deferred SPIAs are weighed: the top two. With
+        // COLAs or after-tax money weighed, it's the best of each kind instead (level or COLA, Tax Deferred or after-tax),
+        // so each kind is searched in full: up to four.
         internal const int PurchaseFinalists = 2;
+
+        private static bool ByKind(AnnuityPurchaseOptions options) => options.ConsiderCola || options.ConsiderAfterTax;
+
+        private static int FinalistCount(IReadOnlyList<AnnuityCandidate> candidates, AnnuityPurchaseOptions options) =>
+            ByKind(options) ? candidates.Select(c => (c.Funding, c.Cola)).Distinct().Count() : Math.Min(PurchaseFinalists, candidates.Count);
 
         // How many steps Optimize reports: 9 claiming ages for the plan without a purchase, and with purchases to try,
         // one for screening them and 9 for each finalist.
         public static int TotalSteps(OptimizationInputs inputs)
         {
-            int candidates = inputs.Purchase is { } options ? AnnuityPurchase.Candidates(inputs.Template, options).Count : 0;
-            return ClaimingAges.Count * (1 + Math.Min(PurchaseFinalists, candidates)) + (candidates > 0 ? 1 : 0);
+            if (inputs.Purchase is not { } options) return ClaimingAges.Count;
+            var candidates = AnnuityPurchase.Candidates(inputs.Template, options);
+            return ClaimingAges.Count * (1 + FinalistCount(candidates, options)) + (candidates.Count > 0 ? 1 : 0);
         }
 
         // The same result, reporting as it goes: `listener` hears each finished step (from worker threads), and
         // cancelling the token stops the work, throwing OperationCanceledException.
         //
         // With purchase options, the plan without a purchase is searched first (exactly as without options), then every
-        // purchase (each size, level and, when COLAs are weighed, with one) is screened at that plan's recommended spend -
+        // purchase (each size, level and, when COLAs are weighed, with one; with Tax Deferred money and, when weighed, with
+        // after-tax money) is screened at that plan's recommended spend -
         // at each claiming age, with that age's order and conversion target, the purchases that let the most paths
         // survive (then the most after-tax money left) - and the PurchaseFinalists are searched in full. The plan with
         // the highest midpoint spend wins; a purchase is recommended only if it beats the plan without one.
@@ -74,7 +82,7 @@ namespace MonteCarloSimulation.Optimizer
                 AnnuityCandidate? bought = null;
                 foreach (var candidate in finalists)
                 {
-                    var with = Plan(inputs, AnnuityPurchase.Apply(template, options, candidate.Amount, candidate.Cola), paths, progress, cancellationToken);
+                    var with = Plan(inputs, AnnuityPurchase.Apply(template, options, candidate.Amount, candidate.Cola, candidate.Funding), paths, progress, cancellationToken);
                     if (with.Optimum.Recommended.SpendAtMidpoint > best.Optimum.Recommended.SpendAtMidpoint)
                         (best, bought) = (with, candidate);
                 }
@@ -89,7 +97,8 @@ namespace MonteCarloSimulation.Optimizer
                     without.MoneyLeft,
                     best.MoneyLeft,
                     candidates.Count,
-                    bought is { Cola: true } ? Annuity.ColaIncrease : 0);
+                    bought is { Cola: true } ? Annuity.ColaIncrease : 0,
+                    bought is null ? null : AnnuityPurchase.Source(template, bought.Amount, bought.Funding));
                 return new OptimizationResult(best.Optimum with { Purchase = decision }, BenefitByAge(inputs.SocialSecurity), inputs.Paths);
             }
             catch (AggregateException e) when (cancellationToken.IsCancellationRequested
@@ -139,8 +148,8 @@ namespace MonteCarloSimulation.Optimizer
 
         // The purchases worth a full search: each one at each claiming age (that age's order and conversion target in the
         // plan without a purchase), every path run at that plan's recommended spend. Ranked by the most paths surviving at
-        // any one age, then the after-tax money left there; the top PurchaseFinalists, or with COLAs weighed the best of
-        // each kind, in rank order.
+        // any one age, then the after-tax money left there; the top PurchaseFinalists, or with COLAs or after-tax money
+        // weighed the best of each kind, in rank order.
         private static IReadOnlyList<AnnuityCandidate> ScreenPurchases(
             OptimizationInputs inputs, AnnuityPurchaseOptions options, IReadOnlyList<AnnuityCandidate> candidates, PlanResult without,
             double[][] paths, CancellationToken cancellationToken)
@@ -155,7 +164,7 @@ namespace MonteCarloSimulation.Optimizer
                 {
                     int a = k / ages.Count, i = k % ages.Count;
                     var age = ages[i];
-                    var simulator = new PathSimulator(AnnuityPurchase.Apply(inputs.Template, options, candidates[a].Amount, candidates[a].Cola),
+                    var simulator = new PathSimulator(AnnuityPurchase.Apply(inputs.Template, options, candidates[a].Amount, candidates[a].Cola, candidates[a].Funding),
                         age.StartDate, age.MonthlyBenefit, age.WithdrawalStrategy, age.RothConversionTarget, paths);
                     int survivors = 0;
                     double left = 0;
@@ -176,8 +185,8 @@ namespace MonteCarloSimulation.Optimizer
                 .OrderByDescending(x => x.Best.Survivors).ThenByDescending(x => x.Best.AfterTaxLeft)
                 .Select(x => x.Candidate)
                 .ToList();
-            return options.ConsiderCola
-                ? ranked.GroupBy(c => c.Cola).Select(kind => kind.First()).ToList()
+            return ByKind(options)
+                ? ranked.GroupBy(c => (c.Funding, c.Cola)).Select(kind => kind.First()).ToList()
                 : ranked.Take(PurchaseFinalists).ToList();
         }
 

@@ -156,6 +156,7 @@
                             <input type="text" inputmode="decimal" class="money-input" name="initialRothUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="5,000" required>
                         </label>
                         <p class="total-line" id="roth-total" data-requires="account-basis-split" data-locked="hide">Total Roth = $20,000</p>
+                        <p class="subgroup-hint" id="roth-purchase-note" hidden></p>
                     </fieldset>
                     <fieldset class="subgroup">
                         <legend><span data-i18n="form.brokerage">Brokerage Accts</span> <span class="paid-badge" data-feature="account-basis-split" hidden></span></legend>
@@ -170,6 +171,7 @@
                             <input type="text" inputmode="decimal" class="money-input" name="initialBrokerageUnrealizedGain" pattern="[0-9,]*\.?[0-9]*" value="300,000" required>
                         </label>
                         <p class="total-line" id="brokerage-total" data-requires="account-basis-split" data-locked="hide">Total Brokerage = $400,000</p>
+                        <p class="subgroup-hint" id="brokerage-purchase-note" hidden></p>
                     </fieldset>
                     <p class="total-line span-all" id="grand-total">Total money = $1,420,000</p>
                 </div>
@@ -206,7 +208,7 @@
                 </div>
 
                 <div class="tab-panel field-grid" role="tabpanel" id="panel-annuity" aria-labelledby="tab-annuity" hidden>
-                    <p class="subgroup-hint span-all"><span data-i18n="optimal.annuity.intro">The Optimizer decides whether buying an annuity with Tax Deferred money raises your spend, and shows what it bought here. You can't enter an annuity on this page.</span> <span class="paid-badge" data-feature="annuity" hidden></span></p>
+                    <p class="subgroup-hint span-all"><span data-i18n="optimal.annuity.intro">The Optimizer decides whether buying an annuity raises your spend, with Tax Deferred money or with Brokerage and Roth money, and shows what it bought here. You can't enter an annuity on this page.</span> <span class="paid-badge" data-feature="annuity" hidden></span></p>
                     <label class="checkbox-label span-all">
                         <input type="checkbox" name="considerAnnuities" checked data-requires="annuity" data-free-value="true">
                         <span data-i18n="optimal.annuity.consider">Consider buying an annuity</span>
@@ -224,7 +226,7 @@
                         <legend data-i18n="runner.annuity.type">Type</legend>
                         <label class="checkbox-label"><input type="radio" name="annuityType" value="spia" checked disabled> <span>SPIA</span><sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note 1: SPIA" data-i18n-aria-label="runner.annuity.noteSpiaAria">1</a><span class="footnote-tip" role="tooltip" data-i18n="runner.annuity.noteSpia">Single Premium Immediate Annuity: payments start on your Retire On Date.</span></sup></label>
                         <label class="checkbox-label"><input type="radio" name="annuityType" value="dia" disabled> <span>DIA</span><sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note 2: DIA" data-i18n-aria-label="runner.annuity.noteDiaAria">2</a><span class="footnote-tip" role="tooltip" data-i18n="optimal.annuity.noteDia">Deferred Income Annuity: not considered, since today's rates are for immediate annuities only.</span></sup></label>
-                        <label class="checkbox-label"><input type="checkbox" name="annuityTaxDeferred" checked disabled> <span><span data-i18n="runner.annuity.taxDeferred">In a tax-deferred account</span><sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note 3: how the payments are taxed" data-i18n-aria-label="runner.annuity.noteTaxDeferredAria">3</a><span class="footnote-tip" role="tooltip" data-i18n="optimal.annuity.noteTaxDeferred">The Optimizer buys the annuity with Tax Deferred money, so it stays in a tax-deferred account and every payment is taxed 100% as ordinary income.</span></sup></span></label>
+                        <label class="checkbox-label"><input type="checkbox" name="annuityTaxDeferred" checked disabled> <span><span data-i18n="runner.annuity.taxDeferred">In a tax-deferred account</span><sup class="footnote"><a href="#" class="footnote-ref" aria-label="Note 3: how the payments are taxed" data-i18n-aria-label="runner.annuity.noteTaxDeferredAria">3</a><span class="footnote-tip" role="tooltip" data-i18n="optimal.annuity.noteTaxDeferred">Bought with Tax Deferred money, the annuity stays in a tax-deferred account and every payment is taxed 100% as ordinary income. Bought with Brokerage or Roth money (unticked), its price comes back tax-free over its first 26 years of payments, and the rest of each payment is ordinary income.</span></sup></span></label>
                         <!-- Ticked when the Optimizer bought an annuity with the app's COLA (it weighs each size with and without one) -->
                         <label class="checkbox-label"><input type="checkbox" name="boughtCola" disabled> <span data-i18n="runner.annuity.cola">Yearly increase (COLA)</span> <small class="cola-rate" data-i18n="runner.annuity.colaRateNote">2% a year</small> <span class="paid-badge" data-feature="annuity-cola" hidden></span></label>
                     </fieldset>
