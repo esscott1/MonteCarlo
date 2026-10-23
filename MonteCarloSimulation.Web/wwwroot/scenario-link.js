@@ -8,7 +8,8 @@ window.ScenarioLink = (function () {
     const VERSION = '1';
 
     // [request field, how it's written]: num as is, monthly the annual amount ÷ 12 (as the page shows it), pct a fraction
-    // as a percent, date yyyymmdd, bool 0/1, and the enums by their first letter
+    // as a percent, date yyyymmdd, bool 0/1, and the enums by their first letter. cola is the COLA's rate, from when
+    // there was a choice: always written 2 (the one rate now) and read as any number, but left out of the request.
     const FIELDS = [
         ['years', 'num'], ['iterations', 'num'], ['withdrawal', 'monthly'], ['birthdate', 'date'], ['retirementDate', 'date'],
         ['filingStatus', { single: 's', married: 'm' }],
@@ -23,10 +24,10 @@ window.ScenarioLink = (function () {
     ];
     const ANNUITY_FIELDS = [
         ['annuityMonthlyAmount', 'num'], ['annuityInvestment', 'num'], ['annuityType', { spia: 's', dia: 'd' }],
-        ['annuityStartDate', 'date?'], ['annuityTaxDeferred', 'bool'], ['annuityCola', 'bool'], ['annuityColaRate', 'pct'],
+        ['annuityStartDate', 'date?'], ['annuityTaxDeferred', 'bool'], ['annuityCola', 'bool'], ['annuityColaRate', 'cola'],
     ];
     // What a request without an annuity sends for its fields (app.js's annuityRequest reads them from the form anyway)
-    const NO_ANNUITY = { annuityMonthlyAmount: 0, annuityInvestment: 0, annuityType: 'spia', annuityStartDate: null, annuityTaxDeferred: false, annuityCola: false, annuityColaRate: 0 };
+    const NO_ANNUITY = { annuityMonthlyAmount: 0, annuityInvestment: 0, annuityType: 'spia', annuityStartDate: null, annuityTaxDeferred: false, annuityCola: false };
 
     const NUMBER = /^-?\d+(\.\d+)?(e[+-]?\d+)?$/i;
     const DATE = /^(\d{4})(\d{2})(\d{2})$/;
@@ -40,6 +41,7 @@ window.ScenarioLink = (function () {
             case 'monthly': return tidy(value / 12);
             case 'pct': return tidy(value * 100);
             case 'bool': return value ? '1' : '0';
+            case 'cola': return '2';
             case 'date': return value.replaceAll('-', '');
             case 'date?': return value ? value.replaceAll('-', '') : '';
         }
@@ -88,6 +90,10 @@ window.ScenarioLink = (function () {
         const fields = withAnnuity ? [...FIELDS, ...ANNUITY_FIELDS] : FIELDS;
         const request = {};
         for (let i = 0; i < fields.length; i++) {
+            if (fields[i][1] === 'cola') {
+                if (!NUMBER.test(values[i])) return null;
+                continue;
+            }
             const value = read(values[i], fields[i][1]);
             if (value === undefined) return null;
             request[fields[i][0]] = value;

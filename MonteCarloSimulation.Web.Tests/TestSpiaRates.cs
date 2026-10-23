@@ -20,9 +20,10 @@ namespace MonteCarloSimulation.Web.Tests
                 .SetHandlerLifetime(Timeout.InfiniteTimeSpan));
         }
 
-        // The purchase options /api/optimal gives the Optimizer for this request, from the app's own figures
-        public static async Task<AnnuityPurchaseOptions?> PurchaseFor(WebApplicationFactory<Program> app, OptimalRequest request, bool female = false) =>
-            request.PurchaseOptions(await app.Services.GetRequiredService<SpiaPayoutIndex>().CurrentAsync(), female);
+        // The purchase options /api/optimal gives the Optimizer for this request, from the app's own figures: with the COLA
+        // weighed too, as for Plus, Pro and the Free teaser while a paid tier offers it
+        public static async Task<AnnuityPurchaseOptions?> PurchaseFor(WebApplicationFactory<Program> app, OptimalRequest request, bool female = false, bool cola = true) =>
+            request.PurchaseOptions(await app.Services.GetRequiredService<SpiaPayoutIndex>().CurrentAsync(), female, cola);
 
         private sealed class Unreachable : HttpMessageHandler
         {

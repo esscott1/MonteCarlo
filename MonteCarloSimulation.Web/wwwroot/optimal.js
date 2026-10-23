@@ -87,6 +87,7 @@ function applyPurchase(decision, fullTaxDeferred) {
     el['initialTaxableBalance'].dispatchEvent(new Event('input', { bubbles: true }));
     el['annuityInvestment'].value = formatWithCommas(String(amount));
     el['annuityMonthlyAmount'].value = formatWithCommas(String(amount > 0 ? decision.monthlyPayment : 0));
+    el['boughtCola'].checked = amount > 0 && decision.annualIncrease > 0;
     renderPurchaseNotes();
 }
 
@@ -117,7 +118,7 @@ function renderPurchaseNotes() {
             payment: formatCurrency(decision.monthlyPayment),
             per: formatCurrency(decision.monthlyPer100k),
             asOf,
-        });
+        }) + (decision.annualIncrease > 0 ? ` ${t('optimal.annuity.statusCola')}` : '');
         note.textContent = t('optimal.tdPurchaseNote', { amount: formatCurrency(decision.amount), full: formatCurrency(bought.fullTaxDeferred) });
     } else {
         status.innerHTML = t('optimal.annuity.statusNone', { count: decision.amountsConsidered, asOf });
@@ -211,7 +212,7 @@ function purchaseLine(purchase) {
         asOf,
         without: perMonth(purchase.spendWithout),
         with: perMonth(purchase.spendWith),
-    })}</p>`;
+    })}${purchase.annualIncrease > 0 ? ` ${t('optimal.purchase.cola')}` : ''}</p>`;
 }
 
 function renderBenefitCurve(benefits) {
@@ -374,7 +375,8 @@ function simulatorHandoff(optimum) {
         annualStandardDeduction: q.annualStandardDeduction,
         filingStatus: q.filingStatus,
         enableRothConversions: q.enableRothConversions,
-        annuity: bought ? { investment: bought.amount, monthlyPayment: bought.monthlyPayment } : null,
+        // cola: bought with the app's COLA (its monthlyPayment is the first year's); missing in older hand-offs, meaning none
+        annuity: bought ? { investment: bought.amount, monthlyPayment: bought.monthlyPayment, cola: bought.annualIncrease > 0 } : null,
         assetMix: {
             stockAllocation: q.stockAllocation,
             bondAllocation: q.bondAllocation,

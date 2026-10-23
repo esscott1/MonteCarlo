@@ -14,6 +14,11 @@ namespace MonteCarloSimulation.Core
         // Payments over which the basis is recovered: 26 years of monthly payments.
         public const int BasisRecoveryPayments = 26 * 12;
 
+        // The app's one COLA: 2% each January. A COLA annuity bought for the same money starts lower than a level one;
+        // the app assumes its first year's payment is 90% of the level payment (the SPIA index quotes level payouts only).
+        public const double ColaIncrease = 0.02;
+        public const double ColaFirstYearFactor = 0.9;
+
         // The first payment's amount, in actual (nominal) dollars.
         public double MonthlyPayment { get; init; }
         public DateOnly FirstPayment { get; init; }

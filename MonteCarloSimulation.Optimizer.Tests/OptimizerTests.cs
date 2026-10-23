@@ -403,6 +403,49 @@ namespace MonteCarloSimulation.Optimizer.Tests
             Assert.Equal(again.ClaimingAges, reported.ClaimingAges);
         }
 
+        [Fact]
+        public void AColaPurchase_StartsTenPercentLower_AndRisesTwoPercentEachJanuary()
+        {
+            var options = new AnnuityPurchaseOptions(612, "2026-10-01", ConsiderCola: true);
+            var template = Mixed();
+
+            var bought = AnnuityPurchase.Apply(template, options, 400_000, cola: true);
+
+            Assert.Equal(500_000, bought.InitialTaxableBalance);
+            Assert.Equal(2_203.2, bought.Annuity!.MonthlyPayment, 6); // 90% of the level 2,448
+            Assert.Equal(Annuity.ColaIncrease, bought.Annuity.AnnualIncrease);
+            Assert.Equal(0, bought.Annuity.Basis);
+            // Every size, level and then with the COLA; level only without ConsiderCola
+            var candidates = AnnuityPurchase.Candidates(template, options);
+            Assert.Equal(18, candidates.Count);
+            Assert.Equal(9, candidates.Count(c => c.Cola));
+            Assert.All(AnnuityPurchase.Candidates(template, options with { ConsiderCola = false }), c => Assert.False(c.Cola));
+        }
+
+        [Fact]
+        public void WithColasWeighed_AColaCanWin_AndThePlanIsThatPurchasesOwnSearch()
+        {
+            var level = WithPurchase(700);
+            var inputs = new OptimizationInputs { Template = level.Template, SocialSecurity = level.SocialSecurity, Paths = level.Paths, Purchase = level.Purchase! with { ConsiderCola = true } };
+
+            var optimum = SpendingOptimizer.Optimize(inputs).Optimum;
+            var decision = optimum.Purchase!;
+
+            // Still the screen plus two finalists: the best level SPIA and the best COLA one
+            Assert.Equal(9 + 1 + 2 * 9, SpendingOptimizer.TotalSteps(inputs));
+            Assert.Equal(18, decision.AmountsConsidered);
+            // Over this household's 30 years of inflation the COLA's later payments win, and beat the best level purchase
+            Assert.Equal(Annuity.ColaIncrease, decision.AnnualIncrease);
+            Assert.True(decision.Amount > 0);
+            Assert.Equal(630 * decision.Amount / 100_000, decision.MonthlyPayment, 6);
+            Assert.True(decision.SpendWith > SpendingOptimizer.Optimize(level).Optimum.Purchase!.SpendWith);
+
+            var bought = AnnuityPurchase.Apply(inputs.Template, inputs.Purchase!, decision.Amount, cola: true);
+            var alone = SpendingOptimizer.Optimize(new OptimizationInputs { Template = bought, SocialSecurity = Defaults, Paths = 60 }).Optimum;
+            Assert.Equal(alone.Recommended, optimum.Recommended);
+            Assert.Equal(alone.VerifiedSurvivalRate, optimum.VerifiedSurvivalRate);
+        }
+
         // --- Reporting progress and cancelling ---
 
         [Fact]

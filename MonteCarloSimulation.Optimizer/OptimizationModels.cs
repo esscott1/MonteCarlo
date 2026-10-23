@@ -17,13 +17,19 @@ namespace MonteCarloSimulation.Optimizer
 
     // A SPIA bought on the Retire On date with Tax Deferred money (a qualified annuity: no tax at purchase, every payment
     // ordinary income), in multiples of Step up to the whole Tax Deferred balance. MonthlyPer100k is the current best
-    // payout per $100,000 for the household's age then, as of RateAsOf.
-    public sealed record AnnuityPurchaseOptions(double MonthlyPer100k, string RateAsOf, double Step = AnnuityPurchase.DefaultStep);
+    // payout per $100,000 for the household's age then, as of RateAsOf. ConsiderCola also weighs each size with the app's
+    // COLA (2% a year, starting 10% lower).
+    public sealed record AnnuityPurchaseOptions(double MonthlyPer100k, string RateAsOf, double Step = AnnuityPurchase.DefaultStep, bool ConsiderCola = false);
+
+    // One purchase to weigh: a size, level or with the COLA
+    public sealed record AnnuityCandidate(double Amount, bool Cola);
 
     // What the search decided. Amount 0 means no purchase raised the spend (and MonthlyPayment is 0). SpendWithout and
     // SpendWith are the recommended midpoint (82.5%) annual spends without and with the purchase (equal with none);
     // MoneyLeftWithout and MoneyLeftWith the median after-tax money left at the end of the window, over every path,
-    // each at its own recommended spend (a failed path counts as 0). AmountsConsidered is how many sizes were tried.
+    // each at its own recommended spend (a failed path counts as 0). AmountsConsidered is how many purchases were tried
+    // (each size once, or twice when COLAs were weighed too). MonthlyPayment is the first payment; AnnualIncrease the
+    // bought annuity's COLA (Annuity.ColaIncrease), 0 for a level one.
     public sealed record AnnuityPurchaseDecision(
         double Amount,
         double MonthlyPayment,
@@ -33,7 +39,8 @@ namespace MonteCarloSimulation.Optimizer
         double SpendWith,
         double MoneyLeftWithout,
         double MoneyLeftWith,
-        int AmountsConsidered);
+        int AmountsConsidered,
+        double AnnualIncrease = 0);
 
     // One Social Security claiming age: the most annual spending (today's dollars) that survives 85%, 82.5% and 80%
     // of the simulated market paths. TotalSocialSecurity is every benefit payment received from the start date to

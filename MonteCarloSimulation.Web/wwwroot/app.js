@@ -50,13 +50,12 @@ function initSocialSecurityDefault() {
     followBirthdate();
 }
 
-// The Annuity tab (Plus; its COLA Pro): an annuity already owned. Its fields are disabled until "Include an annuity"
-// is ticked; a DIA shows its start date, at least two years from today (the visitor's own date), and a COLA its rate.
+// The Annuity tab (Plus, its COLA too): an annuity already owned. Its fields are disabled until "Include an annuity"
+// is ticked; a DIA shows its start date, at least two years from today (the visitor's own date).
 function initAnnuity() {
     const include = form.elements['includeAnnuity'];
     const details = document.getElementById('annuity-details');
     const start = form.elements['annuityStartDate'];
-    const cola = form.elements['annuityCola'];
     const today = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     const earliest = addYears(`${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`, 2);
@@ -69,10 +68,50 @@ function initAnnuity() {
         const dia = form.elements['annuityType'].value === 'dia';
         document.getElementById('annuity-start').hidden = !dia;
         start.disabled = !dia;
-        document.getElementById('annuity-cola-rate').hidden = !cola.checked;
     };
-    [include, cola, ...form.elements['annuityType']].forEach((input) => input.addEventListener('change', update));
+    [include, ...form.elements['annuityType']].forEach((input) => input.addEventListener('change', update));
     update();
+}
+
+// The app's one COLA, as Core's Annuity has it (ColaIncrease, ColaFirstYearFactor; PagesTests keeps them equal): 2% each
+// January, and a first year's payment 10% below a level annuity's for the same money.
+const COLA_RATE = 0.02;
+const COLA_FACTOR = 0.9;
+
+// Ticking COLA prices the monthly payment as a COLA annuity's first year, 10% less; unticking puts the level payment back
+// (the one it replaced, unless the visitor has typed another since, which is grossed up instead). The box's
+// data-priced says whether the field holds a COLA price, so only a real flip changes it - not a Free visitor's lock
+// (paywall.js fires change as it locks), and not a hand-off or shared link, whose payment already is what it is.
+function setColaPriced(priced) {
+    const cola = form.elements['annuityCola'];
+    cola.dataset.priced = String(priced);
+    if (!priced) delete cola.dataset.plainAmount;
+}
+
+function initAnnuityCola() {
+    const cola = form.elements['annuityCola'];
+    const payment = form.elements['annuityMonthlyAmount'];
+    const cents = (value) => Math.round(value * 100) / 100;
+    cola.addEventListener('change', () => {
+        if (cola.checked === (cola.dataset.priced === 'true')) return;
+        const amount = parseNumber(payment.value);
+        if (amount > 0) {
+            const plain = Number(cola.dataset.plainAmount);
+            let next;
+            if (cola.checked) {
+                cola.dataset.plainAmount = String(amount);
+                next = cents(amount * COLA_FACTOR);
+            } else {
+                next = plain > 0 && Math.abs(plain * COLA_FACTOR - amount) < 1 ? plain : cents(amount / COLA_FACTOR);
+            }
+            payment.value = formatWithCommas(String(next));
+            payment.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (cola.checked) cola.dataset.priced = 'true';
+        else setColaPriced(false);
+        renderAnnuityRate();
+    });
+    setColaPriced(cola.checked);
 }
 
 // The annuity as /api/run takes it. Read from the elements, not FormData: disabled controls aren't in FormData.
@@ -87,7 +126,6 @@ function annuityRequest() {
         annuityStartDate: dia && el['annuityStartDate'].value ? el['annuityStartDate'].value : null,
         annuityTaxDeferred: el['annuityTaxDeferred'].checked,
         annuityCola: el['annuityCola'].checked,
-        annuityColaRate: Number(el['annuityColaRate'].value),
     };
 }
 
@@ -164,7 +202,10 @@ function renderAnnuityRate() {
         return;
     }
     const investment = parseNumber(form.elements['annuityInvestment'].value) || 0;
-    const monthly = Math.round(rate.monthlyPer100k * investment / 100_000);
+    // With a COLA, the first year's payment: 10% below the level payout the index quotes
+    const cola = form.elements['annuityCola'].checked;
+    const plain = Math.round(rate.monthlyPer100k * investment / 100_000);
+    const monthly = cola ? Math.round(plain * COLA_FACTOR) : plain;
     text.textContent = t(rate.estimated ? 'runner.rate.estimated' : 'runner.rate.published', {
         who: t(rate.sex === 'female' ? 'runner.rate.woman' : 'runner.rate.man'),
         age: rate.age,
@@ -172,9 +213,10 @@ function renderAnnuityRate() {
         per: formatCurrency(rate.monthlyPer100k),
         amount: formatCurrency(monthly),
         investment: formatCurrency(investment),
-    });
+    }) + (cola ? ` ${t('runner.rate.colaNote')}` : '');
     use.hidden = !(monthly > 0);
     use.dataset.amount = String(monthly);
+    use.dataset.plainAmount = String(plain);
     source.innerHTML = t(rate.estimated ? 'runner.rate.sourceEstimated' : 'runner.rate.sourcePublished', links);
 }
 
@@ -188,6 +230,9 @@ function initAnnuityRate() {
         const payment = el['annuityMonthlyAmount'];
         payment.value = formatWithCommas(e.currentTarget.dataset.amount);
         payment.dispatchEvent(new Event('input', { bubbles: true }));
+        // The suggested payment is already priced for the COLA (or not); unticking it later goes back to the level one
+        setColaPriced(el['annuityCola'].checked);
+        if (el['annuityCola'].checked) el['annuityCola'].dataset.plainAmount = e.currentTarget.dataset.plainAmount;
     });
     document.addEventListener('paywall:change', refreshAnnuityRate);
     document.addEventListener('i18n:change', renderAnnuityRate);
@@ -438,7 +483,28 @@ function taxCell(yd, conversionsEnabled, taxDetail) {
         : `<td class="teaser">${taxesBreakdown(yd, conversionsEnabled)} <span class="paid-badge" data-feature="tax-detail" hidden></span></td>`;
 }
 
-function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail) {
+// A failed run's last word, after its failure year: what that year's Social Security and annuity still paid, after
+// tax, against what the year needed (its spending and any Medicare surcharge, in that year's dollars) - or, with no
+// income at all, that the money is gone. Plain text, for the failure trace too.
+function stillReceivedText(yd) {
+    const ss = yd.socialSecurityIncome;
+    const annuity = yd.annuityIncome;
+    if (!(ss > 0.5) && !(annuity > 0.5)) return t('runner.stillReceive.none');
+    const parts = [];
+    if (ss > 0.5) parts.push(t('runner.stillReceive.ss', { amount: formatCurrency(ss), tax: formatCurrency(yd.socialSecurityTax) }));
+    if (annuity > 0.5) parts.push(t('runner.stillReceive.annuity', { amount: formatCurrency(annuity), tax: formatCurrency(yd.annuityTax) }));
+    return t('runner.stillReceive', {
+        income: parts.join(t('runner.stillReceive.and')),
+        net: formatCurrency(ss - yd.socialSecurityTax + annuity - yd.annuityTax),
+        // The surcharge isn't sent without the tax detail after its first years
+        need: formatCurrency(yd.withdrawal + (yd.irmaaSurcharge ?? 0)),
+    });
+}
+
+const yearAgeLabel = (yd) => t('runner.yearAge', { year: yd.calendarYear, age: Math.floor(yd.ageInYear + 0.005) });
+
+// failed: the run failed, so the table ends with what its last year still paid (stillReceivedText)
+function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail, failed = false) {
     const rows = yearDetails.map((yd) => {
         return `
         <tr>
@@ -450,13 +516,17 @@ function renderRunDetailTable(yearDetails, conversionsEnabled, taxDetail) {
         </tr>
     `;
     }).join('');
+    const last = yearDetails[yearDetails.length - 1];
+    const closing = failed && last
+        ? `<tr class="run-income-row"><td colspan="5"><strong>${yearAgeLabel(last)}:</strong> ${stillReceivedText(last)}</td></tr>`
+        : '';
 
     return `${taxDetail ? '' : taxDetailNote()}
         <table class="run-table">
             <thead>
                 <tr>${['year', 'withdrawal', 'taxes', 'return', 'totalBalance'].map((key) => `<th>${t(`runner.table.${key}`)}${key === 'taxes' ? ' <span class="paid-badge" data-feature="tax-detail" hidden></span>' : ''}</th>`).join('')}</tr>
             </thead>
-            <tbody>${rows}</tbody>
+            <tbody>${rows}${closing}</tbody>
         </table>
     `;
 }
@@ -527,11 +597,12 @@ function annuityLine(parameters) {
 // language switches (which redraw it).
 let summaryExpanded = false;
 
-function summaryBox(kind, headline, details) {
+// outcome: the second line, under the headline and shown folded or not
+function summaryBox(kind, headline, outcome, details) {
     return `
         <div class="summary-box ${kind}">
             <details class="summary-details"${summaryExpanded ? ' open' : ''}>
-                <summary><span class="summary-caret" aria-hidden="true"></span>${headline}</summary>
+                <summary><span class="summary-caret" aria-hidden="true"></span>${headline}<span class="summary-outcome">${outcome}</span></summary>
                 ${details}
             </details>
             <p class="summary-share"><button type="button" class="secondary-button share-scenario">${t('runner.share.button')}</button></p>
@@ -539,11 +610,30 @@ function summaryBox(kind, headline, details) {
     `;
 }
 
+const mean = (values) => values.reduce((a, b) => a + b, 0) / values.length;
+const stdDevOf = (values, average) => Math.sqrt(mean(values.map((v) => (v - average) ** 2)));
+const percent1 = (value) => `${(value * 100).toFixed(1)}%`;
+
+// The summary's second line: the runs' average ending balance (a failed run's as $0, as the balance chart counts it)
+// and every simulated year's average return, each with its standard deviation - the balance's in dollars and as a
+// share of the average
+function outcomeLine(result, allRates) {
+    const endings = result.runs.map((run) => (run.failed ? 0 : run.endingBalance));
+    const balance = mean(endings);
+    const balanceStdDev = stdDevOf(endings, balance);
+    const rate = mean(allRates);
+    return t('runner.outcome', {
+        balance: formatCurrency(balance),
+        balanceStdDev: formatCurrency(balanceStdDev),
+        share: balance > 0 ? ` (${(balanceStdDev / balance * 100).toFixed(0)}%)` : '',
+        rate: percent1(rate),
+        rateStdDev: percent1(stdDevOf(allRates, rate)),
+    });
+}
+
 function renderSummary(parameters, output) {
     const result = output.result;
-    const totalAvgRate = output.allRates.reduce((a, b) => a + b, 0) / output.allRates.length;
-    const variance = output.allRates.reduce((a, b) => a + Math.pow(b - totalAvgRate, 2), 0) / output.allRates.length;
-    const stdDev = Math.sqrt(variance);
+    const outcome = outcomeLine(result, output.allRates);
     const avgLifetimeTax = result.runs.reduce((a, run) => a + run.lifetimeTaxesPaid, 0) / result.runs.length;
     // Not sent without the tax-detail feature
     const avgLifetimeIrmaa = result.runs.reduce((a, run) => a + (run.lifetimeIrmaaSurcharges ?? 0), 0) / result.runs.length;
@@ -568,20 +658,19 @@ function renderSummary(parameters, output) {
         return summaryBox(
             survival > 0.8 ? 'ok' : 'warn',
             `<strong>${survival > 0.8 ? '🙂' : '🙁'} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}`,
+            outcome,
             `${scenarioLine}
-                <p>${t('runner.realized', { mean: formatPercent(totalAvgRate), stdDev: stdDev.toFixed(4) })}</p>
                 <p>${t('runner.inheritance', { amount: formatCurrency(parameters.newMoney), year: new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney })}</p>
                 <p>${t('runner.avgFailure', { year: avgFailureYear.toFixed(0), rate: formatPercent(avgFailureReturn) })}</p>
                 ${lifetimeTaxLine}
                 ${accountChoiceLine(parameters, output)}`);
     }
 
-    const avgBalance = result.successMoneyRemaining.reduce((a, b) => a + b, 0) / result.successMoneyRemaining.length;
     return summaryBox(
         'ok',
         `<strong>🙂 ${t('runner.allSurvived')}</strong>`,
+        outcome,
         `${scenarioLine}
-            <p>${t('runner.avgBalance', { amount: formatCurrency(avgBalance) })}</p>
             ${lifetimeTaxLine}
             ${accountChoiceLine(parameters, output)}`);
 }
@@ -609,7 +698,8 @@ function failureTrace(runs) {
             total: formatCurrency(y.balance), taxable: formatCurrency(y.taxableBalance),
             brokerage: formatCurrency(y.brokerageBalance), roth: formatCurrency(y.rothBalance),
         }),
-    ].join('\n')).join('\n\n')).join('\n\n\n');
+    ].join('\n')).concat(`${yearAgeLabel(run.years[run.years.length - 1])}: ${stillReceivedText(run.years[run.years.length - 1])}`)
+        .join('\n\n')).join('\n\n\n');
 }
 
 function renderDetail(output, conversionsEnabled, taxDetail) {
@@ -720,7 +810,7 @@ function initRunToggles() {
         if (!expanded && !detailRow.dataset.built) {
             const run = view.output.result.runs[Number(button.dataset.run)];
             const cell = detailRow.firstElementChild;
-            cell.innerHTML = renderRunDetailTable(run.years, view.parameters.enableRothConversions, view.taxDetail);
+            cell.innerHTML = renderRunDetailTable(run.years, view.parameters.enableRothConversions, view.taxDetail, run.failed);
             Paywall.decorate(cell);
             detailRow.dataset.built = 'true';
         }
@@ -1038,7 +1128,8 @@ function applySimulatorHandoff() {
 }
 
 // The annuity the Optimizer decided to buy (with Tax Deferred money: the hand-off's Tax Deferred balance is already
-// what's left), as this page's own: a SPIA from the Retire On date in a tax-deferred account, no COLA. Without one, the
+// what's left), as this page's own: a SPIA from the Retire On date in a tax-deferred account, with the app's COLA when
+// the Optimizer chose one (its payment is already the COLA's first year). Without one, the
 // Annuity tab is left off.
 function applyHandoffAnnuity(annuity) {
     const el = form.elements;
@@ -1048,9 +1139,10 @@ function applyHandoffAnnuity(annuity) {
         el['annuityInvestment'].value = formatWithCommas(String(annuity.investment));
         el['annuityType'].value = 'spia';
         el['annuityTaxDeferred'].checked = true;
-        el['annuityCola'].checked = false;
+        el['annuityCola'].checked = !!annuity.cola;
     }
-    // The tab redraws from all its fields (the DIA date, the COLA rate, the suggested rate) on this one change
+    setColaPriced(el['annuityCola'].checked);
+    // The tab redraws from all its fields (the DIA date, the suggested rate) on this one change
     el['includeAnnuity'].dispatchEvent(new Event('change'));
 }
 
@@ -1170,10 +1262,11 @@ function applyScenarioRequest(r) {
             set('annuityStartDate', diaMoved ? start.min : r.annuityStartDate);
         }
         check('annuityTaxDeferred', r.annuityTaxDeferred);
+        // The app's one COLA rate: an older link's 1% or 3% opens as 2%. Its payment is already what was paid.
         check('annuityCola', r.annuityCola);
-        if ([...el['annuityColaRate'].options].some((o) => o.value === String(r.annuityColaRate))) set('annuityColaRate', String(r.annuityColaRate));
     }
-    // The tab redraws from all its fields (the DIA date, the COLA rate, the suggested rate) on this one change
+    setColaPriced(el['annuityCola'].checked);
+    // The tab redraws from all its fields (the DIA date, the suggested rate) on this one change
     el['includeAnnuity'].dispatchEvent(new Event('change'));
 
     // Field by field rather than Inputs.setAssetMix, which would also fill a Free visitor's locked returns
@@ -1214,6 +1307,7 @@ Inputs.initFilingStatus(form);
 Inputs.sizeInputs(form);
 initSocialSecurityDefault();
 initAnnuity();
+initAnnuityCola();
 initAnnuityRate();
 Inputs.initCollapsibleInputs(form);
 initRunToggles();

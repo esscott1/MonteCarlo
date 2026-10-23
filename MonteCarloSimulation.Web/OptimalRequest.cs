@@ -67,13 +67,13 @@ namespace MonteCarloSimulation.Web
         // The age on the Retire On date, when a suggested annuity would be bought (as the SPIA rate takes it)
         public double AgeAtRetirement => (RetirementDate.DayNumber - Birthdate.DayNumber) / 365.25;
 
-        // The annuity purchases to consider, at a woman's rate or a man's: none without figures, or when the index has no
-        // rate for that age
-        public AnnuityPurchaseOptions? PurchaseOptions(SpiaFigures? figures, bool female)
+        // The annuity purchases to consider, at a woman's rate or a man's, level only or with the app's COLA too: none
+        // without figures, or when the index has no rate for that age
+        public AnnuityPurchaseOptions? PurchaseOptions(SpiaFigures? figures, bool female, bool cola = false)
         {
             if (figures?.Model.MonthlyPer100k(AgeAtRetirement, female ? AnnuitantSex.Female : AnnuitantSex.Male) is not { } rate)
                 return null;
-            return new AnnuityPurchaseOptions(rate.Monthly, figures.AsOf);
+            return new AnnuityPurchaseOptions(rate.Monthly, figures.AsOf, ConsiderCola: cola);
         }
 
         public OptimizationInputs ToInputs(AnnuityPurchaseOptions? purchase = null)
