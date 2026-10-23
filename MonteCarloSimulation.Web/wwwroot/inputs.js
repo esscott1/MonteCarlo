@@ -357,6 +357,44 @@ window.Inputs = (() => {
         if (overflow > 0) tip.style.left = `${-Math.min(overflow, box.left - 4)}px`;
     }
 
+    // --- The Optimizer's answers, shared by the Optimal page and the Scenario runner's Optimize ---
+
+    // Calls onEvent with each JSON line of a streamed response (/api/optimal, /api/run/optimize) as it arrives.
+    async function readEvents(response, onEvent) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffered = '';
+        for (;;) {
+            const { value, done } = await reader.read();
+            buffered += decoder.decode(value, { stream: !done });
+            let newline;
+            while ((newline = buffered.indexOf('\n')) >= 0) {
+                const line = buffered.slice(0, newline).trim();
+                buffered = buffered.slice(newline + 1);
+                if (line) onEvent(JSON.parse(line));
+            }
+            if (done) break;
+        }
+        if (buffered.trim()) onEvent(JSON.parse(buffered));
+    }
+
+    // Each balance field and what a purchase decision's source says it took from it (the Optimizer's AnnuitySource)
+    const PURCHASE_FIELDS = {
+        initialTaxableBalance: 'fromTaxDeferred',
+        initialBrokerageBasis: 'fromBrokerageBasis',
+        initialBrokerageUnrealizedGain: 'fromBrokerageGain',
+        initialRothBasis: 'fromRothBasis',
+        initialRothUnrealizedGain: 'fromRothGain',
+    };
+
+    // What a decision's purchase took from one balance field: 0 without a purchase, and a decision without a source
+    // paid it all from Tax Deferred
+    function purchaseTaken(decision, field) {
+        if (!(decision?.amount > 0)) return 0;
+        if (!decision.source) return field === 'initialTaxableBalance' ? decision.amount : 0;
+        return decision.source[PURCHASE_FIELDS[field]] ?? 0;
+    }
+
     // "2026-10-01" as "Oct 1, 2026" (a month-only "2026-10" as "Oct 2026")
     function formatAsOf(asOf) {
         const monthOnly = /^\d{4}-\d{2}$/.test(asOf);
@@ -387,5 +425,8 @@ window.Inputs = (() => {
         sizeInputs,
         formatAsOf,
         initFormFootnotes,
+        readEvents,
+        PURCHASE_FIELDS,
+        purchaseTaken,
     };
 })();

@@ -43,9 +43,15 @@ function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// The annuity the last result bought, shown in the inputs: Tax Deferred lowered by its cost, the Annuity tab filled in.
-// { decision, fullTaxDeferred }, or null before a result that weighed a purchase.
+// The annuity the last result bought, shown in the inputs: each balance it was paid from lowered by what it took, the
+// Annuity tab filled in. { decision, full } (full: the request's balances before the purchase), or null before a result
+// that weighed a purchase.
 let bought = null;
+
+// What a decision's purchase took from one balance field (Inputs.purchaseTaken): by default the last result's
+const taken = (field, decision = bought?.decision) => Inputs.purchaseTaken(decision, field);
+
+const cents = (value) => Math.round(value * 100) / 100;
 
 function readRequest() {
     const data = new FormData(optimalForm);
@@ -53,12 +59,12 @@ function readRequest() {
         years: Number(data.get('years')),
         birthdate: data.get('birthdate'),
         retirementDate: data.get('retirementDate'),
-        // Each run decides afresh: the Tax Deferred field holds what's left after the last purchase, so it's added back
-        initialTaxableBalance: parseNumber(data.get('initialTaxableBalance')) + (bought?.decision.amount ?? 0),
-        initialRothBasis: parseNumber(data.get('initialRothBasis')),
-        initialRothUnrealizedGain: parseNumber(data.get('initialRothUnrealizedGain')),
-        initialBrokerageBasis: parseNumber(data.get('initialBrokerageBasis')),
-        initialBrokerageUnrealizedGain: parseNumber(data.get('initialBrokerageUnrealizedGain')),
+        // Each run decides afresh: the balance fields hold what's left after the last purchase, so what it took is added back
+        initialTaxableBalance: cents(parseNumber(data.get('initialTaxableBalance')) + taken('initialTaxableBalance')),
+        initialRothBasis: cents(parseNumber(data.get('initialRothBasis')) + taken('initialRothBasis')),
+        initialRothUnrealizedGain: cents(parseNumber(data.get('initialRothUnrealizedGain')) + taken('initialRothUnrealizedGain')),
+        initialBrokerageBasis: cents(parseNumber(data.get('initialBrokerageBasis')) + taken('initialBrokerageBasis')),
+        initialBrokerageUnrealizedGain: cents(parseNumber(data.get('initialBrokerageUnrealizedGain')) + taken('initialBrokerageUnrealizedGain')),
         newMoney: parseNumber(data.get('newMoney')),
         yearNewMoney: Number(data.get('yearNewMoney')),
         socialSecurityAt62: parseNumber(data.get('socialSecurityAt62')),
@@ -77,31 +83,49 @@ function readRequest() {
     };
 }
 
-// A result's annuity decision, put into the inputs. With a purchase: Tax Deferred shows what's left, with a note, and the
-// Annuity tab shows what was bought. Without one (none helped, or none was weighed): the full balance and an empty tab.
-function applyPurchase(decision, fullTaxDeferred) {
+// A result's annuity decision, put into the inputs. With a purchase: each balance it was paid from shows what's left,
+// with a note, and the Annuity tab shows what was bought. Without one (none helped, or none was weighed): the full
+// balances and an empty tab. `request`: the request the result came from, with the balances before any purchase.
+function applyPurchase(decision, request) {
     const el = optimalForm.elements;
-    bought = decision ? { decision, fullTaxDeferred } : null;
+    bought = decision ? { decision, full: request } : null;
     const amount = decision?.amount > 0 ? decision.amount : 0;
-    el['initialTaxableBalance'].value = formatWithCommas(String(fullTaxDeferred - amount));
-    el['initialTaxableBalance'].dispatchEvent(new Event('input', { bubbles: true }));
+    Object.keys(Inputs.PURCHASE_FIELDS).forEach((field) => {
+        el[field].value = formatWithCommas(String(cents(request[field] - taken(field))));
+        el[field].dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    // A Free visitor's account totals follow the fields (inputs.js)
+    Inputs.refreshAccountTotals(optimalForm);
     el['annuityInvestment'].value = formatWithCommas(String(amount));
     el['annuityMonthlyAmount'].value = formatWithCommas(String(amount > 0 ? decision.monthlyPayment : 0));
     el['boughtCola'].checked = amount > 0 && decision.annualIncrease > 0;
+    // Ticked for a qualified annuity, bought with Tax Deferred money; unticked for one bought with after-tax money
+    el['annuityTaxDeferred'].checked = !(amount > 0 && decision.source?.funding === 'AfterTax');
     renderPurchaseNotes();
 }
 
-// The Annuity tab's status line and the note under Tax Deferred, in the page's language
+// Where an after-tax purchase's money came from, in words: Brokerage (with its sale's estimated tax) and Roth
+function afterTaxFrom(source) {
+    const parts = [];
+    const brokerage = source.fromBrokerageBasis + source.fromBrokerageGain;
+    if (brokerage > 0.5) parts.push(t('optimal.annuity.fromBrokerage', { amount: formatCurrency(brokerage), tax: formatCurrency(source.brokerageSaleTax) }));
+    const roth = source.fromRothBasis + source.fromRothGain;
+    if (roth > 0.5) parts.push(t('optimal.annuity.fromRoth', { amount: formatCurrency(roth) }));
+    return parts.join(t('optimal.annuity.fromAnd'));
+}
+
+const isAfterTax = (decision) => decision?.amount > 0 && decision.source?.funding === 'AfterTax';
+
+// The Annuity tab's status line and the notes under the balances a purchase was paid from, in the page's language
 function renderPurchaseNotes() {
     const status = document.getElementById('annuity-status');
-    const note = document.getElementById('td-purchase-note');
     const decision = bought?.decision;
     const result = !!view?.optimum || !!view?.teaser;
     const off = !optimalForm.elements['considerAnnuities'].checked;
     document.getElementById('annuity-not-yet').hidden = result || off;
     document.getElementById('annuity-off').hidden = result || !off;
     status.hidden = !result;
-    note.hidden = !(decision?.amount > 0);
+    renderBalanceNotes();
     if (view?.teaser) {
         status.innerHTML = annuityTeaserLine(view.teaser);
         Paywall.decorate(status);
@@ -113,16 +137,45 @@ function renderPurchaseNotes() {
     }
     const asOf = formatAsOf(decision.rateAsOf);
     if (decision.amount > 0) {
-        status.innerHTML = t('optimal.annuity.statusBought', {
+        const values = {
             amount: formatCurrency(decision.amount),
             payment: formatCurrency(decision.monthlyPayment),
             per: formatCurrency(decision.monthlyPer100k),
             asOf,
-        }) + (decision.annualIncrease > 0 ? ` ${t('optimal.annuity.statusCola')}` : '');
-        note.textContent = t('optimal.tdPurchaseNote', { amount: formatCurrency(decision.amount), full: formatCurrency(bought.fullTaxDeferred) });
+        };
+        status.innerHTML = (isAfterTax(decision)
+            ? t('optimal.annuity.statusAfterTax', { ...values, from: afterTaxFrom(decision.source) })
+            : t('optimal.annuity.statusBought', values))
+            + (decision.annualIncrease > 0 ? ` ${t('optimal.annuity.statusCola')}` : '');
     } else {
         status.innerHTML = t('optimal.annuity.statusNone', { count: decision.amountsConsidered, asOf });
     }
+}
+
+// Under Tax Deferred, Brokerage and Roth: what the purchase took from each, and that Find optimal adds it back
+function renderBalanceNotes() {
+    const full = bought?.full;
+    const note = (id, text) => {
+        const el = document.getElementById(id);
+        el.hidden = !text;
+        el.textContent = text ?? '';
+    };
+    const td = taken('initialTaxableBalance');
+    const brokerage = taken('initialBrokerageBasis') + taken('initialBrokerageUnrealizedGain');
+    const roth = taken('initialRothBasis') + taken('initialRothUnrealizedGain');
+    note('td-purchase-note', td > 0.5
+        ? t('optimal.tdPurchaseNote', { amount: formatCurrency(td), full: formatCurrency(full.initialTaxableBalance) })
+        : null);
+    note('brokerage-purchase-note', brokerage > 0.5
+        ? t('optimal.brokeragePurchaseNote', {
+            amount: formatCurrency(brokerage),
+            tax: formatCurrency(bought.decision.source.brokerageSaleTax),
+            full: formatCurrency(full.initialBrokerageBasis + full.initialBrokerageUnrealizedGain),
+        })
+        : null);
+    note('roth-purchase-note', roth > 0.5
+        ? t('optimal.rothPurchaseNote', { amount: formatCurrency(roth), full: formatCurrency(full.initialRothBasis + full.initialRothUnrealizedGain) })
+        : null);
 }
 
 function renderErrors(errors) {
@@ -201,18 +254,21 @@ function renderCard(optimum) {
         </div>`;
 }
 
-// What the Optimizer decided about buying an annuity with Tax Deferred money (Plus), when it weighed one
+// What the Optimizer decided about buying an annuity (Plus), with Tax Deferred or after-tax money, when it weighed one
 function purchaseLine(purchase) {
     if (!purchase) return '';
     const asOf = formatAsOf(purchase.rateAsOf);
     if (!(purchase.amount > 0)) return `<p>${t('optimal.purchaseNone', { count: purchase.amountsConsidered, asOf })}</p>`;
-    return `<p>${t('optimal.purchase', {
+    const values = {
         amount: formatCurrency(purchase.amount),
         payment: formatCurrency(purchase.monthlyPayment),
         asOf,
         without: perMonth(purchase.spendWithout),
         with: perMonth(purchase.spendWith),
-    })}${purchase.annualIncrease > 0 ? ` ${t('optimal.purchase.cola')}` : ''}</p>`;
+    };
+    return `<p>${isAfterTax(purchase)
+        ? t('optimal.purchase.afterTax', { ...values, from: afterTaxFrom(purchase.source) })
+        : t('optimal.purchase', values)}${purchase.annualIncrease > 0 ? ` ${t('optimal.purchase.cola')}` : ''}</p>`;
 }
 
 function renderBenefitCurve(benefits) {
@@ -268,25 +324,6 @@ function renderProgress(progress) {
     if (line) line.innerHTML = progressText(progress.completed, progress.total);
 }
 
-// Calls onEvent with each JSON line of a streamed response as it arrives.
-async function readEvents(response, onEvent) {
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffered = '';
-    for (;;) {
-        const { value, done } = await reader.read();
-        buffered += decoder.decode(value, { stream: !done });
-        let newline;
-        while ((newline = buffered.indexOf('\n')) >= 0) {
-            const line = buffered.slice(0, newline).trim();
-            buffered = buffered.slice(newline + 1);
-            if (line) onEvent(JSON.parse(line));
-        }
-        if (done) break;
-    }
-    if (buffered.trim()) onEvent(JSON.parse(buffered));
-}
-
 optimalForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     optimalSubmit.disabled = true;
@@ -313,7 +350,7 @@ optimalForm.addEventListener('submit', async (e) => {
             render();
             return;
         }
-        await readEvents(response, (event) => {
+        await Inputs.readEvents(response, (event) => {
             switch (event.type) {
                 case 'start':
                     started = true;
@@ -326,12 +363,12 @@ optimalForm.addEventListener('submit', async (e) => {
                     break;
                 case 'result':
                     view.optimum = event.optimum;
-                    applyPurchase(event.optimum.purchase ?? null, request.initialTaxableBalance);
+                    applyPurchase(event.optimum.purchase ?? null, request);
                     render();
                     break;
                 case 'teaser':
                     view.teaser = event;
-                    applyPurchase(null, request.initialTaxableBalance);
+                    applyPurchase(null, request);
                     render();
                     break;
                 case 'done':
@@ -353,8 +390,9 @@ optimalForm.addEventListener('submit', async (e) => {
 function simulatorHandoff(optimum) {
     const r = optimum.recommended;
     const q = lastRequest;
-    // A suggested annuity was bought with Tax Deferred money: the runner starts with what's left, and the annuity
+    // A suggested annuity was paid for from the balances: the runner starts with what's left, and the annuity
     const bought = optimum.purchase?.amount > 0 ? optimum.purchase : null;
+    const left = (field) => cents(q[field] - taken(field, bought));
     return {
         version: 2,
         recommendedAge: r.age,
@@ -365,18 +403,26 @@ function simulatorHandoff(optimum) {
         years: q.years,
         birthdate: q.birthdate,
         retirementDate: q.retirementDate,
-        initialTaxableBalance: q.initialTaxableBalance - (bought ? bought.amount : 0),
-        initialRothBasis: q.initialRothBasis,
-        initialRothUnrealizedGain: q.initialRothUnrealizedGain,
-        initialBrokerageBasis: q.initialBrokerageBasis,
-        initialBrokerageUnrealizedGain: q.initialBrokerageUnrealizedGain,
+        initialTaxableBalance: left('initialTaxableBalance'),
+        initialRothBasis: left('initialRothBasis'),
+        initialRothUnrealizedGain: left('initialRothUnrealizedGain'),
+        initialBrokerageBasis: left('initialBrokerageBasis'),
+        initialBrokerageUnrealizedGain: left('initialBrokerageUnrealizedGain'),
         newMoney: q.newMoney,
         yearNewMoney: q.yearNewMoney,
         annualStandardDeduction: q.annualStandardDeduction,
         filingStatus: q.filingStatus,
         enableRothConversions: q.enableRothConversions,
-        // cola: bought with the app's COLA (its monthlyPayment is the first year's); missing in older hand-offs, meaning none
-        annuity: bought ? { investment: bought.amount, monthlyPayment: bought.monthlyPayment, cola: bought.annualIncrease > 0 } : null,
+        // cola: bought with the app's COLA (its monthlyPayment is the first year's); missing in older hand-offs, meaning
+        // none. taxDeferred: false when bought with after-tax money (missing means true), and saleTax the estimated tax
+        // on the Brokerage sold for it, already out of the Brokerage balance.
+        annuity: bought ? {
+            investment: bought.amount,
+            monthlyPayment: bought.monthlyPayment,
+            cola: bought.annualIncrease > 0,
+            taxDeferred: !isAfterTax(bought),
+            saleTax: bought.source?.brokerageSaleTax ?? 0,
+        } : null,
         assetMix: {
             stockAllocation: q.stockAllocation,
             bondAllocation: q.bondAllocation,

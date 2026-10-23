@@ -147,7 +147,8 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.NotNull(inputs.Purchase);
             Assert.Equal(paths ?? SpendingOptimizer.DefaultPaths, inputs.Paths);
             int total = SpendingOptimizer.TotalSteps(inputs);
-            Assert.Equal(9 + 1 + 2 * 9, total); // without a purchase, the screen, then two finalist sizes
+            // Without a purchase, the screen, then a finalist of each kind: level or COLA, Tax Deferred or after-tax money
+            Assert.Equal(9 + 1 + 4 * 9, total);
             var start = events[0];
             Assert.Equal(inputs.Paths, start.GetProperty("paths").GetInt32());
             Assert.Equal(total, start.GetProperty("totalSteps").GetInt32());

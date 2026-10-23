@@ -24,6 +24,16 @@ namespace MonteCarloSimulation.Optimizer
         public static SocialSecurityCurve FromFullRetirementAmount(double at67) =>
             new(at67 * SsaShareAt62, at67, at67 * SsaShareAt70);
 
+        // The curve through one claim, as the Scenario runner has it: `monthly` from `startDate`. The age then, in whole
+        // months (62 to 70), fixes where on SSA's shape that amount sits, which gives the benefit at full retirement age,
+        // and SSA's rules give the rest - so the curve pays exactly `monthly` at the claim's own age.
+        public static SocialSecurityCurve FromClaim(DateOnly birthdate, DateOnly startDate, double monthly)
+        {
+            int months = (startDate.Year - birthdate.Year) * 12 + startDate.Month - birthdate.Month - (startDate.Day < birthdate.Day ? 1 : 0);
+            double share = FromFullRetirementAmount(1).MonthlyBenefitAtMonths(Math.Clamp(months, EarliestAge * 12, LatestAge * 12));
+            return FromFullRetirementAmount(monthly / share);
+        }
+
         public double MonthlyBenefitAtAge(int age) => MonthlyBenefitAtMonths(age * 12);
 
         public double MonthlyBenefitAtMonths(int claimAgeMonths)
