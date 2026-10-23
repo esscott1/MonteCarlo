@@ -11,7 +11,7 @@ tiers plan adds a dev environment, this becomes `modules/` + `envs/`.
 |---|---|
 | Foundry account `aifoundry-montecarlo` (eastus2, kind `AIServices`, SKU `S0`, keys disabled) | The resource group `rg-montecarlo` |
 | Foundry project `montecarlo` | The App Service plan and the Web App `montecarlo-otsconsulting` |
-| Deployment `claude-haiku-4-5` (`GlobalStandard`, 25k tokens a minute) | The Web App's app settings (`next_step` prints the command) |
+| Deployment `claude-haiku-5-5` (`GlobalStandard`, 25k tokens a minute) | The Web App's app settings (`next_step` prints the command) |
 | Cognitive Services User on the account for the Web App's managed identity | The custom domain and certificate |
 | The same role for the operator (`operator_principal_id`), for local runs | The state storage account |
 
@@ -26,7 +26,7 @@ the [commercial terms](https://www.anthropic.com/legal/commercial-terms) and che
 ## Cost
 
 No standing charge: S0 has no hourly fee, projects are free, and `GlobalStandard` capacity is a rate
-cap, not a reservation. Only the tokens used are billed.
+cap, not a reservation. Only the tokens used are billed, on the Azure invoice through the Marketplace.
 
 ## Bootstrap (once, by hand)
 
@@ -47,8 +47,13 @@ Already done for this subscription. These are what Terraform can't create for it
 3. **The Web App's system-assigned identity**, which `main.tf` reads:
    `az webapp identity assign -g rg-montecarlo -n montecarlo-otsconsulting`
 4. **Claude quota.** Check `az cognitiveservices usage list -l eastus2 -o table` for
-   `AIServices.GlobalStandard.claude-haiku-4-5`. A limit of 0 means the deployment will fail with a
-   quota error until quota is granted (Foundry portal → Quota).
+   `AIServices.GlobalStandard.claude-haiku-5-5`. Claude quota is per subscription, shared by every
+   region, so another region doesn't help. A limit of 0 means the deployment fails with "insufficient
+   quota" until quota is granted: request it with the
+   [quota increase form](https://aka.ms/oai/stuquotarequest), or an Azure support ticket (Service and
+   subscription limits). Pay-as-you-go should default to 40 requests and 40,000 input tokens a minute
+   ([Claude quotas](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/claude-models-quotas-limits));
+   this subscription showed 0 in October 2026.
 
 ## Running it
 
@@ -70,15 +75,15 @@ wait a few minutes; 404: wrong URL or deployment name):
 curl -X POST "https://aifoundry-montecarlo.services.ai.azure.com/anthropic/v1/messages" \
   -H "Authorization: Bearer $(az account get-access-token --scope https://ai.azure.com/.default --query accessToken -o tsv)" \
   -H "anthropic-version: 2023-06-01" -H "Content-Type: application/json" \
-  -d '{"model":"claude-haiku-4-5","max_tokens":64,"messages":[{"role":"user","content":"ping"}]}'
+  -d '{"model":"claude-haiku-5-5","max_tokens":64,"messages":[{"role":"user","content":"ping"}]}'
 ```
 
 A second `terraform apply` must report **No changes**; anything else is drift.
 
 ## Gotchas
 
-- **Model version.** Foundry's versions aren't the API's dates: `claude-haiku-4-5` is `2` (default)
-  or `20251001`. List them with
+- **Model version.** Foundry's versions aren't the API's dates: `claude-haiku-5-5` is `2` (hosted on
+  Azure, the default) or `1` (hosted on Anthropic's infrastructure). List them with
   `az cognitiveservices model list -l eastus2 --query "[?model.format=='Anthropic'].{name:model.name,version:model.version}" -o table`.
 - **Norton (or any TLS-intercepting antivirus).** The Azure CLI is Python and doesn't use the Windows
   certificate store, so it fails with `CERTIFICATE_VERIFY_FAILED`, and Terraform's backend and

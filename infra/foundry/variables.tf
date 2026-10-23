@@ -30,11 +30,11 @@ variable "project_name" {
 variable "model" {
   description = "Claude model to deploy. The deployment is named after it, so this is also the model id the app sends."
   type        = string
-  default     = "claude-haiku-4-5"
+  default     = "claude-haiku-5-5"
 }
 
 variable "model_version" {
-  description = "Model version as Foundry lists it (az cognitiveservices model list -l eastus2). claude-haiku-4-5 offers 2 (the default) and 20251001."
+  description = "Model version as Foundry lists it (az cognitiveservices model list -l eastus2): 2 is hosted on Azure (the default), 1 on Anthropic's infrastructure."
   type        = string
   default     = "2"
 }
@@ -82,13 +82,13 @@ variable "claude_country_code" {
 }
 
 variable "claude_industry" {
-  description = "Industry, lowercase, as in the Foundry portal's list."
+  description = "Industry, lowercase, as in the Foundry portal's list (Azure-Samples' list plus consulting, seen in the portal in October 2026)."
   type        = string
   default     = "technology"
 
   validation {
     condition = contains([
-      "technology", "finance", "healthcare", "education",
+      "technology", "consulting", "finance", "healthcare", "education",
       "retail", "manufacturing", "government", "media", "other",
     ], var.claude_industry)
     error_message = "Must be one of the Foundry portal's lowercase industries."
