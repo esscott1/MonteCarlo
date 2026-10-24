@@ -8,20 +8,25 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
-const script = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'MonteCarloSimulation.Web', 'wwwroot', 'gordon-script.js');
+const wwwroot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'MonteCarloSimulation.Web', 'wwwroot');
 const context = { window: {}, I18n: { language: 'en' }, t: (key) => key };
-vm.runInNewContext(readFileSync(script, 'utf8'), context);
+// Gordon's run sentences are the results summary's (run-story.js), loaded first as on the page
+vm.runInNewContext(readFileSync(join(wwwroot, 'run-story.js'), 'utf8'), context);
+context.RunStory = context.window.RunStory;
+vm.runInNewContext(readFileSync(join(wwwroot, 'gordon-script.js'), 'utf8'), context);
 const { create, parseMoney, parseDate, parseAge } = context.window.GordonScript;
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-// A stand-in for gordon.js's page: the inputs as data, each action recorded and applied
-function fakePage({ plus = true } = {}) {
+// A stand-in for gordon.js's page: the inputs as data, each action recorded and applied. offer: whether a Free visitor
+// is offered Plus (until it's answered)
+function fakePage({ plus = true, offer = false } = {}) {
     const state = {
         birthdate: '1969-07-07', retirementDate: '2027-01-01', filingStatus: 'single', taxDeferred: 1000000, roth: 20000,
         brokerage: 400000, inheritance: 0, inheritanceYears: 10, socialSecurityMonthly: 2750, socialSecurityStart: '2031-07-07',
         mix: { stocks: 60, bonds: 30, cash: 10 }, spending: 8000, years: 40, iterations: 20,
     };
     const actions = [];
+    const plusOffer = { open: offer, answered: 0 };
     const apply = {
         setBirthdate: (v) => { state.birthdate = v; },
         setRetirementDate: (v) => { state.retirementDate = v; },
@@ -40,7 +45,14 @@ function fakePage({ plus = true } = {}) {
     return {
         state,
         actions,
+        plusOffer,
         can: (feature) => plus || feature !== 'inheritance',
+        offersPlus: () => plusOffer.open,
+        plusOfferAnswered() {
+            plusOffer.open = false;
+            plusOffer.answered++;
+        },
+        plusHref: () => '/billing/subscribe?tier=plus&return=%2Findex.html',
         monthYear: (iso) => iso.slice(0, 7),
         // SSA's shape, as app.js's ssShareOnDate: whole months of age, 5/9% less a month for 36 months early, 5/12% after,
         // and 2/3% more a month to 70
@@ -146,7 +158,7 @@ test('confirming a typed spend runs the plan, and the result reads the run', () 
     assert.deepEqual(keys(running), ['gordon.running']);
 
     const result = engine.result({ ok: true, total: 99, survived: 83, rate: 83 / 99, years: 30, median: 2.1e6, lower: 0, endYear: '2075', endAge: 95, lowerShortYear: 2068, lowerShortAge: 88, lowerShort: 31400, lowerShortShare: 0.35, monthly: 9000 });
-    assert.deepEqual(keys(result), ['gordon.result.survived', 'gordon.result.median', 'gordon.result.lowerShort', 'gordon.tip.inRange']);
+    assert.deepEqual(keys(result), ['story.survived', 'story.median', 'story.lowerShort', 'story.tip.inRange']);
     assert.deepEqual(plain(result.choices.map((c) => c.value)), ['details', 'change', 'restart']);
 });
 
@@ -172,7 +184,7 @@ test('"Find the most I can safely spend" leaves the spend to Optimize, which run
     assert.equal(result.say.length, 1);
     const message = result.say[0];
     assert.equal(message.kind, 'summary');
-    assert.deepEqual(message.lines.map((line) => line.key), ['gordon.optimized.found', 'gordon.optimized.annuity', 'gordon.result.survivedRate', 'gordon.result.median', 'gordon.result.lowerShort']);
+    assert.deepEqual(message.lines.map((line) => line.key), ['gordon.optimized.found', 'gordon.optimized.annuity', 'story.survivedRate', 'story.median', 'story.lowerShort']);
     assert.equal(message.lines[0].values.amount, '$7,400');
     assert.deepEqual(message.lines[2].values, { years: 30, rate: 79 });
     // The weakest markets fall short of the plan, about $31,000 a year (35%), from 2068 at 88; they don't run dry
@@ -185,7 +197,7 @@ test('"Find the most I can safely spend" leaves the spend to Optimize, which run
     engine.reply({ text: '7,000' });
     engine.reply({ choice: 'run' });
     const later = engine.result({ ok: true, total: 99, survived: 99, rate: 1, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerShortYear: null, lowerShortAge: null, lowerShort: null, lowerShortShare: null, monthly: 7000 });
-    assert.deepEqual(keys(later), ['gordon.result.allSurvived', 'gordon.result.median', 'gordon.result.lowerHolds', 'gordon.tip.more']);
+    assert.deepEqual(keys(later), ['story.allSurvived', 'story.median', 'story.lowerHolds', 'story.tip.more']);
 });
 
 test('a Free visitor\'s Optimize is the teaser range, and says Plus finds the exact spend', () => {
@@ -198,7 +210,7 @@ test('a Free visitor\'s Optimize is the teaser range, and says Plus finds the ex
     const result = plain(engine.result({ ok: true, total: 99, survived: 99, rate: 1, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerShortYear: null, lowerShortAge: null, lowerShort: null, lowerShortShare: null, monthly: 6500 }));
     assert.equal(result.say.length, 1);
     const lines = result.say[0].lines;
-    assert.deepEqual(lines.map((line) => line.key), ['gordon.optimized.teaser', 'gordon.result.allSurvivedRate', 'gordon.result.median', 'gordon.result.lowerHolds']);
+    assert.deepEqual(lines.map((line) => line.key), ['gordon.optimized.teaser', 'story.allSurvivedRate', 'story.median', 'story.lowerHolds']);
     assert.equal(lines[0].values.low, '$6,500');
 });
 
@@ -323,7 +335,7 @@ test('"Show me an example" fills every input at once and optimizes, saying nothi
     assert.equal(engine.step, 'confirm');
     engine.reply({ choice: 'run' });
     const later = engine.result({ ok: true, total: 99, survived: 90, rate: 90 / 99, years: 34, median: 1e6, lower: 1e5, endYear: '2062', endAge: 94, lowerShortYear: null, lowerShortAge: null, lowerShort: null, lowerShortShare: null, monthly: 8000 });
-    assert.deepEqual(keys(later), ['gordon.result.survived', 'gordon.result.median', 'gordon.result.lowerHolds', 'gordon.tip.more']);
+    assert.deepEqual(keys(later), ['story.survived', 'story.median', 'story.lowerHolds', 'story.tip.more']);
 });
 
 test('a Free visitor\'s example leaves out the inheritance, and its spend is the low end of the range', () => {
@@ -363,13 +375,132 @@ test('the tip follows the survival percent as shown, and amounts are rounded', (
     const result = plain(engine.result({ ok: true, total: 99, survived: 79, rate: 79 / 99, years: 34, median: 2048411, lower: 0, endYear: '2062', endAge: 94, lowerShortYear: 2055, lowerShortAge: 87, lowerShort: 31400, lowerShortShare: 0.35, monthly: 7000 }));
     assert.equal(result.say[0].values.rate, 80);
     assert.equal(result.say[1].values.amount, '$2,050,000');
-    assert.equal(result.say[3].key, 'gordon.tip.inRange');
+    assert.equal(result.say[3].key, 'story.tip.inRange');
 });
 
 test('a run whose typical market falls short says when and by how much, not that $0 is left', () => {
     const { engine } = converse(fakePage(), [{ choice: 'start' }]);
     const result = engine.result({ ok: true, total: 99, survived: 33, rate: 1 / 3, years: 34, median: 0, lower: 0, endYear: '2062', endAge: 94, lowerShortYear: 2043, lowerShortAge: 75, lowerShort: 31400, lowerShortShare: 0.35, medianShortYear: 2055, medianShortAge: 87, medianShort: 18650, medianShortShare: 0.2, monthly: 9000 });
-    assert.deepEqual(keys(result), ['gordon.result.survived', 'gordon.result.medianShort', 'gordon.result.lowerShort', 'gordon.tip.lower']);
+    assert.deepEqual(keys(result), ['story.survived', 'story.medianShort', 'story.lowerShort', 'story.tip.lower']);
     // A typical market falls short too, from 2055 at 87, by about $19,000 a year (20%)
     assert.deepEqual(plain(result.say[1].values), { year: 2055, age: 87, amount: '$19,000', percent: 20 });
+});
+
+// --- The Plus offer, after a Free visitor's results ---
+
+const FREE_UP_TO_SPENDING = UP_TO_SPENDING.filter((_, i) => i !== 7);
+const DONE = { ok: true, total: 99, survived: 85, rate: 85 / 99, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerShortYear: null, lowerShortAge: null, lowerShort: null, lowerShortShare: null, monthly: 6000 };
+
+function freeResult(page) {
+    const { engine } = converse(page, [...FREE_UP_TO_SPENDING, { text: '6,000' }, { choice: 'run' }]);
+    return { engine, result: plain(engine.result(DONE)) };
+}
+
+test('a Free visitor\'s results end with the Plus question, only Yes and No, and Gordon stays open', () => {
+    const { engine, result } = freeResult(fakePage({ plus: false, offer: true }));
+    assert.equal(result.say.at(-1).key, 'gordon.plus.ask');
+    assert.deepEqual(result.say.slice(0, -1).map((m) => m.key), ['story.survived', 'story.median', 'story.lowerHolds', 'story.tip.inRange']);
+    assert.deepEqual(result.choices.map((c) => c.value), ['yes', 'no']);
+    assert.equal(result.keepOpen, true);
+    assert.equal(engine.step, 'plusOffer');
+});
+
+test('Yes says what Plus unlocks, with only Unlock Plus (a link to the access page) and No thanks, and isn\'t asked again', () => {
+    const page = fakePage({ plus: false, offer: true });
+    const { engine } = freeResult(page);
+    const yes = plain(engine.reply({ choice: 'yes' }));
+    assert.deepEqual(keys(yes), ['gordon.plus.features']);
+    assert.deepEqual(yes.choices, [
+        { key: 'gordon.choice.unlockPlus', value: 'unlockPlus', href: '/billing/subscribe?tier=plus&return=%2Findex.html' },
+        { key: 'gordon.choice.noThanks', value: 'noThanks' },
+    ]);
+    assert.equal(page.plusOffer.answered, 1);
+
+    // Anything else asks again with the same two
+    const again = plain(engine.reply({ text: 'what does it cost?' }));
+    assert.deepEqual(keys(again), ['gordon.retry.plusUnlock']);
+    assert.deepEqual(again.choices.map((c) => c.value), ['unlockPlus', 'noThanks']);
+
+    // Unlock Plus (its tab opens) brings the results' buttons
+    const opened = plain(engine.reply({ choice: 'unlockPlus' }));
+    assert.deepEqual(keys(opened), ['gordon.plus.opened']);
+    assert.deepEqual(opened.choices.map((c) => c.value), ['details', 'change', 'restart']);
+    assert.equal(engine.step, 'results');
+
+    // The next run's results don't ask again
+    engine.reply({ choice: 'change' });
+    engine.reply({ choice: 'spending' });
+    engine.reply({ text: '5,500' });
+    engine.reply({ choice: 'run' });
+    const later = plain(engine.result(DONE));
+    assert.ok(!keys(later).includes('gordon.plus.ask'));
+    assert.equal(later.keepOpen, undefined);
+});
+
+test('No (or a typed no) goes back to the results\' buttons and isn\'t asked again', () => {
+    for (const answer of [{ choice: 'no' }, { text: 'no thanks' }]) {
+        const page = fakePage({ plus: false, offer: true });
+        const { engine } = freeResult(page);
+        const no = plain(engine.reply(answer));
+        assert.deepEqual(keys(no), ['gordon.plus.declined']);
+        assert.deepEqual(no.choices.map((c) => c.value), ['details', 'change', 'restart']);
+        assert.equal(page.plusOffer.answered, 1);
+        assert.equal(engine.step, 'results');
+    }
+});
+
+test('anything but Yes or No asks again, with only Yes and No', () => {
+    const page = fakePage({ plus: false, offer: true });
+    const { engine } = freeResult(page);
+    const again = plain(engine.reply({ text: 'maybe later' }));
+    assert.deepEqual(keys(again), ['gordon.retry.plusOffer']);
+    assert.deepEqual(again.choices.map((c) => c.value), ['yes', 'no']);
+    assert.equal(page.plusOffer.answered, 0);
+    assert.equal(engine.step, 'plusOffer');
+});
+
+test('no Plus question for Plus or Pro visitors, in Free Only, or after a run that didn\'t work', () => {
+    const { result } = freeResult(fakePage({ plus: false, offer: false }));
+    assert.ok(!keys(result).includes('gordon.plus.ask'));
+    assert.deepEqual(result.choices.map((c) => c.value), ['details', 'change', 'restart']);
+
+    const { engine } = converse(fakePage({ plus: false, offer: true }), [...FREE_UP_TO_SPENDING, { text: '6,000' }, { choice: 'run' }]);
+    const failed = plain(engine.result({ ok: false, message: 'Allocations must total 100%.' }));
+    assert.deepEqual(keys(failed), ['gordon.result.problem']);
+});
+
+test('the example\'s report ends with the Plus question too', () => {
+    const page = fakePage({ plus: false, offer: true });
+    const engine = create(page);
+    page.play(engine.start());
+    page.play(engine.reply({ choice: 'example' }));
+    engine.optimized({ kind: 'optimizedTeaser', low: 6500, high: 7000 });
+    const report = plain(engine.result(DONE));
+    assert.deepEqual(keys(report), ['summary', 'gordon.plus.ask']);
+    assert.equal(report.keepOpen, true);
+});
+
+test('No thanks after Yes brings the results\' buttons', () => {
+    const { engine } = freeResult(fakePage({ plus: false, offer: true }));
+    engine.reply({ choice: 'yes' });
+    const no = plain(engine.reply({ choice: 'noThanks' }));
+    assert.deepEqual(keys(no), ['gordon.plus.declined']);
+    assert.deepEqual(no.choices.map((c) => c.value), ['details', 'change', 'restart']);
+});
+
+test('once Plus is unlocked, Run optimizes again with the full Optimizer', () => {
+    const page = fakePage({ plus: false, offer: true });
+    const { engine } = freeResult(page);
+    engine.reply({ choice: 'yes' });
+    engine.reply({ choice: 'unlockPlus' });
+
+    const unlocked = plain(engine.unlocked());
+    assert.deepEqual(keys(unlocked), ['gordon.plus.unlocked']);
+    assert.deepEqual(unlocked.choices.map((c) => c.key), ['gordon.choice.runPlus', 'gordon.choice.details', 'gordon.choice.changeAndRerun', 'gordon.choice.startOver']);
+
+    const run = engine.reply({ choice: 'rerun' });
+    assert.equal(run.optimize, true);
+    assert.equal(run.run, false);
+    assert.deepEqual(keys(run), ['gordon.optimizing']);
+    assert.equal(engine.step, 'running');
 });

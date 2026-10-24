@@ -491,13 +491,7 @@ function taxCell(yd, conversionsEnabled, taxDetail) {
 // A failed run's last year: what it needed after tax (spending plus any Medicare surcharge, which isn't sent without the
 // tax detail after its first years), the Social Security and annuity it still paid after tax, and how far short that
 // falls, in dollars and as a share of the need. Gordon reads the weakest markets' shortfall the same way.
-function yearShortfall(yd) {
-    const need = yd.withdrawal + (yd.irmaaSurcharge ?? 0);
-    const ss = Math.max(0, yd.socialSecurityIncome - yd.socialSecurityTax);
-    const annuity = Math.max(0, yd.annuityIncome - yd.annuityTax);
-    const short = Math.max(0, need - ss - annuity);
-    return { need, ss, annuity, net: ss + annuity, short, share: need > 0 ? short / need : 0 };
-}
+const { yearShortfall } = RunStory;
 
 function stillReceivedText(yd) {
     const s = yearShortfall(yd);
@@ -600,17 +594,20 @@ function annuityLine(parameters) {
     })}</p>`;
 }
 
-// The results summary: its first sentence (how many runs survived) always shows, with a caret that unfolds the details
-// under it. Folded at first; once opened or closed it stays that way while the page is open, through new runs and
-// language switches (which redraw it).
+// The results summary: its first two lines (how many runs survived; the average ending balance and return), then the
+// run in plain words, as Gordon tells it (run-story.js), then More detail, a caret that unfolds the rest. Folded at first;
+// once opened or closed it stays that way while the page is open, through new runs and language switches (which redraw it).
 let summaryExpanded = false;
 
-// outcome: the second line, under the headline and shown folded or not
-function summaryBox(kind, headline, outcome, details) {
+// outcome: the second line; story: RunStory's messages
+function summaryBox(kind, headline, outcome, story, details) {
     return `
         <div class="summary-box ${kind}">
+            <p class="summary-headline">${headline}</p>
+            <p class="summary-outcome">${outcome}</p>
+            <div class="summary-story">${story.map((m) => `<p>${t(m.key, m.values)}</p>`).join('')}</div>
             <details class="summary-details"${summaryExpanded ? ' open' : ''}>
-                <summary><span class="summary-caret" aria-hidden="true"></span>${headline}<span class="summary-outcome">${outcome}</span></summary>
+                <summary><span class="summary-caret" aria-hidden="true"></span>${t('runner.moreDetail')}</summary>
                 ${details}
             </details>
             <p class="summary-share"><button type="button" class="secondary-button share-scenario">${t('runner.share.button')}</button></p>
@@ -647,9 +644,18 @@ function survivalFace(survival) {
     return '🙂';
 }
 
-function renderSummary(parameters, output) {
+// The run in plain words, as Gordon says it: a typical market and the weakest 10%, then how the survival compares with
+// the 80-85% range - left out after Optimize, whose spend already aims for it (its note above the results says so)
+function storyLines(view) {
+    const facts = RunStory.facts(view);
+    return [...RunStory.markets(facts), ...(view.fromOptimize ? [] : [RunStory.tip(facts)])];
+}
+
+function renderSummary(view) {
+    const { parameters, output } = view;
     const result = output.result;
     const outcome = outcomeLine(result, output.allRates);
+    const story = storyLines(view);
     const avgLifetimeTax = result.runs.reduce((a, run) => a + run.lifetimeTaxesPaid, 0) / result.runs.length;
     // Not sent without the tax-detail feature
     const avgLifetimeIrmaa = result.runs.reduce((a, run) => a + (run.lifetimeIrmaaSurcharges ?? 0), 0) / result.runs.length;
@@ -675,6 +681,7 @@ function renderSummary(parameters, output) {
             survival > 0.8 ? 'ok' : 'warn',
             `<strong>${survivalFace(survival)} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}`,
             outcome,
+            story,
             `${scenarioLine}
                 <p>${t('runner.inheritance', { amount: formatCurrency(parameters.newMoney), year: new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney })}</p>
                 <p>${t('runner.avgFailure', { year: avgFailureYear.toFixed(0), rate: formatPercent(avgFailureReturn) })}</p>
@@ -686,6 +693,7 @@ function renderSummary(parameters, output) {
         'ok',
         `<strong>${survivalFace(1)} ${t('runner.allSurvived')}</strong>`,
         outcome,
+        story,
         `${scenarioLine}
             ${lifetimeTaxLine}
             ${accountChoiceLine(parameters, output)}`);
@@ -751,7 +759,7 @@ function renderView() {
     } else {
         const { parameters, output, taxDetail } = view;
         results.innerHTML =
-            renderSummary(parameters, output) +
+            renderSummary(view) +
             renderPerRunTable(output.result) +
             renderDetail(output, parameters.enableRothConversions, taxDetail);
         Paywall.decorate(results);
@@ -1053,7 +1061,12 @@ form.addEventListener('submit', async (e) => {
         } else {
             const data = await response.json();
             // taxDetail is false when the server left out the year-by-year tax detail (FreeRunView)
-            view = { kind: 'results', parameters: data.parameters, output: data.output, taxDetail: data.taxDetail !== false, taxDetailYears: data.taxDetailYears ?? 0, request: payload };
+            // fromOptimize: the run Optimize started (its hand-off note is still up)
+            view = {
+                kind: 'results', parameters: data.parameters, output: data.output, taxDetail: data.taxDetail !== false,
+                taxDetailYears: data.taxDetailYears ?? 0, request: payload,
+                fromOptimize: handoff?.kind === 'optimized' || handoff?.kind === 'optimizedTeaser',
+            };
             chartData = { points: data.output.balanceBands, runs: data.output.result.runs.length };
         }
     } catch (err) {

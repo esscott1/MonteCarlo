@@ -303,6 +303,7 @@ window.Paywall = (function () {
         can,
         decorate,
         refresh,
+        subscribeHref,
         get me() { return me; },
     };
 })();
