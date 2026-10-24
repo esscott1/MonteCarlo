@@ -11,6 +11,9 @@
 // A message is { key, values } (text from t(), values already formatted and escaped) or a bulleted list,
 // { kind: 'summary', lines, lead, after } (lead and after: keys of a line before and after the bullets, both optional).
 // A turn with quiet: true says nothing more until its run's result, which comes as one message.
+// A choice with an href is a link, opened in a new tab (the Plus offer's Unlock Plus), and also answers. A result with
+// keepOpen: true asks something (the Plus offer), so the panel doesn't fold away once it's read.
+// engine.unlocked() is told when Plus is unlocked after a result, and offers to run again with the full Optimizer.
 window.GordonScript = (() => {
     const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
     const money = (value) => usd.format(value);
@@ -364,6 +367,47 @@ window.GordonScript = (() => {
                     return { next: 'change' };
                 },
             },
+            // The Plus offer, at the end of a Free visitor's results, with only Yes and No: Yes says what Plus adds, with a
+            // link to enter a code (the access page in a new tab, like the Plus badges' link); No brings the results'
+            // buttons. Either answer is the last time it's asked this session (page.plusOfferAnswered).
+            plusOffer: {
+                ask: () => [],
+                choices: () => [choice('gordon.choice.yes', 'yes'), choice('gordon.choice.no', 'no')],
+                answer(input) {
+                    const text = input.choice ? '' : input.text ?? '';
+                    const yes = input.choice === 'yes' || has(text, /^(yes|yeah|yep|sure|ok|okay|si|claro|dale)\b/);
+                    const no = input.choice === 'no' || has(text, /^(no|nope|not now|ahora no)\b/);
+                    if (!yes && !no) return { retry: 'gordon.retry.plusOffer' };
+                    page.plusOfferAnswered();
+                    return yes
+                        ? { say: [say('gordon.plus.features')], next: 'plusUnlock' }
+                        : { say: [say('gordon.plus.declined')], next: 'results' };
+                },
+            },
+            // Only Unlock Plus (which also opens the access page) or No thanks; either brings the results' buttons
+            plusUnlock: {
+                ask: () => [],
+                choices: () => [{ key: 'gordon.choice.unlockPlus', value: 'unlockPlus', href: page.plusHref() }, choice('gordon.choice.noThanks', 'noThanks')],
+                answer(input) {
+                    const text = input.choice ? '' : input.text ?? '';
+                    if (input.choice === 'unlockPlus') return { say: [say('gordon.plus.opened')], next: 'results' };
+                    if (input.choice === 'noThanks' || has(text, /^(no|nope|not now|ahora no)\b/)) return { say: [say('gordon.plus.declined')], next: 'results' };
+                    return { retry: 'gordon.retry.plusUnlock' };
+                },
+            },
+            // Plus was unlocked after the results: Run optimizes, now with the full Optimizer, then runs
+            unlocked: {
+                ask: () => [],
+                choices: () => [choice('gordon.choice.runPlus', 'rerun'), ...STEPS.results.choices()],
+                answer(input) {
+                    const text = input.choice ? '' : input.text ?? '';
+                    if (input.choice === 'rerun' || has(text, /\b(run|go|yes|yep|sure|ok|okay|si|dale|corre|ejecut\w*)\b/)) {
+                        answers.spending = 'optimize';
+                        return { say: [say('gordon.optimizing')], optimize: true, next: 'running' };
+                    }
+                    return STEPS.results.answer(input);
+                },
+            },
         };
 
         function moneyStep(name, action, askKey, ackKey) {
@@ -381,6 +425,8 @@ window.GordonScript = (() => {
 
         // The spend is left to Optimize, until an amount is given
         const optimizing = () => answers.spending === 'optimize';
+        // After a run: the results, and the Plus offer and its follow-ups
+        const AFTER_RUN = ['results', 'plusOffer', 'plusUnlock', 'unlocked'];
 
         function summaryLines() {
             const now = page.get();
@@ -430,7 +476,7 @@ window.GordonScript = (() => {
             if (!input.choice && has(text, /^(back|go back|undo|atras|volver)\b/) && history.length) {
                 return turn(history.pop(), [say('gordon.back')]);
             }
-            if (!input.choice && has(text, /^(skip|pass|saltar|omitir)\b/) && !['intro', 'confirm', 'change', 'running', 'results'].includes(step)) {
+            if (!input.choice && has(text, /^(skip|pass|saltar|omitir)\b/) && !['intro', 'confirm', 'change', 'running', ...AFTER_RUN].includes(step)) {
                 const next = backTo ?? after(step);
                 if (next === 'confirm') backTo = null;
                 return turn(next, [say('gordon.skipped')]);
@@ -441,7 +487,7 @@ window.GordonScript = (() => {
             if (result.restart) return start();
             if (result.retry) return { say: [say(result.retry)], choices: STEPS[step].choices ? STEPS[step].choices() : [], actions: [] };
 
-            if (!['change', 'running', 'results'].includes(step)) history.push(step);
+            if (!['change', 'running', ...AFTER_RUN].includes(step)) history.push(step);
             let next = result.next ?? (backTo ?? after(step));
             // A step changed from the summary goes straight back to it; inheritance's follow-up question still comes first
             if (next === 'confirm') backTo = null;
@@ -494,34 +540,10 @@ window.GordonScript = (() => {
             };
         }
 
-        // How the run went: its survival, then a typical and a weak market (digest: gordon.js's reading of the results);
-        // counts: whether the survival says how many markets were run
+        // How the run went: its survival, then a typical and a weak market, in the words the results summary uses too
+        // (run-story.js; digest: its facts); counts: whether the survival says how many markets were run
         function runLines(digest, { counts }) {
-            const about = (value) => money(Math.round(value / 10000) * 10000);
-            const aboutYear = (value) => money(Math.round(value / 1000) * 1000);
-            const percent = Math.round(digest.rate * 100);
-            const all = digest.survived === digest.total;
-            const survival = counts
-                ? (all ? say('gordon.result.allSurvived', { total: digest.total, years: digest.years })
-                    : say('gordon.result.survived', { survived: digest.survived, total: digest.total, years: digest.years, rate: percent }))
-                : (all ? say('gordon.result.allSurvivedRate', { years: digest.years })
-                    : say('gordon.result.survivedRate', { years: digest.years, rate: percent }));
-            return [
-                survival,
-                // Neither a typical market nor the weakest runs dry: Social Security and any annuity still pay, short of the plan
-                digest.medianShortYear
-                    ? say('gordon.result.medianShort', {
-                        year: digest.medianShortYear, age: digest.medianShortAge,
-                        amount: aboutYear(digest.medianShort), percent: Math.round(digest.medianShortShare * 100),
-                    })
-                    : say('gordon.result.median', { amount: about(digest.median), year: digest.endYear, age: digest.endAge }),
-                digest.lowerShortYear
-                    ? say('gordon.result.lowerShort', {
-                        year: digest.lowerShortYear, age: digest.lowerShortAge,
-                        amount: aboutYear(digest.lowerShort), percent: Math.round(digest.lowerShortShare * 100),
-                    })
-                    : say('gordon.result.lowerHolds', { amount: about(digest.lower), year: digest.endYear }),
-            ];
+            return [RunStory.survival(digest, { counts }), ...RunStory.markets(digest)];
         }
 
         // What a finished run means (digest: gordon.js's reading of the results)
@@ -533,15 +555,26 @@ window.GordonScript = (() => {
             const problem = () => (digest.message ? say('gordon.result.problem', { message: digest.message }) : say('gordon.result.failed'));
             if (reporting) {
                 reporting = false;
-                return { say: [digest.ok ? report(o) : problem()], choices, actions: [] };
+                return digest.ok ? withPlusOffer({ say: [report(o)], choices, actions: [] }) : { say: [problem()], choices, actions: [] };
             }
             if (!digest.ok) return { say: [problem()], choices, actions: [] };
             // After Optimize: one bulleted message - what it decided, then how the run went, without the run count
-            if (o) return { say: [{ kind: 'summary', lines: [...optimumLines(o), ...runLines(digest, { counts: false })] }], choices, actions: [] };
-            // The tip follows the percent as shown, so 79.8% reads "80%" and counts as in the range
-            const percent = Math.round(digest.rate * 100);
-            const tip = percent < 80 ? 'gordon.tip.lower' : percent < 90 ? 'gordon.tip.inRange' : 'gordon.tip.more';
-            return { say: [...runLines(digest, { counts: true }), say(tip, { amount: money(digest.monthly) })], choices, actions: [] };
+            if (o) return withPlusOffer({ say: [{ kind: 'summary', lines: [...optimumLines(o), ...runLines(digest, { counts: false })] }], choices, actions: [] });
+            return withPlusOffer({ say: [...runLines(digest, { counts: true }), RunStory.tip(digest)], choices, actions: [] });
+        }
+
+        // A Free visitor's results end with the Plus offer, until it's answered (page.offersPlus: a Free visitor, Plus on
+        // offer, not answered this session), with only Yes and No to choose
+        function withPlusOffer(result) {
+            if (!page.offersPlus()) return result;
+            step = 'plusOffer';
+            return { ...result, say: [...result.say, say('gordon.plus.ask')], choices: STEPS.plusOffer.choices(), keepOpen: true };
+        }
+
+        // Plus was unlocked (a code entered in the access page's tab) after the results
+        function unlocked() {
+            step = 'unlocked';
+            return { say: [say('gordon.plus.unlocked')], choices: STEPS.unlocked.choices(), actions: [] };
         }
 
         // "Show me an example", in one turn: each of the example household's answers read by its step as if typed (so the
@@ -561,7 +594,7 @@ window.GordonScript = (() => {
             return { say: [], lead: 0, actions, choices: [], optimize: true, quiet: true };
         }
 
-        return { start, reply, optimized, result, get step() { return step; } };
+        return { start, reply, optimized, result, unlocked, get step() { return step; } };
     }
 
     return { create, parseMoney, parseDate, parseAge };

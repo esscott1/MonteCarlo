@@ -48,8 +48,21 @@ window.Gordon = (() => {
         return setMoney(basis, amount - gainAmount);
     }
 
+    // Gordon's Plus offer was answered in this tab's session, so it isn't asked again
+    const PLUS_OFFER_KEY = 'gordonPlusOffer';
+    const plusOfferAnswered = () => {
+        try { return sessionStorage.getItem(PLUS_OFFER_KEY) === 'answered'; } catch { return false; }
+    };
+
     const page = {
         can: (feature) => Paywall.can(feature),
+        // A Free visitor, while Plus is on offer, who hasn't answered the offer yet
+        offersPlus: () => Paywall.me.tier === 'Free' && Paywall.me.offers.some((offer) => offer.tier === 'Plus') && !plusOfferAnswered(),
+        plusOfferAnswered() {
+            try { sessionStorage.setItem(PLUS_OFFER_KEY, 'answered'); } catch { /* asked again next time */ }
+        },
+        // The access page for a Plus code, as the Plus badges link to it (it comes back here once a code is entered)
+        plusHref: () => Paywall.subscribeHref('Plus'),
         monthYear: (isoDate) => I18n.monthYear(new Date(`${isoDate}T00:00:00Z`)),
         // The share of the benefit at full retirement age (67) a claim starting on this date gets, by SSA's shape (app.js,
         // the same as Optimize and Optimize Social Security read a claim)
@@ -128,54 +141,9 @@ window.Gordon = (() => {
         if (matchMedia('(min-width: 901px)').matches) target.scrollIntoView({ block: 'nearest', behavior: reduceMotion() ? 'auto' : 'smooth' });
     }
 
-    // --- digest: a finished run, as facts ---
+    // --- digest: a finished run, as facts (run-story.js, which the results summary reads too) ---
 
-    function digest(view) {
-        if (view?.kind === 'errors') {
-            const first = Object.values(view.errors ?? {}).flat()[0];
-            return { ok: false, message: first ? I18n.translateServerMessage(first) : null };
-        }
-        if (view?.kind !== 'results') return { ok: false, message: view?.message ?? null };
-        const { parameters: p, output: o } = view;
-        const bands = o.balanceBands;
-        const last = bands[bands.length - 1];
-        const ageAt = (isoDate) => Math.floor((Date.parse(isoDate) - Date.parse(p.birthdate)) / (365.25 * 864e5));
-        const survived = p.iterations - o.result.outOfMoneyCount;
-        // A typical market and the weakest 10%: the runs at the 50th and 10th percentiles, ranked by how soon they fell
-        // short, then by what they ended with. One that fell short says when and by how much in that year (app.js's
-        // yearShortfall, as its year table says); the money doesn't run dry, since Social Security and any annuity pay on
-        const severity = (run) => (run.failed ? run.years.length : Number.MAX_SAFE_INTEGER);
-        const ranked = [...o.result.runs].sort((a, b) => severity(a) - severity(b) || a.endingBalance - b.endingBalance);
-        const shortAt = (share) => {
-            const run = ranked[Math.floor((ranked.length - 1) * share)];
-            if (!run?.failed) return { year: null, age: null, short: null, share: null };
-            const year = run.years[run.years.length - 1];
-            const s = yearShortfall(year);
-            return { year: year.calendarYear, age: Math.floor(year.ageInYear + 0.005), short: s.short, share: s.share };
-        };
-        const typical = shortAt(0.5);
-        const weak = shortAt(0.1);
-        return {
-            ok: true,
-            total: p.iterations,
-            survived,
-            rate: survived / p.iterations,
-            years: p.years,
-            median: last.middle,
-            lower: last.lower,
-            endYear: last.date.slice(0, 4),
-            endAge: ageAt(last.date),
-            lowerShortYear: weak.year,
-            lowerShortAge: weak.age,
-            lowerShort: weak.short,
-            lowerShortShare: weak.share,
-            medianShortYear: typical.year,
-            medianShortAge: typical.age,
-            medianShort: typical.short,
-            medianShortShare: typical.share,
-            monthly: p.withdrawal / 12,
-        };
-    }
+    const digest = (view) => RunStory.facts(view);
 
     // --- the panel ---
 
@@ -265,8 +233,11 @@ window.Gordon = (() => {
         }
     }
 
+    // A choice with an href is a link to another tab (Unlock Plus), which also answers
     function renderChoices() {
-        choiceBox.innerHTML = choices.map((c, i) => `<button type="button" class="gordon-choice" data-i="${i}">${renderText(c)}</button>`).join('');
+        choiceBox.innerHTML = choices.map((c, i) => (c.href
+            ? `<a class="gordon-choice" href="${escapeHtml(c.href)}" target="_blank" rel="noopener" data-i="${i}">${renderText(c)}</a>`
+            : `<button type="button" class="gordon-choice" data-i="${i}">${renderText(c)}</button>`)).join('');
         choiceBox.hidden = choices.length === 0;
         scrollLog();
     }
@@ -442,15 +413,16 @@ window.Gordon = (() => {
     }
 
     // Once a run Gordon started is explained, a pause to read it, then the page scrolls to the results and Gordon folds
-    // out of their way - unless the visitor has touched the panel meanwhile
+    // out of their way - unless the visitor has touched the panel meanwhile. fold: false when Gordon asked something
+    // (the Plus offer), so it stays open to be answered.
     const READ_PAUSE_MS = 5000;
     let autoMinimize = null;
-    function minimizeAfterReading(mine) {
+    function minimizeAfterReading(mine, { fold = true } = {}) {
         clearTimeout(autoMinimize);
         autoMinimize = setTimeout(() => {
             if (mine !== session || panel.hidden || minimized) return;
             page.apply({ name: 'showResults' });
-            setMinimized(true, { focus: false });
+            if (fold) setMinimized(true, { focus: false });
         }, READ_PAUSE_MS);
     }
     ['pointerdown', 'keydown'].forEach((type) => panel.addEventListener(type, () => clearTimeout(autoMinimize)));
@@ -557,6 +529,7 @@ window.Gordon = (() => {
         if (e.key === 'Escape') { close(); launcher.focus(); }
     });
     choiceBox.addEventListener('click', (e) => {
+        // A link choice opens its tab as usual, and answers too
         const button = e.target.closest('.gordon-choice');
         if (!button) return;
         const c = choices[Number(button.dataset.i)];
@@ -599,11 +572,21 @@ window.Gordon = (() => {
         progress = null;
         renderProgress();
         const facts = digest(e.detail);
-        enqueue(engine.result(facts));
+        const reply = engine.result(facts);
+        enqueue(reply);
         // The results are on the page: once they're explained, Gordon makes room for them
         const mine = session;
-        if (facts.ok) playing = playing.then(() => minimizeAfterReading(mine));
+        if (facts.ok) playing = playing.then(() => minimizeAfterReading(mine, { fold: !reply.keepOpen }));
     });
+
+    // Plus unlocked after Gordon's results - a code entered on the access page, which another tab broadcasts (paywall.js):
+    // Gordon offers to run again with the full Optimizer
+    let fullOptimizer = false;
+    function noticeUnlock() {
+        const was = fullOptimizer;
+        fullOptimizer = Paywall.can('optimizer-full');
+        if (!was && fullOptimizer && engine && ['results', 'plusOffer', 'plusUnlock'].includes(engine.step)) enqueue(engine.unlocked());
+    }
 
     // Shown while the Observe switch is on; it's read again when the tab regains focus (paywall.js)
     function sync() {
@@ -615,8 +598,14 @@ window.Gordon = (() => {
     document.body.append(launcher, panel);
     I18n.ready.then(renderStatic);
     document.addEventListener('i18n:change', renderStatic);
-    Paywall.ready.then(sync);
-    document.addEventListener('paywall:change', sync);
+    Paywall.ready.then(() => {
+        sync();
+        fullOptimizer = Paywall.can('optimizer-full');
+    });
+    document.addEventListener('paywall:change', () => {
+        sync();
+        noticeUnlock();
+    });
 
     return { open, close, page, digest };
 })();

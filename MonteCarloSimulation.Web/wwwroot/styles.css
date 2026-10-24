@@ -885,7 +885,8 @@ button[type="submit"]:hover {
     margin: 0.3rem 0;
 }
 
-/* The Scenario runner's summary: the first sentence with a caret that unfolds the details (app.js summaryBox) */
+/* The Scenario runner's summary: two lines, the run in plain words, then More detail with a caret that unfolds the
+   rest (app.js summaryBox) */
 .summary-details > summary {
     cursor: pointer;
     list-style: none;
@@ -911,11 +912,11 @@ button[type="submit"]:hover {
     transform: rotate(90deg);
 }
 
-/* The second line: the average ending balance and return, under the headline's text */
-.summary-outcome {
-    display: block;
-    padding-left: 1.45em;
-    margin-top: 0.2rem;
+/* The run in plain words (run-story.js), set apart from the two lines above it */
+.summary-story {
+    margin: 0.6rem 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
 }
 
 /* A failed run's year table ends with what its last year still paid */
@@ -2417,6 +2418,11 @@ body.translations-page {
 .gordon-choice:hover,
 .gordon-choice:focus-visible {
     background: var(--plus-soft);
+}
+
+/* Unlock Plus: a link to the access page, drawn like the other choices */
+a.gordon-choice {
+    text-decoration: none;
 }
 
 .gordon-input {

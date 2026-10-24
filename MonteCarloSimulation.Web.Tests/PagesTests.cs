@@ -588,7 +588,11 @@ namespace MonteCarloSimulation.Web.Tests
             string script = await GetAsync("/app.js");
             string en = await GetAsync("/i18n/en.json");
 
-            Assert.Contains(@"${headline}<span class=""summary-outcome"">${outcome}</span></summary>", script);
+            // The two lines stay above the run in plain words (run-story.js, as Gordon tells it); the rest folds under More detail
+            Assert.Contains(@"<p class=""summary-headline"">${headline}</p>", script);
+            Assert.Contains(@"<p class=""summary-outcome"">${outcome}</p>", script);
+            Assert.Contains("return [...RunStory.markets(facts), ...(view.fromOptimize ? [] : [RunStory.tip(facts)])];", script);
+            Assert.Contains("t('runner.moreDetail')", script);
             Assert.Contains("t('runner.outcome', {", script);
             Assert.Contains("renderRunDetailTable(run.years, view.parameters.enableRothConversions, view.taxDetail, run.failed)", script);
             Assert.Contains(@"""runner.stillReceive.none"": ""You will be {short} ({percent}%) short of your desired withdrawal amount: no income or balances remain.""", en);
@@ -693,16 +697,24 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains("new CustomEvent('runner:optimized', { detail: { ...handoff } })", app);
             Assert.Equal(2, Regex.Matches(app, @"new CustomEvent\('runner:result', \{ detail: view \}\)").Count);
             Assert.Contains("'runner:optimized'", gordon);
-            // The panel can fold to its header bar and be dragged out of the way, and folds itself once results are in
+            // The panel can fold to its header bar and be dragged out of the way, and folds itself once results are in -
+            // unless they end with a question (the Plus offer), which it stays open to have answered
             Assert.Contains(@"class=""flyout-close gordon-minimize""", gordon);
             Assert.Contains("header.setPointerCapture(e.pointerId)", gordon);
-            Assert.Contains("minimizeAfterReading(mine)", gordon);
+            Assert.Contains("minimizeAfterReading(mine, { fold: !reply.keepOpen })", gordon);
+            // Its Unlock Plus link is the Plus badges' own (paywall.js)
+            Assert.Contains("plusHref: () => Paywall.subscribeHref('Plus')", gordon);
             // Gordon moves a benefit at 67 to the start age by the page's own SSA shape, the one Optimize reads a claim by
             Assert.Contains("socialSecurityShare: (birthdate, startDate) => ssShareOnDate(birthdate, startDate)", gordon);
             Assert.Contains("const at67 = amount / ssShareOnDate(birth, start);", app);
-            // Gordon's typical and weakest markets' shortfall is the year table's own (yearShortfall)
-            Assert.Contains("const s = yearShortfall(year);", gordon);
+            // Gordon's run sentences are the results summary's, and their shortfall is the year table's own (yearShortfall)
+            string story = await GetAsync("/run-story.js");
+            Assert.Contains("const digest = (view) => RunStory.facts(view);", gordon);
+            Assert.Contains("const s = yearShortfall(year);", story);
+            Assert.Contains("const { yearShortfall } = RunStory;", app);
             Assert.Contains("const s = yearShortfall(yd);", app);
+            int storyScript = html.IndexOf("<script src=\"run-story.js\"></script>");
+            Assert.True(storyScript > 0 && storyScript < html.IndexOf("<script src=\"app.js\"></script>"));
             Assert.Contains(@"data-tier=""gordon""", observe);
             Assert.Contains("Enable Gordon", observe);
         }
