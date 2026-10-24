@@ -139,11 +139,22 @@ window.Gordon = (() => {
         const { parameters: p, output: o } = view;
         const bands = o.balanceBands;
         const last = bands[bands.length - 1];
-        // The first year-end the 10th percentile's balance is gone (the weaker markets), and the median's (a typical one)
-        const out = bands.find((band, i) => i > 0 && band.lower <= 1);
-        const medianOut = bands.find((band, i) => i > 0 && band.middle <= 1);
         const ageAt = (isoDate) => Math.floor((Date.parse(isoDate) - Date.parse(p.birthdate)) / (365.25 * 864e5));
         const survived = p.iterations - o.result.outOfMoneyCount;
+        // A typical market and the weakest 10%: the runs at the 50th and 10th percentiles, ranked by how soon they fell
+        // short, then by what they ended with. One that fell short says when and by how much in that year (app.js's
+        // yearShortfall, as its year table says); the money doesn't run dry, since Social Security and any annuity pay on
+        const severity = (run) => (run.failed ? run.years.length : Number.MAX_SAFE_INTEGER);
+        const ranked = [...o.result.runs].sort((a, b) => severity(a) - severity(b) || a.endingBalance - b.endingBalance);
+        const shortAt = (share) => {
+            const run = ranked[Math.floor((ranked.length - 1) * share)];
+            if (!run?.failed) return { year: null, age: null, short: null, share: null };
+            const year = run.years[run.years.length - 1];
+            const s = yearShortfall(year);
+            return { year: year.calendarYear, age: Math.floor(year.ageInYear + 0.005), short: s.short, share: s.share };
+        };
+        const typical = shortAt(0.5);
+        const weak = shortAt(0.1);
         return {
             ok: true,
             total: p.iterations,
@@ -154,10 +165,14 @@ window.Gordon = (() => {
             lower: last.lower,
             endYear: last.date.slice(0, 4),
             endAge: ageAt(last.date),
-            lowerOutYear: out ? out.date.slice(0, 4) : null,
-            lowerOutAge: out ? ageAt(out.date) : null,
-            medianOutYear: medianOut ? medianOut.date.slice(0, 4) : null,
-            medianOutAge: medianOut ? ageAt(medianOut.date) : null,
+            lowerShortYear: weak.year,
+            lowerShortAge: weak.age,
+            lowerShort: weak.short,
+            lowerShortShare: weak.share,
+            medianShortYear: typical.year,
+            medianShortAge: typical.age,
+            medianShort: typical.short,
+            medianShortShare: typical.share,
             monthly: p.withdrawal / 12,
         };
     }

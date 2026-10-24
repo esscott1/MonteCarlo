@@ -145,8 +145,8 @@ test('confirming a typed spend runs the plan, and the result reads the run', () 
     assert.equal(running.optimize, false);
     assert.deepEqual(keys(running), ['gordon.running']);
 
-    const result = engine.result({ ok: true, total: 99, survived: 83, rate: 83 / 99, years: 30, median: 2.1e6, lower: 0, endYear: '2075', endAge: 95, lowerOutYear: '2068', lowerOutAge: 88, monthly: 9000 });
-    assert.deepEqual(keys(result), ['gordon.result.survived', 'gordon.result.median', 'gordon.result.lowerRunsOut', 'gordon.tip.inRange']);
+    const result = engine.result({ ok: true, total: 99, survived: 83, rate: 83 / 99, years: 30, median: 2.1e6, lower: 0, endYear: '2075', endAge: 95, lowerShortYear: 2068, lowerShortAge: 88, lowerShort: 31400, lowerShortShare: 0.35, monthly: 9000 });
+    assert.deepEqual(keys(result), ['gordon.result.survived', 'gordon.result.median', 'gordon.result.lowerShort', 'gordon.tip.inRange']);
     assert.deepEqual(plain(result.choices.map((c) => c.value)), ['details', 'change', 'restart']);
 });
 
@@ -168,13 +168,15 @@ test('"Find the most I can safely spend" leaves the spend to Optimize, which run
     assert.deepEqual(found.say, []);
 
     // Then one bulleted message: what Optimize decided and how the run went, with no run count and no tip
-    const result = plain(engine.result({ ok: true, total: 99, survived: 78, rate: 78 / 99, years: 30, median: 1e6, lower: 0, endYear: '2075', endAge: 95, lowerOutYear: '2068', lowerOutAge: 88, monthly: 7400 }));
+    const result = plain(engine.result({ ok: true, total: 99, survived: 78, rate: 78 / 99, years: 30, median: 1e6, lower: 0, endYear: '2075', endAge: 95, lowerShortYear: 2068, lowerShortAge: 88, lowerShort: 31400, lowerShortShare: 0.35, monthly: 7400 }));
     assert.equal(result.say.length, 1);
     const message = result.say[0];
     assert.equal(message.kind, 'summary');
-    assert.deepEqual(message.lines.map((line) => line.key), ['gordon.optimized.found', 'gordon.optimized.annuity', 'gordon.result.survivedRate', 'gordon.result.median', 'gordon.result.lowerRunsOut']);
+    assert.deepEqual(message.lines.map((line) => line.key), ['gordon.optimized.found', 'gordon.optimized.annuity', 'gordon.result.survivedRate', 'gordon.result.median', 'gordon.result.lowerShort']);
     assert.equal(message.lines[0].values.amount, '$7,400');
     assert.deepEqual(message.lines[2].values, { years: 30, rate: 79 });
+    // The weakest markets fall short of the plan, about $31,000 a year (35%), from 2068 at 88; they don't run dry
+    assert.deepEqual(message.lines[4].values, { year: 2068, age: 88, amount: '$31,000', percent: 35 });
     assert.deepEqual(result.choices.map((c) => c.value), ['details', 'change', 'restart']);
 
     // A later plain run is told in the usual sentences again
@@ -182,7 +184,7 @@ test('"Find the most I can safely spend" leaves the spend to Optimize, which run
     engine.reply({ choice: 'spending' });
     engine.reply({ text: '7,000' });
     engine.reply({ choice: 'run' });
-    const later = engine.result({ ok: true, total: 99, survived: 99, rate: 1, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerOutYear: null, lowerOutAge: null, monthly: 7000 });
+    const later = engine.result({ ok: true, total: 99, survived: 99, rate: 1, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerShortYear: null, lowerShortAge: null, lowerShort: null, lowerShortShare: null, monthly: 7000 });
     assert.deepEqual(keys(later), ['gordon.result.allSurvived', 'gordon.result.median', 'gordon.result.lowerHolds', 'gordon.tip.more']);
 });
 
@@ -193,7 +195,7 @@ test('a Free visitor\'s Optimize is the teaser range, and says Plus finds the ex
     assert.equal(engine.step, 'confirm');
     engine.reply({ choice: 'run' });
     assert.deepEqual(plain(engine.optimized({ kind: 'optimizedTeaser', low: 6500, high: 7000 })).say, []);
-    const result = plain(engine.result({ ok: true, total: 99, survived: 99, rate: 1, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerOutYear: null, lowerOutAge: null, monthly: 6500 }));
+    const result = plain(engine.result({ ok: true, total: 99, survived: 99, rate: 1, years: 30, median: 1e6, lower: 1e5, endYear: '2075', endAge: 95, lowerShortYear: null, lowerShortAge: null, lowerShort: null, lowerShortShare: null, monthly: 6500 }));
     assert.equal(result.say.length, 1);
     const lines = result.say[0].lines;
     assert.deepEqual(lines.map((line) => line.key), ['gordon.optimized.teaser', 'gordon.result.allSurvivedRate', 'gordon.result.median', 'gordon.result.lowerHolds']);
@@ -304,7 +306,7 @@ test('"Show me an example" fills every input at once and optimizes, saying nothi
     const quiet = plain(engine.optimized({ kind: 'optimized', withdrawalMonthly: 8997, recommendedAge: 67, annuity: { investment: 900000, monthlyPayment: 5229, taxDeferred: true, cola: true } }));
     assert.deepEqual(quiet.say, []);
     page.state.taxDeferred = 0;
-    const result = plain(engine.result({ ok: true, total: 99, survived: 82, rate: 82 / 99, years: 34, median: 440000, lower: 0, endYear: '2062', endAge: 94, lowerOutYear: '2045', lowerOutAge: 77, monthly: 8997 }));
+    const result = plain(engine.result({ ok: true, total: 99, survived: 82, rate: 82 / 99, years: 34, median: 440000, lower: 0, endYear: '2062', endAge: 94, lowerShortYear: 2045, lowerShortAge: 77, lowerShort: 31400, lowerShortShare: 0.35, monthly: 8997 }));
     assert.equal(result.say.length, 1);
     const report = result.say[0];
     assert.equal(report.kind, 'summary');
@@ -320,7 +322,7 @@ test('"Show me an example" fills every input at once and optimizes, saying nothi
     page.play(engine.reply({ text: '8,000' }));
     assert.equal(engine.step, 'confirm');
     engine.reply({ choice: 'run' });
-    const later = engine.result({ ok: true, total: 99, survived: 90, rate: 90 / 99, years: 34, median: 1e6, lower: 1e5, endYear: '2062', endAge: 94, lowerOutYear: null, lowerOutAge: null, monthly: 8000 });
+    const later = engine.result({ ok: true, total: 99, survived: 90, rate: 90 / 99, years: 34, median: 1e6, lower: 1e5, endYear: '2062', endAge: 94, lowerShortYear: null, lowerShortAge: null, lowerShort: null, lowerShortShare: null, monthly: 8000 });
     assert.deepEqual(keys(later), ['gordon.result.survived', 'gordon.result.median', 'gordon.result.lowerHolds', 'gordon.tip.more']);
 });
 
@@ -332,7 +334,7 @@ test('a Free visitor\'s example leaves out the inheritance, and its spend is the
     assert.ok(!page.actions.some((a) => a.name === 'setInheritance'));
 
     assert.deepEqual(plain(engine.optimized({ kind: 'optimizedTeaser', low: 7000, high: 7500 })).say, []);
-    const report = plain(engine.result({ ok: true, total: 99, survived: 81, rate: 81 / 99, years: 34, median: 2.06e6, lower: 0, endYear: '2062', endAge: 94, lowerOutYear: '2054', lowerOutAge: 86, monthly: 7000 })).say[0];
+    const report = plain(engine.result({ ok: true, total: 99, survived: 81, rate: 81 / 99, years: 34, median: 2.06e6, lower: 0, endYear: '2062', endAge: 94, lowerShortYear: 2054, lowerShortAge: 86, lowerShort: 31400, lowerShortShare: 0.35, monthly: 7000 })).say[0];
     assert.deepEqual(report.lines.map((line) => line.key), ['gordon.summary.born', 'gordon.example.retire', 'gordon.example.spendTeaser', 'gordon.example.savings']);
     assert.equal(report.lines[2].values.amount, '$7,000');
 });
@@ -358,14 +360,16 @@ test('the summary reads the form when it\'s shown, so it includes the last answe
 
 test('the tip follows the survival percent as shown, and amounts are rounded', () => {
     const { engine } = converse(fakePage(), [{ choice: 'start' }]);
-    const result = plain(engine.result({ ok: true, total: 99, survived: 79, rate: 79 / 99, years: 34, median: 2048411, lower: 0, endYear: '2062', endAge: 94, lowerOutYear: '2055', lowerOutAge: 87, monthly: 7000 }));
+    const result = plain(engine.result({ ok: true, total: 99, survived: 79, rate: 79 / 99, years: 34, median: 2048411, lower: 0, endYear: '2062', endAge: 94, lowerShortYear: 2055, lowerShortAge: 87, lowerShort: 31400, lowerShortShare: 0.35, monthly: 7000 }));
     assert.equal(result.say[0].values.rate, 80);
     assert.equal(result.say[1].values.amount, '$2,050,000');
     assert.equal(result.say[3].key, 'gordon.tip.inRange');
 });
 
-test('a run whose typical market runs out says when, not that $0 is left', () => {
+test('a run whose typical market falls short says when and by how much, not that $0 is left', () => {
     const { engine } = converse(fakePage(), [{ choice: 'start' }]);
-    const result = engine.result({ ok: true, total: 99, survived: 33, rate: 1 / 3, years: 34, median: 0, lower: 0, endYear: '2062', endAge: 94, lowerOutYear: '2043', lowerOutAge: 75, medianOutYear: '2055', medianOutAge: 87, monthly: 9000 });
-    assert.deepEqual(keys(result), ['gordon.result.survived', 'gordon.result.medianRunsOut', 'gordon.result.lowerRunsOut', 'gordon.tip.lower']);
+    const result = engine.result({ ok: true, total: 99, survived: 33, rate: 1 / 3, years: 34, median: 0, lower: 0, endYear: '2062', endAge: 94, lowerShortYear: 2043, lowerShortAge: 75, lowerShort: 31400, lowerShortShare: 0.35, medianShortYear: 2055, medianShortAge: 87, medianShort: 18650, medianShortShare: 0.2, monthly: 9000 });
+    assert.deepEqual(keys(result), ['gordon.result.survived', 'gordon.result.medianShort', 'gordon.result.lowerShort', 'gordon.tip.lower']);
+    // A typical market falls short too, from 2055 at 87, by about $19,000 a year (20%)
+    assert.deepEqual(plain(result.say[1].values), { year: 2055, age: 87, amount: '$19,000', percent: 20 });
 });

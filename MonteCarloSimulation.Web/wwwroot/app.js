@@ -488,19 +488,25 @@ function taxCell(yd, conversionsEnabled, taxDetail) {
 // A failed run's last word, after its failure year: what that year's Social Security and annuity still paid, after
 // tax, against what the year needed (its spending and any Medicare surcharge, in that year's dollars) - or, with no
 // income at all, that the money is gone. Plain text, for the failure trace too.
+// A failed run's last year: what it needed after tax (spending plus any Medicare surcharge, which isn't sent without the
+// tax detail after its first years), the Social Security and annuity it still paid after tax, and how far short that
+// falls, in dollars and as a share of the need. Gordon reads the weakest markets' shortfall the same way.
+function yearShortfall(yd) {
+    const need = yd.withdrawal + (yd.irmaaSurcharge ?? 0);
+    const ss = Math.max(0, yd.socialSecurityIncome - yd.socialSecurityTax);
+    const annuity = Math.max(0, yd.annuityIncome - yd.annuityTax);
+    const short = Math.max(0, need - ss - annuity);
+    return { need, ss, annuity, net: ss + annuity, short, share: need > 0 ? short / need : 0 };
+}
+
 function stillReceivedText(yd) {
-    const ss = yd.socialSecurityIncome;
-    const annuity = yd.annuityIncome;
-    if (!(ss > 0.5) && !(annuity > 0.5)) return t('runner.stillReceive.none');
+    const s = yearShortfall(yd);
+    const shortfall = { short: formatCurrency(s.short), percent: Math.round(s.share * 100) };
+    if (!(s.ss > 0.5) && !(s.annuity > 0.5)) return t('runner.stillReceive.none', shortfall);
     const parts = [];
-    if (ss > 0.5) parts.push(t('runner.stillReceive.ss', { amount: formatCurrency(ss), tax: formatCurrency(yd.socialSecurityTax) }));
-    if (annuity > 0.5) parts.push(t('runner.stillReceive.annuity', { amount: formatCurrency(annuity), tax: formatCurrency(yd.annuityTax) }));
-    return t('runner.stillReceive', {
-        income: parts.join(t('runner.stillReceive.and')),
-        net: formatCurrency(ss - yd.socialSecurityTax + annuity - yd.annuityTax),
-        // The surcharge isn't sent without the tax detail after its first years
-        need: formatCurrency(yd.withdrawal + (yd.irmaaSurcharge ?? 0)),
-    });
+    if (s.ss > 0.5) parts.push(t('runner.stillReceive.ss', { amount: formatCurrency(s.ss) }));
+    if (s.annuity > 0.5) parts.push(t('runner.stillReceive.annuity', { amount: formatCurrency(s.annuity) }));
+    return t('runner.stillReceive', { ...shortfall, net: formatCurrency(s.net), income: parts.join(t('runner.stillReceive.and')) });
 }
 
 const yearAgeLabel = (yd) => t('runner.yearAge', { year: yd.calendarYear, age: Math.floor(yd.ageInYear + 0.005) });

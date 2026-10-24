@@ -498,6 +498,7 @@ window.GordonScript = (() => {
         // counts: whether the survival says how many markets were run
         function runLines(digest, { counts }) {
             const about = (value) => money(Math.round(value / 10000) * 10000);
+            const aboutYear = (value) => money(Math.round(value / 1000) * 1000);
             const percent = Math.round(digest.rate * 100);
             const all = digest.survived === digest.total;
             const survival = counts
@@ -507,11 +508,18 @@ window.GordonScript = (() => {
                     : say('gordon.result.survivedRate', { years: digest.years, rate: percent }));
             return [
                 survival,
-                digest.medianOutYear
-                    ? say('gordon.result.medianRunsOut', { year: digest.medianOutYear, age: digest.medianOutAge })
+                // Neither a typical market nor the weakest runs dry: Social Security and any annuity still pay, short of the plan
+                digest.medianShortYear
+                    ? say('gordon.result.medianShort', {
+                        year: digest.medianShortYear, age: digest.medianShortAge,
+                        amount: aboutYear(digest.medianShort), percent: Math.round(digest.medianShortShare * 100),
+                    })
                     : say('gordon.result.median', { amount: about(digest.median), year: digest.endYear, age: digest.endAge }),
-                digest.lowerOutYear
-                    ? say('gordon.result.lowerRunsOut', { year: digest.lowerOutYear, age: digest.lowerOutAge })
+                digest.lowerShortYear
+                    ? say('gordon.result.lowerShort', {
+                        year: digest.lowerShortYear, age: digest.lowerShortAge,
+                        amount: aboutYear(digest.lowerShort), percent: Math.round(digest.lowerShortShare * 100),
+                    })
                     : say('gordon.result.lowerHolds', { amount: about(digest.lower), year: digest.endYear }),
             ];
         }

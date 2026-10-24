@@ -591,7 +591,7 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains(@"${headline}<span class=""summary-outcome"">${outcome}</span></summary>", script);
             Assert.Contains("t('runner.outcome', {", script);
             Assert.Contains("renderRunDetailTable(run.years, view.parameters.enableRothConversions, view.taxDetail, run.failed)", script);
-            Assert.Contains(@"""runner.stillReceive.none"": ""No more income or balances remain: completely out of money.""", en);
+            Assert.Contains(@"""runner.stillReceive.none"": ""You will be {short} ({percent}%) short of your desired withdrawal amount: no income or balances remain.""", en);
             Assert.DoesNotContain("runner.realized", script);
         }
 
@@ -700,6 +700,9 @@ namespace MonteCarloSimulation.Web.Tests
             // Gordon moves a benefit at 67 to the start age by the page's own SSA shape, the one Optimize reads a claim by
             Assert.Contains("socialSecurityShare: (birthdate, startDate) => ssShareOnDate(birthdate, startDate)", gordon);
             Assert.Contains("const at67 = amount / ssShareOnDate(birth, start);", app);
+            // Gordon's typical and weakest markets' shortfall is the year table's own (yearShortfall)
+            Assert.Contains("const s = yearShortfall(year);", gordon);
+            Assert.Contains("const s = yearShortfall(yd);", app);
             Assert.Contains(@"data-tier=""gordon""", observe);
             Assert.Contains("Enable Gordon", observe);
         }
