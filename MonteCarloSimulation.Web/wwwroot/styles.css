@@ -2161,3 +2161,334 @@ body.translations-page {
     cursor: pointer;
     font: inherit;
 }
+
+/* Gordon (gordon.js): the launcher in the bottom-right corner, and the chat panel above it. On a phone the panel is a
+   sheet across the bottom of the screen. */
+.gordon-launcher {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    z-index: 50;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem 0.5rem 0.5rem;
+    border: none;
+    border-radius: 999px;
+    background: var(--button);
+    color: var(--button-text);
+    font-size: 0.95rem;
+    font-weight: 600;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+}
+
+.gordon-launcher:hover,
+.gordon-launcher:focus-visible {
+    background: var(--button-hover);
+}
+
+.gordon-launcher.open {
+    display: none;
+}
+
+.gordon-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.gordon-header .gordon-avatar {
+    background: var(--accent);
+    color: var(--surface);
+}
+
+.gordon-panel {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    width: min(380px, calc(100vw - 2.5rem));
+    height: min(600px, calc(100vh - 2.5rem));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+}
+
+.gordon-panel[hidden] {
+    display: none;
+}
+
+.gordon-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.gordon-heading {
+    flex: 1;
+    min-width: 0;
+}
+
+.gordon-heading h2 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.gordon-subtitle {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.gordon-restart.secondary-button {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.8rem;
+}
+
+/* Moving: the header is the handle (gordon.js); a phone keeps the sheet, so it isn't one there */
+@media (min-width: 601px) {
+    .gordon-header {
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .gordon-header button {
+        cursor: pointer;
+    }
+}
+
+.gordon-panel.dragging,
+.gordon-panel.dragging .gordon-header {
+    cursor: grabbing;
+    user-select: none;
+}
+
+.gordon-heading:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* Minimized: just the header bar, so the page shows; a dot on the avatar when Gordon has said something since */
+.gordon-panel.minimized {
+    width: min(280px, calc(100vw - 2.5rem));
+    height: auto;
+}
+
+.gordon-panel.minimized .gordon-header {
+    border-bottom: none;
+}
+
+.gordon-panel.minimized .gordon-log,
+.gordon-panel.minimized .gordon-choices,
+.gordon-panel.minimized .gordon-input,
+.gordon-panel.minimized .gordon-restart {
+    display: none;
+}
+
+.gordon-panel.minimized .gordon-heading {
+    cursor: pointer;
+}
+
+.gordon-header .gordon-avatar {
+    position: relative;
+}
+
+.gordon-panel.unread .gordon-header .gordon-avatar::after {
+    content: "";
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 0.6rem;
+    height: 0.6rem;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+    background: var(--danger);
+}
+
+.gordon-log {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: var(--page);
+}
+
+.gordon-message {
+    align-self: flex-start;
+    max-width: 88%;
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 12px 12px 12px 4px;
+    background: var(--surface);
+    font-size: 0.92rem;
+    line-height: 1.4;
+}
+
+.gordon-message.visitor {
+    align-self: flex-end;
+    border-color: transparent;
+    border-radius: 12px 12px 4px 12px;
+    background: var(--button);
+    color: var(--button-text);
+}
+
+.gordon-summary {
+    padding-left: 1.6rem;
+}
+
+.gordon-summary li + li,
+.gordon-list li + li {
+    margin-top: 0.2rem;
+}
+
+/* A message with a line before and after its bullets (the example's household and its report) */
+.gordon-message > p {
+    margin: 0;
+}
+
+.gordon-list {
+    margin: 0.35rem 0;
+    padding-left: 1.2rem;
+}
+
+.gordon-typing {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.65rem 0.8rem;
+}
+
+.gordon-typing span {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 50%;
+    background: var(--muted);
+    animation: gordon-dot 1s infinite ease-in-out;
+}
+
+.gordon-typing span:nth-child(2) { animation-delay: 0.15s; }
+.gordon-typing span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes gordon-dot {
+    0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-3px); }
+}
+
+.gordon-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.6rem 0.75rem 0;
+    border-top: 1px solid var(--border);
+}
+
+.gordon-choices[hidden] {
+    display: none;
+}
+
+.gordon-choice {
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--accent);
+    font-size: 0.88rem;
+    cursor: pointer;
+}
+
+.gordon-choice:hover,
+.gordon-choice:focus-visible {
+    background: var(--plus-soft);
+}
+
+.gordon-input {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem 0.75rem;
+}
+
+.gordon-input input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.95rem;
+}
+
+.gordon-input button {
+    padding: 0.5rem 0.9rem;
+    border: none;
+    border-radius: 6px;
+    background: var(--button);
+    color: var(--button-text);
+    cursor: pointer;
+}
+
+.gordon-input button:disabled,
+.gordon-input input:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* A field Gordon just filled in */
+.gordon-filled {
+    animation: gordon-filled 1.8s ease-out;
+}
+
+@keyframes gordon-filled {
+    0%, 35% { box-shadow: 0 0 0 3px var(--accent); background-color: var(--plus-soft); }
+    100% { box-shadow: 0 0 0 3px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gordon-typing span,
+    .gordon-filled {
+        animation: none;
+    }
+
+    .gordon-filled {
+        box-shadow: 0 0 0 3px var(--accent);
+    }
+}
+
+@media (max-width: 600px) {
+    .gordon-launcher {
+        right: 1rem;
+        bottom: 1rem;
+    }
+
+    .gordon-panel {
+        right: 0;
+        left: 0;
+        bottom: 0;
+        width: auto;
+        height: min(75vh, 600px);
+        border-radius: 12px 12px 0 0;
+    }
+
+    .gordon-panel.minimized {
+        width: auto;
+        height: auto;
+    }
+}

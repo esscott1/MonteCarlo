@@ -31,8 +31,9 @@ namespace MonteCarloSimulation.Web
     {
         public static void MapTierAccess(this WebApplication app)
         {
-            // What this visitor may use, and how a Free visitor's account totals are split (the pages split them the same way)
-            app.MapGet("/api/me", async (HttpContext context, FeatureAccess access, IOptionsMonitor<FreeDefaultsOptions> freeDefaults) =>
+            // What this visitor may use, how a Free visitor's account totals are split (the pages split them the same way),
+            // and whether the Scenario runner shows Gordon (the Observe page's switch, for every tier)
+            app.MapGet("/api/me", async (HttpContext context, FeatureAccess access, SiteFlags flags, IOptionsMonitor<FreeDefaultsOptions> freeDefaults) =>
             {
                 context.Response.Headers.CacheControl = "no-store";
                 var me = await access.ForAsync(context);
@@ -43,7 +44,8 @@ namespace MonteCarloSimulation.Web
                     me.Tier,
                     me.Features,
                     me.Offers,
-                    FreeDefaults = new { free.BrokerageGainShare, free.RothBasisShare }
+                    FreeDefaults = new { free.BrokerageGainShare, free.RothBasisShare },
+                    Gordon = await flags.IsOnAsync(Flags.Gordon)
                 });
             });
 

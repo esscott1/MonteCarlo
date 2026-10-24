@@ -591,7 +591,7 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains(@"${headline}<span class=""summary-outcome"">${outcome}</span></summary>", script);
             Assert.Contains("t('runner.outcome', {", script);
             Assert.Contains("renderRunDetailTable(run.years, view.parameters.enableRothConversions, view.taxDetail, run.failed)", script);
-            Assert.Contains(@"""runner.stillReceive.none"": ""No more income or balances remain: completely out of money.""", en);
+            Assert.Contains(@"""runner.stillReceive.none"": ""You will be {short} ({percent}%) short of your desired withdrawal amount: no income or balances remain.""", en);
             Assert.DoesNotContain("runner.realized", script);
         }
 
@@ -655,6 +655,56 @@ namespace MonteCarloSimulation.Web.Tests
             // Opened once the locks are on, so a Free visitor's locked inputs keep their Free values
             Assert.Contains("Paywall.ready.then(applySharedScenario);", script);
             Assert.Contains("&shared=1&return=", script);
+        }
+
+        // The survival headline's face: a frown below 60%, a straight face from 60% to under 75%, a smile from 75%, and
+        // a smile when every run survived
+        [Fact]
+        public async Task ScenarioRunner_Results_ShowAFaceForTheSurvivalRate()
+        {
+            string app = await GetAsync("/app.js");
+
+            Assert.Matches(@"function survivalFace\(survival\) \{\s*if \(survival < 0\.6\) return '🙁';\s*if \(survival < 0\.75\) return '😐';\s*return '🙂';", app);
+            Assert.Contains("${survivalFace(survival)} ${t('runner.failedCount'", app);
+            Assert.Contains("${survivalFace(1)} ${t('runner.allSurvived')}", app);
+        }
+
+        // Gordon, the guided setup: its scripted conversation and then its panel load after the page script, it shows only
+        // while /api/me says the Observe switch is on, and it hears about each finished run from app.js
+        [Fact]
+        public async Task ScenarioRunner_LoadsGordon_AfterThePageScript_BehindItsSwitch()
+        {
+            string html = await GetAsync("/index.html");
+            string app = await GetAsync("/app.js");
+            string gordon = await GetAsync("/gordon.js");
+            string observe = await GetAsync("/observe.js");
+
+            int page = html.IndexOf(@"<script src=""app.js""></script>");
+            int conversation = html.IndexOf(@"<script src=""gordon-script.js""></script>");
+            int panel = html.IndexOf(@"<script src=""gordon.js""></script>");
+            Assert.True(page > 0 && conversation > page && panel > conversation);
+            Assert.Contains("Paywall.me.gordon", gordon);
+            Assert.Contains("new CustomEvent('runner:result', { detail: view })", app);
+            Assert.Contains("'runner:result'", gordon);
+            // Gordon can press Optimize: app.js reports its progress and what it put into the form, and a stopped
+            // Optimize still sends runner:result, so Gordon never waits on a run that won't come
+            Assert.Contains("document.getElementById('optimize-run').click()", gordon);
+            Assert.Contains("new CustomEvent('runner:optimizing'", app);
+            Assert.Contains("new CustomEvent('runner:optimized', { detail: { ...handoff } })", app);
+            Assert.Equal(2, Regex.Matches(app, @"new CustomEvent\('runner:result', \{ detail: view \}\)").Count);
+            Assert.Contains("'runner:optimized'", gordon);
+            // The panel can fold to its header bar and be dragged out of the way, and folds itself once results are in
+            Assert.Contains(@"class=""flyout-close gordon-minimize""", gordon);
+            Assert.Contains("header.setPointerCapture(e.pointerId)", gordon);
+            Assert.Contains("minimizeAfterReading(mine)", gordon);
+            // Gordon moves a benefit at 67 to the start age by the page's own SSA shape, the one Optimize reads a claim by
+            Assert.Contains("socialSecurityShare: (birthdate, startDate) => ssShareOnDate(birthdate, startDate)", gordon);
+            Assert.Contains("const at67 = amount / ssShareOnDate(birth, start);", app);
+            // Gordon's typical and weakest markets' shortfall is the year table's own (yearShortfall)
+            Assert.Contains("const s = yearShortfall(year);", gordon);
+            Assert.Contains("const s = yearShortfall(yd);", app);
+            Assert.Contains(@"data-tier=""gordon""", observe);
+            Assert.Contains("Enable Gordon", observe);
         }
 
         [Fact]

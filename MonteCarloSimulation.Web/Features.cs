@@ -41,14 +41,16 @@ namespace MonteCarloSimulation.Web
         }
     }
 
-    // The two site-wide switches: whether Plus is offered and whether Pro is. Flipped on the Observe page (SiteFlags);
-    // until then each is its default from the "FeatureManagement" section, read by Microsoft.FeatureManagement (an App
-    // Service setting such as FeatureManagement__TierPro overrides it). Their names have no dots, so they work as setting
-    // names. A tier that's off isn't offered: no badges for it, and its code is refused. Both off is Free Only.
+    // The site-wide switches: whether Plus is offered, whether Pro is, and whether Gordon (the Scenario runner's chat
+    // panel) shows. Flipped on the Observe page (SiteFlags); until then each is its default from the "FeatureManagement"
+    // section, read by Microsoft.FeatureManagement (an App Service setting such as FeatureManagement__TierPro overrides
+    // it). Their names have no dots, so they work as setting names. A tier that's off isn't offered: no badges for it, and
+    // its code is refused. Both tiers off is Free Only. Gordon is for every tier, so it doesn't change the site's mode.
     public static class Flags
     {
         public const string TierPlus = "TierPlus";
         public const string TierPro = "TierPro";
+        public const string Gordon = "Gordon";
 
         public static string For(Tier tier) => tier == Tier.Pro ? TierPro : TierPlus;
     }

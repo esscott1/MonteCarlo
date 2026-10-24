@@ -3,9 +3,9 @@ using Microsoft.FeatureManagement;
 
 namespace MonteCarloSimulation.Web
 {
-    // The site-wide switches flipped on the Observe page's Features section: whether Plus is offered and whether Pro is.
-    // Each is kept in a small JSON file once flipped, and until then is its default from configuration
-    // ("FeatureManagement": TierPlus, TierPro, read by Microsoft.FeatureManagement). The file lives where restarts and
+    // The site-wide switches flipped on the Observe page's Features section: whether Plus is offered, whether Pro is, and
+    // whether Gordon shows (Flags). Each is kept in a small JSON file once flipped, and until then is its default from
+    // configuration ("FeatureManagement": TierPlus, TierPro, Gordon, read by Microsoft.FeatureManagement). The file lives where restarts and
     // deploys don't touch it: "SiteFlags:Path" if set, else /home/data/montecarlo on App Service (its persistent /home
     // share; deploys only replace /home/site/wwwroot), else App_Data under the web project (gitignored).
     public sealed class SiteFlags
@@ -34,28 +34,33 @@ namespace MonteCarloSimulation.Web
 
         public static IReadOnlyList<Tier> PaidTiers { get; } = [Tier.Plus, Tier.Pro];
 
-        public async Task<bool> IsOnAsync(Tier tier) =>
-            tier != Tier.Free && (Saved().TryGetValue(Flags.For(tier), out var saved) ? saved.On : await _defaults.IsEnabledAsync(Flags.For(tier)));
+        public async Task<bool> IsOnAsync(Tier tier) => tier != Tier.Free && await IsOnAsync(Flags.For(tier));
+
+        public async Task<bool> IsOnAsync(string flag) => (await StateOfAsync(flag)).On;
 
         // Each paid tier's switch: on or off, and when it was last flipped (null: never, so its default applies)
         public async Task<IReadOnlyList<SiteFlagState>> ListAsync()
         {
-            var saved = Saved();
             var states = new List<SiteFlagState>();
             foreach (var tier in PaidTiers)
             {
-                states.Add(saved.TryGetValue(Flags.For(tier), out var flag)
-                    ? new SiteFlagState(tier, flag.On, flag.ChangedAt)
-                    : new SiteFlagState(tier, await _defaults.IsEnabledAsync(Flags.For(tier)), null));
+                var (on, changedAt) = await StateOfAsync(Flags.For(tier));
+                states.Add(new SiteFlagState(tier, on, changedAt));
             }
             return states;
         }
 
-        public void Set(Tier tier, bool on)
+        // One switch by name: on or off, and when it was last flipped (null: never, so its default applies)
+        public async Task<(bool On, DateTimeOffset? ChangedAt)> StateOfAsync(string flag) =>
+            Saved().TryGetValue(flag, out var saved) ? (saved.On, saved.ChangedAt) : (await _defaults.IsEnabledAsync(flag), null);
+
+        public void Set(Tier tier, bool on) => Set(Flags.For(tier), on);
+
+        public void Set(string flag, bool on)
         {
             lock (_gate)
             {
-                var saved = new Dictionary<string, SavedFlag>(ReadFile()) { [Flags.For(tier)] = new SavedFlag(on, _clock.GetUtcNow()) };
+                var saved = new Dictionary<string, SavedFlag>(ReadFile()) { [flag] = new SavedFlag(on, _clock.GetUtcNow()) };
                 Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
                 // Written whole to a temporary file and moved into place, so a reader never sees half a file
                 string temporary = FilePath + ".tmp";

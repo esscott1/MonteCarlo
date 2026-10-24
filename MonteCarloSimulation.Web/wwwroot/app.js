@@ -488,19 +488,25 @@ function taxCell(yd, conversionsEnabled, taxDetail) {
 // A failed run's last word, after its failure year: what that year's Social Security and annuity still paid, after
 // tax, against what the year needed (its spending and any Medicare surcharge, in that year's dollars) - or, with no
 // income at all, that the money is gone. Plain text, for the failure trace too.
+// A failed run's last year: what it needed after tax (spending plus any Medicare surcharge, which isn't sent without the
+// tax detail after its first years), the Social Security and annuity it still paid after tax, and how far short that
+// falls, in dollars and as a share of the need. Gordon reads the weakest markets' shortfall the same way.
+function yearShortfall(yd) {
+    const need = yd.withdrawal + (yd.irmaaSurcharge ?? 0);
+    const ss = Math.max(0, yd.socialSecurityIncome - yd.socialSecurityTax);
+    const annuity = Math.max(0, yd.annuityIncome - yd.annuityTax);
+    const short = Math.max(0, need - ss - annuity);
+    return { need, ss, annuity, net: ss + annuity, short, share: need > 0 ? short / need : 0 };
+}
+
 function stillReceivedText(yd) {
-    const ss = yd.socialSecurityIncome;
-    const annuity = yd.annuityIncome;
-    if (!(ss > 0.5) && !(annuity > 0.5)) return t('runner.stillReceive.none');
+    const s = yearShortfall(yd);
+    const shortfall = { short: formatCurrency(s.short), percent: Math.round(s.share * 100) };
+    if (!(s.ss > 0.5) && !(s.annuity > 0.5)) return t('runner.stillReceive.none', shortfall);
     const parts = [];
-    if (ss > 0.5) parts.push(t('runner.stillReceive.ss', { amount: formatCurrency(ss), tax: formatCurrency(yd.socialSecurityTax) }));
-    if (annuity > 0.5) parts.push(t('runner.stillReceive.annuity', { amount: formatCurrency(annuity), tax: formatCurrency(yd.annuityTax) }));
-    return t('runner.stillReceive', {
-        income: parts.join(t('runner.stillReceive.and')),
-        net: formatCurrency(ss - yd.socialSecurityTax + annuity - yd.annuityTax),
-        // The surcharge isn't sent without the tax detail after its first years
-        need: formatCurrency(yd.withdrawal + (yd.irmaaSurcharge ?? 0)),
-    });
+    if (s.ss > 0.5) parts.push(t('runner.stillReceive.ss', { amount: formatCurrency(s.ss) }));
+    if (s.annuity > 0.5) parts.push(t('runner.stillReceive.annuity', { amount: formatCurrency(s.annuity) }));
+    return t('runner.stillReceive', { ...shortfall, net: formatCurrency(s.net), income: parts.join(t('runner.stillReceive.and')) });
 }
 
 const yearAgeLabel = (yd) => t('runner.yearAge', { year: yd.calendarYear, age: Math.floor(yd.ageInYear + 0.005) });
@@ -633,6 +639,14 @@ function outcomeLine(result, allRates) {
     });
 }
 
+// The face before the survival headline: a frown below 60% of runs surviving, a straight face from 60% to under 75%,
+// a smile at 75% and above
+function survivalFace(survival) {
+    if (survival < 0.6) return '🙁';
+    if (survival < 0.75) return '😐';
+    return '🙂';
+}
+
 function renderSummary(parameters, output) {
     const result = output.result;
     const outcome = outcomeLine(result, output.allRates);
@@ -659,7 +673,7 @@ function renderSummary(parameters, output) {
         const avgFailureReturn = result.failedScenarioAverages.reduce((a, b) => a + b, 0) / result.failedScenarioAverages.length;
         return summaryBox(
             survival > 0.8 ? 'ok' : 'warn',
-            `<strong>${survival > 0.8 ? '🙂' : '🙁'} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}`,
+            `<strong>${survivalFace(survival)} ${t('runner.failedCount', { failed: result.outOfMoneyCount, total: parameters.iterations, years: parameters.years })}</strong> ${t('runner.survivalRate', { rate: formatPercent(survival) })}`,
             outcome,
             `${scenarioLine}
                 <p>${t('runner.inheritance', { amount: formatCurrency(parameters.newMoney), year: new Date(parameters.retirementDate).getUTCFullYear() + parameters.yearNewMoney })}</p>
@@ -670,7 +684,7 @@ function renderSummary(parameters, output) {
 
     return summaryBox(
         'ok',
-        `<strong>🙂 ${t('runner.allSurvived')}</strong>`,
+        `<strong>${survivalFace(1)} ${t('runner.allSurvived')}</strong>`,
         outcome,
         `${scenarioLine}
             ${lifetimeTaxLine}
@@ -1047,6 +1061,8 @@ form.addEventListener('submit', async (e) => {
     }
     renderView();
     renderChart();
+    // For Gordon (gordon.js), which explains a run it started
+    document.dispatchEvent(new CustomEvent('runner:result', { detail: view }));
 });
 
 // The chart beside the inputs: the latest run's balances (90th percentile, median, 10th percentile), or until the
@@ -1219,6 +1235,12 @@ function setOptimizing(state) {
     form.querySelector('button[type="submit"]').disabled = !!state;
     refreshOptimizeSocialSecurity();
     renderRunStatus();
+    notifyOptimizing();
+}
+
+// For Gordon (gordon.js), which shows Optimize's progress in its panel: { completed, total }, or null once it's done
+function notifyOptimizing() {
+    document.dispatchEvent(new CustomEvent('runner:optimizing', { detail: optimizing ? { ...optimizing } : null }));
 }
 
 function initOptimize() {
@@ -1248,6 +1270,7 @@ function initOptimize() {
                     else if (event.type === 'teaser') teaser = event;
                     else if (event.type === 'error') failure = event.message;
                     renderRunStatus();
+                    notifyOptimizing();
                 });
             }
         } catch (err) {
@@ -1259,11 +1282,15 @@ function initOptimize() {
         else if (!optimum && !teaser) view = { kind: 'failed', message: failure ?? t('runner.optimize.stopped') };
         if (errors || (!optimum && !teaser)) {
             renderView();
+            // No run follows, so Gordon hears it ended here
+            document.dispatchEvent(new CustomEvent('runner:result', { detail: view }));
             return;
         }
         if (optimum) applyOptimized(optimum, request);
         else applyOptimizedTeaser(teaser);
         renderHandoffNote();
+        // For Gordon: what Optimize put into the form (the note's handoff), before the run it starts
+        document.dispatchEvent(new CustomEvent('runner:optimized', { detail: { ...handoff } }));
         // As the hand-off: the submit handler reads the flag before its first await
         handoffRunPending = true;
         form.requestSubmit();
@@ -1319,6 +1346,15 @@ function ssShareAtMonths(months) {
     return 1 + 0.24 * Math.min(Math.max(months - 67 * 12, 0), 36) / 36;
 }
 
+// The share of the full-retirement-age benefit a claim starting on this date gets (yyyy-mm-dd dates): the age in whole
+// months on it, held to 62-70. Gordon uses it too, to move a benefit at 67 to the start age chosen.
+function ssShareOnDate(birth, start) {
+    const [by, bm, bd] = birth.split('-').map(Number);
+    const [sy, sm, sd] = start.split('-').map(Number);
+    const months = Math.min(Math.max((sy - by) * 12 + sm - bm - (sd < bd ? 1 : 0), 62 * 12), 70 * 12);
+    return ssShareAtMonths(months);
+}
+
 // The 62/67/70 estimates through the entered claim
 function ssEstimatesFromClaim() {
     const el = form.elements;
@@ -1326,10 +1362,7 @@ function ssEstimatesFromClaim() {
     const start = el['socialSecurityStartDate'].value;
     const amount = parseNumber(el['socialSecurityMonthlyAmount'].value) || 0;
     if (!birth || !start) return null;
-    const [by, bm, bd] = birth.split('-').map(Number);
-    const [sy, sm, sd] = start.split('-').map(Number);
-    const months = Math.min(Math.max((sy - by) * 12 + sm - bm - (sd < bd ? 1 : 0), 62 * 12), 70 * 12);
-    const at67 = amount / ssShareAtMonths(months);
+    const at67 = amount / ssShareOnDate(birth, start);
     return { at62: at67 * 0.7, at67, at70: at67 * 1.24 };
 }
 

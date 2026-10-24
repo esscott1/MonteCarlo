@@ -16,6 +16,7 @@ function scriptArea(key) {
     if (key.startsWith('paywall.')) return 'paywall.js (paid-feature badges)';
     if (key.startsWith('access.')) return 'access.js (access-code page)';
     if (key.startsWith('theme.')) return 'theme.js (light/dark toggle)';
+    if (key.startsWith('gordon.')) return 'gordon.js (Gordon, the Scenario runner\'s guided setup)';
     if (key.startsWith('info.')) return 'model-info.js (Model Info)';
     if (key.startsWith('lab.')) return 'Model Info (Strategy Lab data)';
     return 'shared';
