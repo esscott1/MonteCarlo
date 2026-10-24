@@ -51,6 +51,9 @@ window.Gordon = (() => {
     const page = {
         can: (feature) => Paywall.can(feature),
         monthYear: (isoDate) => I18n.monthYear(new Date(`${isoDate}T00:00:00Z`)),
+        // The share of the benefit at full retirement age (67) a claim starting on this date gets, by SSA's shape (app.js,
+        // the same as Optimize and Optimize Social Security read a claim)
+        socialSecurityShare: (birthdate, startDate) => ssShareOnDate(birthdate, startDate),
 
         get() {
             return {

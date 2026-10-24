@@ -697,6 +697,9 @@ namespace MonteCarloSimulation.Web.Tests
             Assert.Contains(@"class=""flyout-close gordon-minimize""", gordon);
             Assert.Contains("header.setPointerCapture(e.pointerId)", gordon);
             Assert.Contains("minimizeAfterReading(mine)", gordon);
+            // Gordon moves a benefit at 67 to the start age by the page's own SSA shape, the one Optimize reads a claim by
+            Assert.Contains("socialSecurityShare: (birthdate, startDate) => ssShareOnDate(birthdate, startDate)", gordon);
+            Assert.Contains("const at67 = amount / ssShareOnDate(birth, start);", app);
             Assert.Contains(@"data-tier=""gordon""", observe);
             Assert.Contains("Enable Gordon", observe);
         }

@@ -119,6 +119,11 @@ window.GordonScript = (() => {
         // Inheritance is a Plus input: a Free visitor's stays at $0, so it isn't asked
         const asks = (name) => name !== 'inheritance' || page.can('inheritance');
         const after = (name) => ORDER.slice(ORDER.indexOf(name) + 1).find(asks) ?? 'confirm';
+        // The form's Social Security, as its benefit at full retirement age (the claim it holds, moved back to 67)
+        const fullAgeAmountOnForm = () => {
+            const now = page.get();
+            return Math.round(now.socialSecurityMonthly / page.socialSecurityShare(now.birthdate, now.socialSecurityStart));
+        };
 
         // Each step: what Gordon asks (ask), the buttons under it (choices), and how an answer is read (answer). An answer
         // returns { say, actions, next } when it's understood (next defaults to the following step) or { retry } when not.
@@ -232,23 +237,23 @@ window.GordonScript = (() => {
             ssAmount: {
                 ask: () => [say(page.get().filingStatus === 'married' ? 'gordon.ask.ssMarried' : 'gordon.ask.ss')],
                 choices: () => [choice('gordon.choice.dontKnow', 'unknown'), choice('gordon.choice.noSs', 'none')],
-                // The start date is asked next whenever there's a benefit, even when this was changed from the summary
+                // The benefit at full retirement age (67): the start age, asked next whenever there's a benefit (even when
+                // this was changed from the summary), sets the amount the form gets, less before 67 and more after
                 answer(input) {
                     if (input.choice === 'unknown' || has(input.text ?? '', /don'?t know|not sure|no idea|no se|ni idea/)) {
-                        answers.ssMonthly = page.get().socialSecurityMonthly;
-                        return { say: [say('gordon.ack.ssDefault', { amount: money(answers.ssMonthly) })], next: 'ssStart' };
+                        answers.ssAtFullAge = fullAgeAmountOnForm();
+                        return { say: [say('gordon.ack.ssDefault', { amount: money(answers.ssAtFullAge) })], next: 'ssStart' };
                     }
                     let amount = input.choice === 'none' ? 0 : parseMoney(input.text ?? '');
                     if (amount === null) return { retry: 'gordon.retry.money' };
                     // A yearly figure, most likely
                     const yearly = amount > 12000;
                     if (yearly) amount = Math.round(amount / 12);
-                    answers.ssMonthly = amount;
-                    return {
-                        say: [say(yearly ? 'gordon.ack.ssYearly' : 'gordon.ack.ss', { amount: money(amount) })],
-                        actions: [{ name: 'setSocialSecurityAmount', value: amount }],
-                        next: amount === 0 ? (backTo ?? after('ssStart')) : 'ssStart',
-                    };
+                    answers.ssAtFullAge = amount;
+                    if (amount === 0) {
+                        return { say: [say('gordon.ack.noSs')], actions: [{ name: 'setSocialSecurityAmount', value: 0 }], next: backTo ?? after('ssStart') };
+                    }
+                    return { say: [say(yearly ? 'gordon.ack.ssYearly' : 'gordon.ack.ss', { amount: money(amount) })], next: 'ssStart' };
                 },
             },
             ssStart: {
@@ -269,9 +274,12 @@ window.GordonScript = (() => {
                     }
                     if (!date) return { retry: 'gordon.retry.ssStart' };
                     answers.ssStart = date;
+                    // The full-retirement-age benefit moved to this start by SSA's shape: 30% less at 62, 24% more at 70
+                    const atFullAge = answers.ssAtFullAge ?? fullAgeAmountOnForm();
+                    const monthly = Math.round(atFullAge * page.socialSecurityShare(birthdate, date));
                     return {
-                        say: [say(input.choice === 'unknown' ? 'gordon.ack.ssStartDefault' : 'gordon.ack.ssStart', { age, date: page.monthYear(date) })],
-                        actions: [{ name: 'setSocialSecurityStart', value: date }],
+                        say: [say(input.choice === 'unknown' ? 'gordon.ack.ssStartDefault' : 'gordon.ack.ssStart', { age, date: page.monthYear(date), amount: money(monthly) })],
+                        actions: [{ name: 'setSocialSecurityStart', value: date }, { name: 'setSocialSecurityAmount', value: monthly }],
                     };
                 },
             },

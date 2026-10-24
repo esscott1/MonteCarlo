@@ -42,6 +42,15 @@ function fakePage({ plus = true } = {}) {
         actions,
         can: (feature) => plus || feature !== 'inheritance',
         monthYear: (iso) => iso.slice(0, 7),
+        // SSA's shape, as app.js's ssShareOnDate: whole months of age, 5/9% less a month for 36 months early, 5/12% after,
+        // and 2/3% more a month to 70
+        socialSecurityShare(birthdate, start) {
+            const [by, bm, bd] = birthdate.split('-').map(Number);
+            const [sy, sm, sd] = start.split('-').map(Number);
+            const months = Math.min(Math.max((sy - by) * 12 + sm - bm - (sd < bd ? 1 : 0), 744), 840);
+            const early = Math.max(804 - months, 0);
+            return early > 0 ? 1 - (5 / 9 * Math.min(early, 36) + 5 / 12 * Math.max(0, early - 36)) / 100 : 1 + (2 / 3) * (months - 804) / 100;
+        },
         get: () => state,
         play(turn) {
             for (const action of turn.actions) {
@@ -115,8 +124,8 @@ test('a whole conversation fills each input once, in order, then runs', () => {
         { name: 'setRoth', value: 150000 },
         { name: 'setBrokerage', value: 250000 },
         { name: 'setInheritance', value: { amount: 0, years: 0 } },
-        { name: 'setSocialSecurityAmount', value: 4800 },
         { name: 'setSocialSecurityStart', value: '2047-06-01' },
+        { name: 'setSocialSecurityAmount', value: 4800 },
         { name: 'setMix', value: { stocks: 60, bonds: 30, cash: 10 } },
         { name: 'setSpending', value: 9000 },
     ]);
@@ -207,6 +216,39 @@ test('an answer it doesn\'t understand is asked again, without changing anything
     assert.deepEqual(page.actions, []);
 });
 
+test('Social Security is asked at full retirement age, and the start age sets what the form gets', () => {
+    const upToSs = [{ choice: 'start' }, { text: 'June 1980' }, { text: 'January 2045' }, { choice: 'single' }, { text: '900k' }, { text: '0' }, { text: '100k' }, { choice: 'none' }];
+    const claim = (age) => {
+        const page = fakePage();
+        const { turn } = converse(page, [...upToSs, { text: '4,800' }, age]);
+        return { page, turn };
+    };
+    // 30% less at 62, 24% more at 70, 10% less 18 months early
+    assert.equal(claim({ choice: 62 }).page.state.socialSecurityMonthly, 3360);
+    assert.equal(claim({ choice: 67 }).page.state.socialSecurityMonthly, 4800);
+    assert.equal(claim({ choice: 70 }).page.state.socialSecurityMonthly, 5952);
+    const { page, turn } = claim({ text: 'December 2045' });
+    assert.equal(page.state.socialSecurityStart, '2045-12-01');
+    assert.equal(page.state.socialSecurityMonthly, 4320);
+    assert.equal(turn.say[0].key, 'gordon.ack.ssStart');
+    assert.equal(turn.say[0].values.amount, '$4,320');
+
+    // Not sure: the form's claim moved back to 67 (2,750 at 62 is 3,929 at 67), then to the start chosen
+    const unsure = fakePage();
+    const { engine } = converse(unsure, [{ choice: 'start' }, { text: 'July 1969' }, { text: 'January 2027' }, { choice: 'single' }, { text: '900k' }, { text: '0' }, { text: '100k' }, { choice: 'none' }]);
+    unsure.state.birthdate = '1969-07-07';
+    const ack = unsure.play(engine.reply({ choice: 'unknown' }));
+    assert.equal(ack.say[0].values.amount, '$3,929');
+    unsure.play(engine.reply({ choice: 67 }));
+    assert.equal(unsure.state.socialSecurityMonthly, 3929);
+
+    // None: $0 on the form, and no start age asked
+    const none = fakePage();
+    const after = converse(none, [...upToSs, { choice: 'none' }]);
+    assert.equal(none.state.socialSecurityMonthly, 0);
+    assert.equal(after.engine.step, 'mix');
+});
+
 test('a change from the summary asks that question, then goes back to the summary', () => {
     const page = fakePage();
     const { engine } = converse(page, [
@@ -250,11 +292,12 @@ test('"Show me an example" fills every input at once and optimizes, saying nothi
     assert.equal(engine.step, 'running');
     assert.deepEqual(page.actions.map((a) => a.name), [
         'setBirthdate', 'setRetirementDate', 'setHorizon', 'setRuns', 'setFilingStatus', 'setTaxDeferred', 'setRoth',
-        'setBrokerage', 'setInheritance', 'setSocialSecurityAmount', 'setSocialSecurityStart', 'setMix',
+        'setBrokerage', 'setInheritance', 'setSocialSecurityStart', 'setSocialSecurityAmount', 'setMix',
     ]);
     assert.equal(page.state.birthdate, '1967-06-01');
     assert.equal(page.state.taxDeferred, 900000);
     assert.equal(page.state.socialSecurityStart, '2034-06-01');
+    assert.equal(page.state.socialSecurityMonthly, 4800);
 
     // Nothing about Optimize's answer either; once the run is done, one message: born, retiring, the spend with about
     // 80% confidence, and the money they have as entered (an annuity Optimize buys is paid from the balances)

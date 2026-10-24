@@ -1340,6 +1340,15 @@ function ssShareAtMonths(months) {
     return 1 + 0.24 * Math.min(Math.max(months - 67 * 12, 0), 36) / 36;
 }
 
+// The share of the full-retirement-age benefit a claim starting on this date gets (yyyy-mm-dd dates): the age in whole
+// months on it, held to 62-70. Gordon uses it too, to move a benefit at 67 to the start age chosen.
+function ssShareOnDate(birth, start) {
+    const [by, bm, bd] = birth.split('-').map(Number);
+    const [sy, sm, sd] = start.split('-').map(Number);
+    const months = Math.min(Math.max((sy - by) * 12 + sm - bm - (sd < bd ? 1 : 0), 62 * 12), 70 * 12);
+    return ssShareAtMonths(months);
+}
+
 // The 62/67/70 estimates through the entered claim
 function ssEstimatesFromClaim() {
     const el = form.elements;
@@ -1347,10 +1356,7 @@ function ssEstimatesFromClaim() {
     const start = el['socialSecurityStartDate'].value;
     const amount = parseNumber(el['socialSecurityMonthlyAmount'].value) || 0;
     if (!birth || !start) return null;
-    const [by, bm, bd] = birth.split('-').map(Number);
-    const [sy, sm, sd] = start.split('-').map(Number);
-    const months = Math.min(Math.max((sy - by) * 12 + sm - bm - (sd < bd ? 1 : 0), 62 * 12), 70 * 12);
-    const at67 = amount / ssShareAtMonths(months);
+    const at67 = amount / ssShareOnDate(birth, start);
     return { at62: at67 * 0.7, at67, at70: at67 * 1.24 };
 }
 
