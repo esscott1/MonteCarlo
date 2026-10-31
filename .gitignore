@@ -404,3 +404,12 @@ MonteCarloSimulation.StrategyLab/output/
 
 # The web app's local Plus/Pro switches, flipped on the Observe page (SiteFlags)
 MonteCarloSimulation.Web/App_Data/
+
+# Terraform (infra/): state lives in Azure; the lock file is committed, real tfvars are not
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+tfplan
