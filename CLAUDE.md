@@ -57,6 +57,10 @@ Never delete a branch whose PR is still open or that isn't contained in `master`
 
 Source files are UTF-8 with CRLF line endings in the working copy (`core.autocrlf=true`; the repo stores LF). BOM use is mixed — most `.cs` files have none, the `.csproj` files do — so preserve each file's existing BOM state and give new `.cs` files none. `git add` will warn `LF will be replaced by CRLF`; that's expected and harmless. Note that `sed -i` in Git Bash rewrites files with LF; restore CRLF afterwards.
 
+## Spec Kit
+
+New features are specified with [GitHub Spec Kit](https://github.com/github/spec-kit) (`specify` 1.2.3, Claude integration, PowerShell scripts): `/speckit-specify` writes `specs/NNN-name/spec.md` (what and why), `/speckit-clarify` asks the open questions, `/speckit-plan` writes `plan.md` (how), `/speckit-tasks` writes `tasks.md`, `/speckit-analyze` checks the three agree, and `/speckit-implement` works through the tasks. The skills are in `.claude/skills/speckit-*`, the scripts and templates in `.specify/`, and the project's principles in `.specify/memory/constitution.md`, which is short and defers to this file for detail (keep the two in agreement). **Specs are committed** with the work they describe; `docs/` stays local. Spec Kit's `git` extension is deliberately not installed, so it never creates or switches branches: name the branch by hand (`feature/<name>`). **Run Spec Kit only in its own git worktree**, never in the shared main folder. `/speckit-implement` may add lines to `.gitignore`; review them. Gordon, the AI chat bot, is `specs/001-gordon/` (its Terraform included), which replaces the old local plan.
+
 ## Deployment
 
 `.github/workflows/ci.yml` runs `dotnet test MonteCarlo.sln -c Release` on every pull request, so check that it passes before asking the user to merge.
