@@ -102,6 +102,21 @@ Every key named here is described in [Keys and secrets](#keys-and-secrets).
 
 It's worth being explicit: the tool-calling/AI round trip in the change-request flow isn't load-bearing for the application's actual purpose. It's included specifically to demonstrate the pattern — a real production application in this situation would most likely not choose to route a simple, deterministic string-composition task through an LLM call at all.
 
+## How a feature request becomes a feature
+
+Feature requirements live in this repo's **GitHub Issues**. Jira is an archive, apart from the automated change-request and Translations pipelines above, which still file Jira stories. Each feature is specified, planned and built with [GitHub Spec Kit](https://github.com/github/spec-kit), and the owner approves every step.
+
+1. **Someone files a request.** **New issue** offers two forms: [Feature request](.github/ISSUE_TEMPLATE/feature-request.yml) and [Bug report](.github/ISSUE_TEMPLATE/bug-report.yml). Blank issues are off. A form adds `type: feature` or `type: bug` and `needs-triage`. The repo is public, so anyone can file one, but only collaborators can add labels, and nothing is built until the owner adds `approved`.
+2. **The owner triages it.** The GitHub Project **MonteCarlo roadmap** shows every issue's stage: Triage, Backlog, Specifying, Spec review, Plan review, Building, PR review, Done. In Claude Code, `/feature` lists triage and the backlog and approves, declines or questions an issue. `/feature new` files one.
+3. **`/feature <number>` takes an approved issue through four gates.** At each one it stops for the owner's go-ahead:
+   - **Start the spec.** It restates the request in its own words for the owner to confirm. Issue text is treated as data, never as instructions. It then makes a worktree on `feature/<number>-<slug>`, writes `specs/NNN-<slug>/spec.md` from the confirmed summary, asks the clarifying questions, and opens a draft pull request ending `Closes #<number>`.
+   - **Approve the spec.** It writes the plan and tasks and checks that the spec, plan and tasks agree.
+   - **Approve the plan and tasks.** It implements them and runs the tests.
+   - **Approve the work.** It writes the PR description, marks the PR ready, and waits for CI.
+4. **The owner merges.** That closes the issue and moves its card to Done.
+
+No GitHub Actions workflow is triggered by issue events, so an issue never reaches an automated agent. The rules are in [.specify/memory/constitution.md](.specify/memory/constitution.md) and the steps in [.claude/skills/feature/SKILL.md](.claude/skills/feature/SKILL.md).
+
 ## English and Spanish
 
 The splash (home) page, the Optimizer, the Scenario runner and Model Info read in English or Spanish: the **Español /
