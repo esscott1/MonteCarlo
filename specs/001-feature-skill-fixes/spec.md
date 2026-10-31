@@ -24,7 +24,7 @@ The owner starts a spec for one issue while another issue's spec is still on its
 
 1. **Given** `master` has specs up to `001` and an open feature branch has `002`, **When** gate 1 starts for another issue, **Then** the new spec is numbered `003`.
 2. **Given** no spec exists anywhere, **When** gate 1 starts, **Then** the new spec is numbered `001`.
-3. **Given** a feature branch was deleted with its spec (an abandoned feature), **When** gate 1 starts, **Then** that branch's number is free to be used again.
+3. **Given** a feature branch was deleted with its spec (an abandoned feature), **When** gate 1 starts, **Then** that branch's number is used again if it was the highest in use; older gaps aren't refilled, so numbers keep the order features started.
 
 ---
 
@@ -59,7 +59,7 @@ A trial of the workflow uses spec number `900`, so it can never be mistaken for,
 
 ### Edge Cases
 
-- A test run while another test's `900` is still on an open branch: the second test takes the next free number from 901 up.
+- A test run while another test's `900` is still on an open branch: the second test takes the highest test number in use, plus one (901).
 - A remote branch that can't be read: the skill stops and says so rather than guessing a number.
 - A feature branch that isn't named `feature/*` (for example the automated agents' `translations/*` branches): it isn't checked, because those branches never hold specs.
 - Real numbering never enters the 900s; if real specs ever reach 899, the owner decides what comes next.
@@ -69,7 +69,7 @@ A trial of the workflow uses spec number `900`, so it can never be mistaken for,
 ### Functional Requirements
 
 - **FR-001**: At gate 1 the skill MUST choose the spec number itself: the next number, below 900, not used by any spec folder on `master` or on any open `feature/*` branch, and give that folder to the spec helper explicitly.
-- **FR-002**: For a run the owner calls a test, the skill MUST use number 900, or the next free number from 900 up if 900 is in use.
+- **FR-002**: For a run the owner calls a test, the skill MUST use the highest test number in use (900 and up), plus one, starting at 900.
 - **FR-003**: The skill MUST take the feature's branch from git and the spec's **Feature Branch** line, and MUST NOT use the branch name reported by the spec helper.
 - **FR-004**: When the owner abandons a feature, the skill MUST delete its spec folder from its branch in a commit, push it, and then close its draft PR, closing only with the owner's OK for that PR.
 - **FR-005**: The project guide's reference to Gordon's spec MUST say `002-gordon`.
@@ -94,7 +94,7 @@ A trial of the workflow uses spec number `900`, so it can never be mistaken for,
 - Open feature branches are the ones on GitHub under `feature/`; local-only branches that were never pushed aren't checked, since the skill pushes every spec at gate 1.
 - The automated change-request pipeline's branches (`feature/SCRUM-<n>-agent-…`) are checked too, and simply hold no specs.
 - The spec helper still creates the spec file; only the number and folder are decided by the skill beforehand.
-- No site page, test or workflow changes; this is the skill and the project guide only.
+- No site page or workflow changes: the skill, the project guide, and a small tested script under `tools/spec-number/` that picks the number (the owner chose a tested script over prose at gate 2).
 
 ## Clarifications
 
@@ -102,3 +102,4 @@ A trial of the workflow uses spec number `900`, so it can never be mistaken for,
 
 - Q: Should a test run take the next real number or a reserved one? → A: A reserved number, 900.
 - Q: What happens to an abandoned feature's spec folder? → A: It is deleted from the feature's branch before its draft PR is closed.
+- Q: Should the numbering rule be a tested script or prose in the skill? → A: A tested script (owner, gate 2).
