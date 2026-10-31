@@ -1,0 +1,42 @@
+name: Feature request
+description: Ask for something the Retirement Portfolio Explorer doesn't do yet.
+labels: ["type: feature", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Describe the need rather than the solution: what you're trying to do and what gets in the way.
+        The owner reviews every request; nothing is built until it's approved. Please don't include personal financial details.
+  - type: textarea
+    id: need
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do, and what stops you today?
+      placeholder: When I plan for a spouse who retires later, I can't...
+    validations:
+      required: true
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Who is it for?
+      options:
+        - Everyone (Free)
+        - Plus
+        - Pro
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: What would success look like?
+      description: How would you know it works? An example with made-up numbers helps.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Pages it touches, similar tools, links or screenshots.
+    validations:
+      required: false
